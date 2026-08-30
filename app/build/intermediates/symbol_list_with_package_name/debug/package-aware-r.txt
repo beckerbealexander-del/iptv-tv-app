@@ -3848,6 +3848,7 @@ id btnLiveFilterAdult
 id btnLiveFilterAll
 id btnLiveFilterDe
 id btnLiveFilterRu
+id btnMainHeroPlay
 id btnPlayPause
 id btnSaveSettings
 id btnSearchClear
@@ -3865,11 +3866,6 @@ id buttonPanel
 id button_start
 id cancel_action
 id cancel_button
-id cardLiveTv
-id cardMovies
-id cardSearch
-id cardSeries
-id cardSettings
 id center
 id centerCrop
 id centerInside
@@ -4099,6 +4095,8 @@ id imgDetailSeriesCover
 id imgEpisodeThumb
 id imgHeroPoster
 id imgHeroSeriesCover
+id imgHistoryPoster
+id imgMainHero
 id imgPoster
 id indeterminate
 id info
@@ -4117,6 +4115,10 @@ id jumpToStart
 id label
 id labeled
 id layout
+id layoutSectionHistory
+id layoutSectionLive
+id layoutSectionMovies
+id layoutSectionSeries
 id layoutTimeline
 id lb_action_button
 id lb_control_closed_captioning
@@ -4161,6 +4163,7 @@ id list_item
 id logo
 id m3_side_sheet
 id main
+id mainHeroBanner
 id mainOnly
 id main_icon
 id main_image
@@ -4235,6 +4238,12 @@ id mtrl_picker_text_input_range_start
 id mtrl_picker_title_text
 id mtrl_view_tag_bottom_padding
 id multiply
+id navHome
+id navLiveTv
+id navMovies
+id navSearch
+id navSeries
+id navSettings
 id navigation_bar_item_active_indicator_view
 id navigation_bar_item_icon_container
 id navigation_bar_item_icon_view
@@ -4305,6 +4314,8 @@ id pressed
 id progressCategories
 id progressChannels
 id progressEpisodes
+id progressHistoryBar
+id progressMainHome
 id progressSearch
 id progressSeries
 id progressSeriesCats
@@ -4318,6 +4329,10 @@ id rectangles
 id recyclerCategories
 id recyclerChannels
 id recyclerEpisodes
+id recyclerMainHistory
+id recyclerMainLive
+id recyclerMainMovies
+id recyclerMainSeries
 id recyclerSearchChannels
 id recyclerSearchMovies
 id recyclerSearchSeries
@@ -4370,6 +4385,7 @@ id shortcut
 id showCustom
 id showHome
 id showTitle
+id sidebar
 id sin
 id skipCollapsed
 id slide
@@ -4478,6 +4494,10 @@ id txtHeroSeriesRating
 id txtHeroSeriesTitle
 id txtHeroTitle
 id txtHintControls
+id txtHistorySubtitle
+id txtHistoryTitle
+id txtMainHeroSubtitle
+id txtMainHeroTitle
 id txtNoResults
 id txtPlayerSubtitle
 id txtPlayerTitle
@@ -4702,6 +4722,7 @@ layout ime_secondary_split_test_activity
 layout item_category
 layout item_channel
 layout item_episode_card
+layout item_history_card
 layout item_poster
 layout item_season_tab
 layout lb_action_1_line

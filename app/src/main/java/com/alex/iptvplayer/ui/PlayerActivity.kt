@@ -18,6 +18,7 @@ import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.exoplayer.ExoPlayer
 import com.alex.iptvplayer.R
+import com.alex.iptvplayer.data.HistoryManager
 import com.alex.iptvplayer.data.LiveStream
 import com.alex.iptvplayer.data.XtreamClient
 import com.alex.iptvplayer.databinding.ActivityPlayerBinding
@@ -31,11 +32,18 @@ class PlayerActivity : AppCompatActivity() {
     private lateinit var binding: ActivityPlayerBinding
     private var exoPlayer: ExoPlayer? = null
     private lateinit var client: XtreamClient
+    private lateinit var historyManager: HistoryManager
 
     private var isLive: Boolean = false
     private var streamList: List<LiveStream> = emptyList()
     private var currentIndex: Int = -1
     private var currentStreamId: Int = -1
+    private var currentStreamUrl: String = ""
+    private var currentStreamName: String = ""
+    private var currentPosterUrl: String? = null
+    private var currentType: String = "VOD"
+    private var seasonNum: Int = 1
+    private var episodeNum: Int = 1
 
     private val osdHandler = Handler(Looper.getMainLooper())
     private val progressHandler = Handler(Looper.getMainLooper())
@@ -45,7 +53,7 @@ class PlayerActivity : AppCompatActivity() {
     // Netflix-Style Spulen Variablen
     private var targetSeekPosition: Long = -1
     private var scrubStepIndex = 0
-    private val scrubSteps = longArrayOf(10_000, 30_000, 60_000, 150_000, 300_000) // 10s, 30s, 1m, 2.5m, 5m
+    private val scrubSteps = longArrayOf(10_000, 30_000, 60_000, 150_000, 300_000)
     private var lastScrubTime = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -54,18 +62,23 @@ class PlayerActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         client = XtreamClient(this)
+        historyManager = HistoryManager(this)
 
-        val streamUrl = intent.getStringExtra("STREAM_URL") ?: ""
-        val streamName = intent.getStringExtra("STREAM_NAME") ?: "Stream"
+        currentStreamUrl = intent.getStringExtra("STREAM_URL") ?: ""
+        currentStreamName = intent.getStringExtra("STREAM_NAME") ?: "Stream"
+        currentPosterUrl = intent.getStringExtra("POSTER_URL")
         currentStreamId = intent.getIntExtra("STREAM_ID", -1)
         currentIndex = intent.getIntExtra("CURRENT_INDEX", -1)
+        currentType = intent.getStringExtra("STREAM_TYPE") ?: if (intent.hasExtra("STREAM_LIST")) "LIVE" else "VOD"
+        seasonNum = intent.getIntExtra("SEASON_NUM", 1)
+        episodeNum = intent.getIntExtra("EPISODE_NUM", 1)
 
         @Suppress("DEPRECATION")
         streamList = (intent.getSerializableExtra("STREAM_LIST") as? ArrayList<LiveStream>) ?: emptyList()
-        isLive = streamList.isNotEmpty()
+        isLive = streamList.isNotEmpty() || currentType == "LIVE"
 
         setupUI()
-        setupPlayer(streamUrl, streamName, currentStreamId)
+        setupPlayer(currentStreamUrl, currentStreamName, currentStreamId)
     }
 
     private fun setupUI() {
@@ -74,12 +87,26 @@ class PlayerActivity : AppCompatActivity() {
             binding.txtHintControls.text = "▲ / ▼ Umschalten | OK Info"
         } else {
             binding.layoutTimeline.visibility = View.VISIBLE
-            binding.txtHintControls.text = "◀ / ▶ Halten zum schnellen Spulen"
+            binding.txtHintControls.text = "◀ / ▶ Spulen | ▲ Zurück zum Film"
         }
 
         binding.btnPlayPause.setOnClickListener { togglePlayPause() }
         binding.btnAudioTracks.setOnClickListener { showAudioTrackDialog() }
         binding.btnSubtitles.setOnClickListener { showSubtitleDialog() }
+
+        // Wenn auf den Buttons DPAD_UP gedrückt wird: OSD verlassen und Fokus zurück zum Video!
+        val buttonKeyDispatcher = View.OnKeyListener { _, keyCode, event ->
+            if (event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_UP) {
+                hideOsd()
+                true
+            } else {
+                false
+            }
+        }
+        binding.btnPlayPause.setOnKeyListener(buttonKeyDispatcher)
+        binding.btnAudioTracks.setOnKeyListener(buttonKeyDispatcher)
+        binding.btnSubtitles.setOnKeyListener(buttonKeyDispatcher)
+        binding.playerSeekBar.setOnKeyListener(buttonKeyDispatcher)
 
         binding.playerSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
@@ -128,6 +155,16 @@ class PlayerActivity : AppCompatActivity() {
             val mediaItem = MediaItem.fromUri(url)
             setMediaItem(mediaItem)
             prepare()
+
+            // Weiterschauen / Resume Position prüfen
+            if (!isLive) {
+                val resumePos = historyManager.getResumePosition(url)
+                if (resumePos > 15_000) {
+                    seekTo(resumePos)
+                    Toast.makeText(this@PlayerActivity, "Fortgesetzt bei ${formatTime(resumePos)}", Toast.LENGTH_SHORT).show()
+                }
+            }
+
             playWhenReady = true
         }
 
@@ -173,6 +210,22 @@ class PlayerActivity : AppCompatActivity() {
                     binding.txtTimeCurrent.text = formatTime(current)
                     binding.txtTimeTotal.text = formatTime(total)
                     binding.playerSeekBar.progress = ((current * 1000) / total).toInt()
+
+                    // Fortschritt alle 5s im Verlauf speichern
+                    if (current > 5000) {
+                        historyManager.saveProgress(
+                            id = if (currentStreamId > 0) currentStreamId.toString() else currentStreamUrl,
+                            title = currentStreamName,
+                            streamUrl = currentStreamUrl,
+                            posterUrl = currentPosterUrl,
+                            type = currentType,
+                            streamId = currentStreamId,
+                            positionMs = current,
+                            durationMs = total,
+                            season = seasonNum,
+                            episodeNum = episodeNum
+                        )
+                    }
                 }
                 progressHandler.postDelayed(this, 1000)
             }
@@ -220,10 +273,15 @@ class PlayerActivity : AppCompatActivity() {
         osdHandler.removeCallbacksAndMessages(null)
         osdHandler.postDelayed({
             if (exoPlayer?.isPlaying == true && !isOsdFocused()) {
-                binding.osdTop.visibility = View.GONE
-                binding.osdBottom.visibility = View.GONE
+                hideOsd()
             }
-        }, 5000)
+        }, 4000)
+    }
+
+    private fun hideOsd() {
+        binding.osdTop.visibility = View.GONE
+        binding.osdBottom.visibility = View.GONE
+        binding.playerView.requestFocus()
     }
 
     private fun isOsdFocused(): Boolean {
@@ -233,7 +291,7 @@ class PlayerActivity : AppCompatActivity() {
                 binding.playerSeekBar.hasFocus()
     }
 
-    // --- Netflix-Style Scrubbing (Spulen mit Geschwindigkeits-Stufen) ---
+    // --- Netflix-Style Scrubbing ---
     private fun performNetflixScrub(forward: Boolean) {
         val player = exoPlayer ?: return
         val now = System.currentTimeMillis()
@@ -253,7 +311,6 @@ class PlayerActivity : AppCompatActivity() {
             targetSeekPosition = (targetSeekPosition - stepMs).coerceAtLeast(0)
         }
 
-        // Zeige Netflix-Style Spul-Blase
         val icon = if (forward) "⏩ +" else "⏪ -"
         val stepSec = stepMs / 1000
         val stepText = if (stepSec >= 60) "${stepSec / 60}m" else "${stepSec}s"
@@ -267,7 +324,6 @@ class PlayerActivity : AppCompatActivity() {
             binding.playerSeekBar.progress = ((targetSeekPosition * 1000) / player.duration).toInt()
         }
 
-        // Debounce: Erst nach 600ms Ruhe tatsächlich seeken
         scrubHandler.removeCallbacksAndMessages(null)
         scrubHandler.postDelayed({
             if (targetSeekPosition >= 0) {
@@ -356,21 +412,25 @@ class PlayerActivity : AppCompatActivity() {
     // --- Fernbedienungssteuerung (D-Pad) ---
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         when (keyCode) {
-            // Netflix-Style Spulen vorwärts
+            KeyEvent.KEYCODE_BACK -> {
+                // Wenn OSD offen ist, erst OSD schließen statt App zu beenden
+                if (binding.osdBottom.visibility == View.VISIBLE) {
+                    hideOsd()
+                    return true
+                }
+            }
             KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {
                 if (!isLive && !isOsdFocused()) {
                     performNetflixScrub(true)
                     return true
                 }
             }
-            // Netflix-Style Spulen rückwärts
             KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_MEDIA_REWIND -> {
                 if (!isLive && !isOsdFocused()) {
                     performNetflixScrub(false)
                     return true
                 }
             }
-            // Runter-Taste: OSD Buttons fokussieren oder zappen
             KeyEvent.KEYCODE_DPAD_DOWN -> {
                 if (isLive) {
                     zapPreviousChannel()
@@ -383,18 +443,20 @@ class PlayerActivity : AppCompatActivity() {
                     return true
                 }
             }
-            // Hoch-Taste: OSD öffnen oder direkt Zapping
             KeyEvent.KEYCODE_DPAD_UP -> {
                 if (isLive) {
                     zapNextChannel()
                     return true
                 } else {
-                    showOsd(binding.txtPlayerTitle.text.toString(), currentStreamId)
-                    binding.btnAudioTracks.requestFocus()
+                    if (isOsdFocused() || binding.osdBottom.visibility == View.VISIBLE) {
+                        hideOsd()
+                    } else {
+                        showOsd(binding.txtPlayerTitle.text.toString(), currentStreamId)
+                        binding.btnPlayPause.requestFocus()
+                    }
                     return true
                 }
             }
-            // Play / Pause oder OSD Bestätigung
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
                 if (!isLive) {
                     if (!isOsdFocused()) {
@@ -403,8 +465,7 @@ class PlayerActivity : AppCompatActivity() {
                     }
                 } else {
                     if (binding.osdBottom.visibility == View.VISIBLE) {
-                        binding.osdTop.visibility = View.GONE
-                        binding.osdBottom.visibility = View.GONE
+                        hideOsd()
                     } else {
                         showOsd(binding.txtPlayerTitle.text.toString(), currentStreamId)
                     }
@@ -433,16 +494,41 @@ class PlayerActivity : AppCompatActivity() {
 
     private fun switchStream(stream: LiveStream) {
         currentStreamId = stream.streamId
+        currentStreamName = stream.name
+        currentStreamUrl = client.getLiveStreamUrl(stream.streamId)
         showOsd(stream.name, stream.streamId)
-        val url = client.getLiveStreamUrl(stream.streamId)
-        val mediaItem = MediaItem.fromUri(url)
+        val mediaItem = MediaItem.fromUri(currentStreamUrl)
         exoPlayer?.setMediaItem(mediaItem)
         exoPlayer?.prepare()
         exoPlayer?.playWhenReady = true
     }
 
+    private fun saveCurrentState() {
+        val player = exoPlayer ?: return
+        if (!isLive && player.duration > 0 && player.currentPosition > 5000) {
+            historyManager.saveProgress(
+                id = if (currentStreamId > 0) currentStreamId.toString() else currentStreamUrl,
+                title = currentStreamName,
+                streamUrl = currentStreamUrl,
+                posterUrl = currentPosterUrl,
+                type = currentType,
+                streamId = currentStreamId,
+                positionMs = player.currentPosition,
+                durationMs = player.duration,
+                season = seasonNum,
+                episodeNum = episodeNum
+            )
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        saveCurrentState()
+    }
+
     override fun onDestroy() {
         super.onDestroy()
+        saveCurrentState()
         osdHandler.removeCallbacksAndMessages(null)
         progressHandler.removeCallbacksAndMessages(null)
         scrubHandler.removeCallbacksAndMessages(null)
