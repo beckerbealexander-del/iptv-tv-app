@@ -7,7 +7,6 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.ProgressBar;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -30,16 +29,13 @@ public final class ActivityMainBinding implements ViewBinding {
   public final ImageView imgMainHero;
 
   @NonNull
-  public final LinearLayout layoutSectionHistory;
+  public final LinearLayout layoutSectionChannelHistory;
 
   @NonNull
-  public final LinearLayout layoutSectionLive;
+  public final LinearLayout layoutSectionMovieHistory;
 
   @NonNull
-  public final LinearLayout layoutSectionMovies;
-
-  @NonNull
-  public final LinearLayout layoutSectionSeries;
+  public final LinearLayout layoutSectionSeriesHistory;
 
   @NonNull
   public final LinearLayout mainHeroBanner;
@@ -57,19 +53,13 @@ public final class ActivityMainBinding implements ViewBinding {
   public final LinearLayout navSettings;
 
   @NonNull
-  public final ProgressBar progressMainHome;
+  public final RecyclerView recyclerChannelHistory;
 
   @NonNull
-  public final RecyclerView recyclerMainHistory;
+  public final RecyclerView recyclerMovieHistory;
 
   @NonNull
-  public final RecyclerView recyclerMainLive;
-
-  @NonNull
-  public final RecyclerView recyclerMainMovies;
-
-  @NonNull
-  public final RecyclerView recyclerMainSeries;
+  public final RecyclerView recyclerSeriesHistory;
 
   @NonNull
   public final LinearLayout sidebar;
@@ -80,36 +70,46 @@ public final class ActivityMainBinding implements ViewBinding {
   @NonNull
   public final TextView txtMainHeroTitle;
 
+  @NonNull
+  public final TextView txtNoChannelHistory;
+
+  @NonNull
+  public final TextView txtNoMovieHistory;
+
+  @NonNull
+  public final TextView txtNoSeriesHistory;
+
   private ActivityMainBinding(@NonNull LinearLayout rootView, @NonNull Button btnMainHeroPlay,
-      @NonNull ImageView imgMainHero, @NonNull LinearLayout layoutSectionHistory,
-      @NonNull LinearLayout layoutSectionLive, @NonNull LinearLayout layoutSectionMovies,
-      @NonNull LinearLayout layoutSectionSeries, @NonNull LinearLayout mainHeroBanner,
+      @NonNull ImageView imgMainHero, @NonNull LinearLayout layoutSectionChannelHistory,
+      @NonNull LinearLayout layoutSectionMovieHistory,
+      @NonNull LinearLayout layoutSectionSeriesHistory, @NonNull LinearLayout mainHeroBanner,
       @NonNull LinearLayout navLiveTv, @NonNull LinearLayout navMovies,
       @NonNull LinearLayout navSeries, @NonNull LinearLayout navSettings,
-      @NonNull ProgressBar progressMainHome, @NonNull RecyclerView recyclerMainHistory,
-      @NonNull RecyclerView recyclerMainLive, @NonNull RecyclerView recyclerMainMovies,
-      @NonNull RecyclerView recyclerMainSeries, @NonNull LinearLayout sidebar,
-      @NonNull TextView txtMainHeroSubtitle, @NonNull TextView txtMainHeroTitle) {
+      @NonNull RecyclerView recyclerChannelHistory, @NonNull RecyclerView recyclerMovieHistory,
+      @NonNull RecyclerView recyclerSeriesHistory, @NonNull LinearLayout sidebar,
+      @NonNull TextView txtMainHeroSubtitle, @NonNull TextView txtMainHeroTitle,
+      @NonNull TextView txtNoChannelHistory, @NonNull TextView txtNoMovieHistory,
+      @NonNull TextView txtNoSeriesHistory) {
     this.rootView = rootView;
     this.btnMainHeroPlay = btnMainHeroPlay;
     this.imgMainHero = imgMainHero;
-    this.layoutSectionHistory = layoutSectionHistory;
-    this.layoutSectionLive = layoutSectionLive;
-    this.layoutSectionMovies = layoutSectionMovies;
-    this.layoutSectionSeries = layoutSectionSeries;
+    this.layoutSectionChannelHistory = layoutSectionChannelHistory;
+    this.layoutSectionMovieHistory = layoutSectionMovieHistory;
+    this.layoutSectionSeriesHistory = layoutSectionSeriesHistory;
     this.mainHeroBanner = mainHeroBanner;
     this.navLiveTv = navLiveTv;
     this.navMovies = navMovies;
     this.navSeries = navSeries;
     this.navSettings = navSettings;
-    this.progressMainHome = progressMainHome;
-    this.recyclerMainHistory = recyclerMainHistory;
-    this.recyclerMainLive = recyclerMainLive;
-    this.recyclerMainMovies = recyclerMainMovies;
-    this.recyclerMainSeries = recyclerMainSeries;
+    this.recyclerChannelHistory = recyclerChannelHistory;
+    this.recyclerMovieHistory = recyclerMovieHistory;
+    this.recyclerSeriesHistory = recyclerSeriesHistory;
     this.sidebar = sidebar;
     this.txtMainHeroSubtitle = txtMainHeroSubtitle;
     this.txtMainHeroTitle = txtMainHeroTitle;
+    this.txtNoChannelHistory = txtNoChannelHistory;
+    this.txtNoMovieHistory = txtNoMovieHistory;
+    this.txtNoSeriesHistory = txtNoSeriesHistory;
   }
 
   @Override
@@ -151,27 +151,21 @@ public final class ActivityMainBinding implements ViewBinding {
         break missingId;
       }
 
-      id = R.id.layoutSectionHistory;
-      LinearLayout layoutSectionHistory = ViewBindings.findChildViewById(rootView, id);
-      if (layoutSectionHistory == null) {
+      id = R.id.layoutSectionChannelHistory;
+      LinearLayout layoutSectionChannelHistory = ViewBindings.findChildViewById(rootView, id);
+      if (layoutSectionChannelHistory == null) {
         break missingId;
       }
 
-      id = R.id.layoutSectionLive;
-      LinearLayout layoutSectionLive = ViewBindings.findChildViewById(rootView, id);
-      if (layoutSectionLive == null) {
+      id = R.id.layoutSectionMovieHistory;
+      LinearLayout layoutSectionMovieHistory = ViewBindings.findChildViewById(rootView, id);
+      if (layoutSectionMovieHistory == null) {
         break missingId;
       }
 
-      id = R.id.layoutSectionMovies;
-      LinearLayout layoutSectionMovies = ViewBindings.findChildViewById(rootView, id);
-      if (layoutSectionMovies == null) {
-        break missingId;
-      }
-
-      id = R.id.layoutSectionSeries;
-      LinearLayout layoutSectionSeries = ViewBindings.findChildViewById(rootView, id);
-      if (layoutSectionSeries == null) {
+      id = R.id.layoutSectionSeriesHistory;
+      LinearLayout layoutSectionSeriesHistory = ViewBindings.findChildViewById(rootView, id);
+      if (layoutSectionSeriesHistory == null) {
         break missingId;
       }
 
@@ -205,33 +199,21 @@ public final class ActivityMainBinding implements ViewBinding {
         break missingId;
       }
 
-      id = R.id.progressMainHome;
-      ProgressBar progressMainHome = ViewBindings.findChildViewById(rootView, id);
-      if (progressMainHome == null) {
+      id = R.id.recyclerChannelHistory;
+      RecyclerView recyclerChannelHistory = ViewBindings.findChildViewById(rootView, id);
+      if (recyclerChannelHistory == null) {
         break missingId;
       }
 
-      id = R.id.recyclerMainHistory;
-      RecyclerView recyclerMainHistory = ViewBindings.findChildViewById(rootView, id);
-      if (recyclerMainHistory == null) {
+      id = R.id.recyclerMovieHistory;
+      RecyclerView recyclerMovieHistory = ViewBindings.findChildViewById(rootView, id);
+      if (recyclerMovieHistory == null) {
         break missingId;
       }
 
-      id = R.id.recyclerMainLive;
-      RecyclerView recyclerMainLive = ViewBindings.findChildViewById(rootView, id);
-      if (recyclerMainLive == null) {
-        break missingId;
-      }
-
-      id = R.id.recyclerMainMovies;
-      RecyclerView recyclerMainMovies = ViewBindings.findChildViewById(rootView, id);
-      if (recyclerMainMovies == null) {
-        break missingId;
-      }
-
-      id = R.id.recyclerMainSeries;
-      RecyclerView recyclerMainSeries = ViewBindings.findChildViewById(rootView, id);
-      if (recyclerMainSeries == null) {
+      id = R.id.recyclerSeriesHistory;
+      RecyclerView recyclerSeriesHistory = ViewBindings.findChildViewById(rootView, id);
+      if (recyclerSeriesHistory == null) {
         break missingId;
       }
 
@@ -253,11 +235,29 @@ public final class ActivityMainBinding implements ViewBinding {
         break missingId;
       }
 
+      id = R.id.txtNoChannelHistory;
+      TextView txtNoChannelHistory = ViewBindings.findChildViewById(rootView, id);
+      if (txtNoChannelHistory == null) {
+        break missingId;
+      }
+
+      id = R.id.txtNoMovieHistory;
+      TextView txtNoMovieHistory = ViewBindings.findChildViewById(rootView, id);
+      if (txtNoMovieHistory == null) {
+        break missingId;
+      }
+
+      id = R.id.txtNoSeriesHistory;
+      TextView txtNoSeriesHistory = ViewBindings.findChildViewById(rootView, id);
+      if (txtNoSeriesHistory == null) {
+        break missingId;
+      }
+
       return new ActivityMainBinding((LinearLayout) rootView, btnMainHeroPlay, imgMainHero,
-          layoutSectionHistory, layoutSectionLive, layoutSectionMovies, layoutSectionSeries,
-          mainHeroBanner, navLiveTv, navMovies, navSeries, navSettings, progressMainHome,
-          recyclerMainHistory, recyclerMainLive, recyclerMainMovies, recyclerMainSeries, sidebar,
-          txtMainHeroSubtitle, txtMainHeroTitle);
+          layoutSectionChannelHistory, layoutSectionMovieHistory, layoutSectionSeriesHistory,
+          mainHeroBanner, navLiveTv, navMovies, navSeries, navSettings, recyclerChannelHistory,
+          recyclerMovieHistory, recyclerSeriesHistory, sidebar, txtMainHeroSubtitle,
+          txtMainHeroTitle, txtNoChannelHistory, txtNoMovieHistory, txtNoSeriesHistory);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));

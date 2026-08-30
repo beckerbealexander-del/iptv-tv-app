@@ -6,7 +6,6 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
@@ -25,12 +24,6 @@ public final class ActivityLiveTvBinding implements ViewBinding {
   private final LinearLayout rootView;
 
   @NonNull
-  public final LinearLayout boxCurrentProgram;
-
-  @NonNull
-  public final LinearLayout boxNextProgram;
-
-  @NonNull
   public final Button btnLiveFilterAdult;
 
   @NonNull
@@ -46,9 +39,6 @@ public final class ActivityLiveTvBinding implements ViewBinding {
   public final EditText editLiveSearch;
 
   @NonNull
-  public final ImageView imgDetailLogo;
-
-  @NonNull
   public final ProgressBar progressCategories;
 
   @NonNull
@@ -61,57 +51,38 @@ public final class ActivityLiveTvBinding implements ViewBinding {
   public final RecyclerView recyclerChannels;
 
   @NonNull
-  public final TextView txtCategoryTitle;
+  public final TextView txtCurrentLiveTime;
 
   @NonNull
-  public final TextView txtDetailName;
+  public final TextView txtPreviewDesc;
 
   @NonNull
-  public final TextView txtEpgCurrentDesc;
+  public final TextView txtPreviewTime;
 
   @NonNull
-  public final TextView txtEpgCurrentTime;
+  public final TextView txtPreviewTitle;
 
-  @NonNull
-  public final TextView txtEpgCurrentTitle;
-
-  @NonNull
-  public final TextView txtEpgNextTime;
-
-  @NonNull
-  public final TextView txtEpgNextTitle;
-
-  private ActivityLiveTvBinding(@NonNull LinearLayout rootView,
-      @NonNull LinearLayout boxCurrentProgram, @NonNull LinearLayout boxNextProgram,
-      @NonNull Button btnLiveFilterAdult, @NonNull Button btnLiveFilterAll,
-      @NonNull Button btnLiveFilterDe, @NonNull Button btnLiveFilterRu,
-      @NonNull EditText editLiveSearch, @NonNull ImageView imgDetailLogo,
+  private ActivityLiveTvBinding(@NonNull LinearLayout rootView, @NonNull Button btnLiveFilterAdult,
+      @NonNull Button btnLiveFilterAll, @NonNull Button btnLiveFilterDe,
+      @NonNull Button btnLiveFilterRu, @NonNull EditText editLiveSearch,
       @NonNull ProgressBar progressCategories, @NonNull ProgressBar progressChannels,
       @NonNull RecyclerView recyclerCategories, @NonNull RecyclerView recyclerChannels,
-      @NonNull TextView txtCategoryTitle, @NonNull TextView txtDetailName,
-      @NonNull TextView txtEpgCurrentDesc, @NonNull TextView txtEpgCurrentTime,
-      @NonNull TextView txtEpgCurrentTitle, @NonNull TextView txtEpgNextTime,
-      @NonNull TextView txtEpgNextTitle) {
+      @NonNull TextView txtCurrentLiveTime, @NonNull TextView txtPreviewDesc,
+      @NonNull TextView txtPreviewTime, @NonNull TextView txtPreviewTitle) {
     this.rootView = rootView;
-    this.boxCurrentProgram = boxCurrentProgram;
-    this.boxNextProgram = boxNextProgram;
     this.btnLiveFilterAdult = btnLiveFilterAdult;
     this.btnLiveFilterAll = btnLiveFilterAll;
     this.btnLiveFilterDe = btnLiveFilterDe;
     this.btnLiveFilterRu = btnLiveFilterRu;
     this.editLiveSearch = editLiveSearch;
-    this.imgDetailLogo = imgDetailLogo;
     this.progressCategories = progressCategories;
     this.progressChannels = progressChannels;
     this.recyclerCategories = recyclerCategories;
     this.recyclerChannels = recyclerChannels;
-    this.txtCategoryTitle = txtCategoryTitle;
-    this.txtDetailName = txtDetailName;
-    this.txtEpgCurrentDesc = txtEpgCurrentDesc;
-    this.txtEpgCurrentTime = txtEpgCurrentTime;
-    this.txtEpgCurrentTitle = txtEpgCurrentTitle;
-    this.txtEpgNextTime = txtEpgNextTime;
-    this.txtEpgNextTitle = txtEpgNextTitle;
+    this.txtCurrentLiveTime = txtCurrentLiveTime;
+    this.txtPreviewDesc = txtPreviewDesc;
+    this.txtPreviewTime = txtPreviewTime;
+    this.txtPreviewTitle = txtPreviewTitle;
   }
 
   @Override
@@ -141,18 +112,6 @@ public final class ActivityLiveTvBinding implements ViewBinding {
     // This is done to optimize the compiled bytecode for size and performance.
     int id;
     missingId: {
-      id = R.id.boxCurrentProgram;
-      LinearLayout boxCurrentProgram = ViewBindings.findChildViewById(rootView, id);
-      if (boxCurrentProgram == null) {
-        break missingId;
-      }
-
-      id = R.id.boxNextProgram;
-      LinearLayout boxNextProgram = ViewBindings.findChildViewById(rootView, id);
-      if (boxNextProgram == null) {
-        break missingId;
-      }
-
       id = R.id.btnLiveFilterAdult;
       Button btnLiveFilterAdult = ViewBindings.findChildViewById(rootView, id);
       if (btnLiveFilterAdult == null) {
@@ -183,12 +142,6 @@ public final class ActivityLiveTvBinding implements ViewBinding {
         break missingId;
       }
 
-      id = R.id.imgDetailLogo;
-      ImageView imgDetailLogo = ViewBindings.findChildViewById(rootView, id);
-      if (imgDetailLogo == null) {
-        break missingId;
-      }
-
       id = R.id.progressCategories;
       ProgressBar progressCategories = ViewBindings.findChildViewById(rootView, id);
       if (progressCategories == null) {
@@ -213,53 +166,34 @@ public final class ActivityLiveTvBinding implements ViewBinding {
         break missingId;
       }
 
-      id = R.id.txtCategoryTitle;
-      TextView txtCategoryTitle = ViewBindings.findChildViewById(rootView, id);
-      if (txtCategoryTitle == null) {
+      id = R.id.txtCurrentLiveTime;
+      TextView txtCurrentLiveTime = ViewBindings.findChildViewById(rootView, id);
+      if (txtCurrentLiveTime == null) {
         break missingId;
       }
 
-      id = R.id.txtDetailName;
-      TextView txtDetailName = ViewBindings.findChildViewById(rootView, id);
-      if (txtDetailName == null) {
+      id = R.id.txtPreviewDesc;
+      TextView txtPreviewDesc = ViewBindings.findChildViewById(rootView, id);
+      if (txtPreviewDesc == null) {
         break missingId;
       }
 
-      id = R.id.txtEpgCurrentDesc;
-      TextView txtEpgCurrentDesc = ViewBindings.findChildViewById(rootView, id);
-      if (txtEpgCurrentDesc == null) {
+      id = R.id.txtPreviewTime;
+      TextView txtPreviewTime = ViewBindings.findChildViewById(rootView, id);
+      if (txtPreviewTime == null) {
         break missingId;
       }
 
-      id = R.id.txtEpgCurrentTime;
-      TextView txtEpgCurrentTime = ViewBindings.findChildViewById(rootView, id);
-      if (txtEpgCurrentTime == null) {
+      id = R.id.txtPreviewTitle;
+      TextView txtPreviewTitle = ViewBindings.findChildViewById(rootView, id);
+      if (txtPreviewTitle == null) {
         break missingId;
       }
 
-      id = R.id.txtEpgCurrentTitle;
-      TextView txtEpgCurrentTitle = ViewBindings.findChildViewById(rootView, id);
-      if (txtEpgCurrentTitle == null) {
-        break missingId;
-      }
-
-      id = R.id.txtEpgNextTime;
-      TextView txtEpgNextTime = ViewBindings.findChildViewById(rootView, id);
-      if (txtEpgNextTime == null) {
-        break missingId;
-      }
-
-      id = R.id.txtEpgNextTitle;
-      TextView txtEpgNextTitle = ViewBindings.findChildViewById(rootView, id);
-      if (txtEpgNextTitle == null) {
-        break missingId;
-      }
-
-      return new ActivityLiveTvBinding((LinearLayout) rootView, boxCurrentProgram, boxNextProgram,
-          btnLiveFilterAdult, btnLiveFilterAll, btnLiveFilterDe, btnLiveFilterRu, editLiveSearch,
-          imgDetailLogo, progressCategories, progressChannels, recyclerCategories, recyclerChannels,
-          txtCategoryTitle, txtDetailName, txtEpgCurrentDesc, txtEpgCurrentTime, txtEpgCurrentTitle,
-          txtEpgNextTime, txtEpgNextTitle);
+      return new ActivityLiveTvBinding((LinearLayout) rootView, btnLiveFilterAdult,
+          btnLiveFilterAll, btnLiveFilterDe, btnLiveFilterRu, editLiveSearch, progressCategories,
+          progressChannels, recyclerCategories, recyclerChannels, txtCurrentLiveTime,
+          txtPreviewDesc, txtPreviewTime, txtPreviewTitle);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));

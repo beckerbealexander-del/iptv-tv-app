@@ -16,6 +16,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.alex.iptvplayer.R
 import com.alex.iptvplayer.data.Category
+import com.alex.iptvplayer.data.EpgProgram
 import com.alex.iptvplayer.data.HistoryManager
 import com.alex.iptvplayer.data.LangFilter
 import com.alex.iptvplayer.data.LiveStream
@@ -25,17 +26,20 @@ import com.bumptech.glide.Glide
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class LiveTvActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityLiveTvBinding
     private lateinit var client: XtreamClient
+    private lateinit var historyManager: HistoryManager
 
     private var allCategories: List<Category> = emptyList()
     private var currentFilter = LangFilter.AUTO_DE_RU_ADULT
     private var currentStreams: List<LiveStream> = emptyList()
     private var selectedCategoryId: String? = null
-    private var epgJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -43,6 +47,9 @@ class LiveTvActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         client = XtreamClient(this)
+        historyManager = HistoryManager(this)
+
+        updateLiveTimeHeader()
 
         binding.recyclerCategories.apply {
             layoutManager = LinearLayoutManager(this@LiveTvActivity)
@@ -61,17 +68,18 @@ class LiveTvActivity : AppCompatActivity() {
         loadCategories()
     }
 
+    private fun updateLiveTimeHeader() {
+        val sdf = SimpleDateFormat("EEE, dd. MMM 'um' HH:mm", Locale.GERMANY)
+        binding.txtCurrentLiveTime.text = "🔴 ${sdf.format(Date())}"
+    }
+
     private fun setupSearch() {
         binding.editLiveSearch.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
                 val q = s?.toString()?.trim()?.lowercase() ?: ""
                 val filtered = if (q.isEmpty()) currentStreams else currentStreams.filter { it.name.lowercase().contains(q) }
-                binding.recyclerChannels.adapter = ChannelAdapter(filtered, { stream ->
-                    showChannelDetailAndEpg(stream)
-                }, { stream, position ->
-                    openFullscreenPlayer(stream, position)
-                })
+                binding.recyclerChannels.adapter = ChannelAdapter(filtered)
             }
             override fun afterTextChanged(s: Editable?) {}
         })
@@ -113,20 +121,15 @@ class LiveTvActivity : AppCompatActivity() {
         if (selectedCategoryId == category.id) return
         selectedCategoryId = category.id
 
-        binding.txtCategoryTitle.text = category.name
         binding.progressChannels.visibility = View.VISIBLE
         lifecycleScope.launch {
             try {
                 currentStreams = client.getLiveStreams(category.id)
                 binding.progressChannels.visibility = View.GONE
-                binding.recyclerChannels.adapter = ChannelAdapter(currentStreams, { stream ->
-                    showChannelDetailAndEpg(stream)
-                }, { stream, position ->
-                    openFullscreenPlayer(stream, position)
-                })
+                binding.recyclerChannels.adapter = ChannelAdapter(currentStreams)
 
                 if (currentStreams.isNotEmpty()) {
-                    showChannelDetailAndEpg(currentStreams[0])
+                    showChannelPreview(currentStreams[0], null)
                 }
             } catch (e: Exception) {
                 binding.progressChannels.visibility = View.GONE
@@ -135,47 +138,20 @@ class LiveTvActivity : AppCompatActivity() {
         }
     }
 
-    private fun showChannelDetailAndEpg(stream: LiveStream) {
-        binding.txtDetailName.text = stream.name
-
-        if (!stream.streamIcon.isNullOrEmpty()) {
-            Glide.with(this).load(stream.streamIcon).override(80, 80).into(binding.imgDetailLogo)
+    private fun showChannelPreview(stream: LiveStream, program: EpgProgram?) {
+        if (program != null) {
+            binding.txtPreviewTitle.text = "${stream.name} – ${program.title}"
+            binding.txtPreviewTime.text = "${program.start} - ${program.end}"
+            binding.txtPreviewDesc.text = if (program.description.isNotEmpty()) program.description else "Keine Programmbeschreibung vorhanden."
         } else {
-            binding.imgDetailLogo.setImageResource(R.drawable.tv_banner)
-        }
-
-        epgJob?.cancel()
-        binding.txtEpgCurrentTitle.text = "Lade EPG..."
-        binding.txtEpgCurrentTime.text = ""
-        binding.txtEpgCurrentDesc.text = ""
-        binding.boxNextProgram.visibility = View.GONE
-
-        epgJob = lifecycleScope.launch {
-            val list = client.getEpg(stream.streamId)
-            if (list.isNotEmpty()) {
-                val current = list.firstOrNull { it.isNowPlaying } ?: list[0]
-                binding.txtEpgCurrentTitle.text = current.title
-                binding.txtEpgCurrentTime.text = "${current.start} - ${current.end}"
-                binding.txtEpgCurrentDesc.text = current.description
-
-                if (list.size > 1) {
-                    val next = if (current == list[0]) list[1] else list.getOrNull(list.indexOf(current) + 1)
-                    if (next != null) {
-                        binding.boxNextProgram.visibility = View.VISIBLE
-                        binding.txtEpgNextTitle.text = next.title
-                        binding.txtEpgNextTime.text = "Ab ${next.start} Uhr"
-                    }
-                }
-            } else {
-                binding.txtEpgCurrentTitle.text = "Kein EPG verfügbar"
-                binding.txtEpgCurrentTime.text = ""
-                binding.txtEpgCurrentDesc.text = "Für diesen Sender liegen aktuell keine Programmdaten vor."
-            }
+            binding.txtPreviewTitle.text = stream.name
+            binding.txtPreviewTime.text = "🔴 LIVE"
+            binding.txtPreviewDesc.text = "Drücke OK auf der Fernbedienung, um den Sender direkt zu starten."
         }
     }
 
     private fun openFullscreenPlayer(stream: LiveStream, position: Int) {
-        HistoryManager(this).saveLiveChannel(stream)
+        historyManager.saveLiveChannel(stream)
         val intent = Intent(this, PlayerActivity::class.java).apply {
             putExtra("STREAM_URL", client.getLiveStreamUrl(stream.streamId))
             putExtra("STREAM_NAME", stream.name)
@@ -188,16 +164,7 @@ class LiveTvActivity : AppCompatActivity() {
         startActivity(intent)
     }
 
-    override fun onPause() {
-        super.onPause()
-        epgJob?.cancel()
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        epgJob?.cancel()
-    }
-
+    // --- Adapter 1: Kategorien ---
     inner class CategoryAdapter(
         private val items: List<Category>,
         private val onSelect: (Category) -> Unit
@@ -232,39 +199,102 @@ class LiveTvActivity : AppCompatActivity() {
         override fun getItemCount() = items.size
     }
 
+    // --- Adapter 2: Senderzeilen mit horizontalem EPG Timeline Grid ---
     inner class ChannelAdapter(
-        private val items: List<LiveStream>,
-        private val onFocus: (LiveStream) -> Unit,
-        private val onClick: (LiveStream, Int) -> Unit
+        private val items: List<LiveStream>
     ) : RecyclerView.Adapter<ChannelAdapter.ViewHolder>() {
 
         inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-            val txtName: TextView = view.findViewById(R.id.txtChannelName)
+            val header: View = view.findViewById(R.id.channelHeader)
+            val txtNum: TextView = view.findViewById(R.id.txtChannelNum)
             val imgLogo: ImageView = view.findViewById(R.id.imgChannelLogo)
+            val txtName: TextView = view.findViewById(R.id.txtChannelName)
+            val recyclerPrograms: RecyclerView = view.findViewById(R.id.recyclerChannelPrograms)
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-            val view = LayoutInflater.from(parent.context).inflate(R.layout.item_channel, parent, false)
+            val view = LayoutInflater.from(parent.context).inflate(R.layout.item_epg_channel_row, parent, false)
             return ViewHolder(view)
         }
 
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val s = items[position]
+            holder.txtNum.text = "${position + 1}"
             holder.txtName.text = s.name
 
             if (!s.streamIcon.isNullOrEmpty()) {
-                Glide.with(holder.itemView).load(s.streamIcon).override(60, 60).into(holder.imgLogo)
+                Glide.with(holder.itemView).load(s.streamIcon).override(45, 45).into(holder.imgLogo)
             } else {
                 holder.imgLogo.setImageResource(R.drawable.tv_banner)
             }
 
-            holder.itemView.setOnFocusChangeListener { _, hasFocus ->
-                if (hasFocus) onFocus(s)
+            holder.header.setOnClickListener {
+                openFullscreenPlayer(s, position)
             }
 
-            holder.itemView.setOnClickListener { onClick(s, position) }
+            holder.header.setOnFocusChangeListener { _, hasFocus ->
+                if (hasFocus) showChannelPreview(s, null)
+            }
+
+            holder.recyclerPrograms.apply {
+                layoutManager = LinearLayoutManager(holder.itemView.context, LinearLayoutManager.HORIZONTAL, false)
+                setHasFixedSize(true)
+            }
+
+            // EPG-Zeitstrahl für diesen Sender laden (Vergangenheit bis Zukunft)
+            lifecycleScope.launch {
+                val epgList = client.getEpg(s.streamId)
+                if (epgList.isNotEmpty()) {
+                    holder.recyclerPrograms.adapter = ProgramTimelineAdapter(s, position, epgList)
+                } else {
+                    val fallback = listOf(EpgProgram("Keine Information", "", "16:00", "23:59", true))
+                    holder.recyclerPrograms.adapter = ProgramTimelineAdapter(s, position, fallback)
+                }
+            }
         }
 
         override fun getItemCount() = items.size
+    }
+
+    // --- Adapter 3: Horizontale EPG-Sendungsblöcke (Timeline) ---
+    inner class ProgramTimelineAdapter(
+        private val stream: LiveStream,
+        private val channelIndex: Int,
+        private val programs: List<EpgProgram>
+    ) : RecyclerView.Adapter<ProgramTimelineAdapter.ViewHolder>() {
+
+        inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+            val txtTitle: TextView = view.findViewById(R.id.txtEpgProgramTitle)
+            val txtTime: TextView = view.findViewById(R.id.txtEpgProgramTime)
+        }
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
+            val view = LayoutInflater.from(parent.context).inflate(R.layout.item_epg_program_block, parent, false)
+            return ViewHolder(view)
+        }
+
+        override fun onBindViewHolder(holder: ViewHolder, position: Int) {
+            val p = programs[position]
+            holder.txtTitle.text = p.title
+            holder.txtTime.text = "${p.start} - ${p.end}"
+
+            if (p.isNowPlaying) {
+                holder.txtTitle.setTextColor(resources.getColor(R.color.netflix_red, null))
+            } else {
+                holder.txtTitle.setTextColor(resources.getColor(R.color.text_primary, null))
+            }
+
+            holder.itemView.setOnFocusChangeListener { _, hasFocus ->
+                if (hasFocus) {
+                    showChannelPreview(stream, p)
+                }
+            }
+
+            holder.itemView.setOnClickListener {
+                openFullscreenPlayer(stream, channelIndex)
+            }
+        }
+
+        override fun getItemCount() = programs.size
     }
 }

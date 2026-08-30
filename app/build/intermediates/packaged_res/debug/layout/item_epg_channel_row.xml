@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="56dp"
+    android:layout_marginBottom="4dp"
+    android:gravity="center_vertical"
+    android:orientation="horizontal">
+
+    <!-- Linker Senderkopf (Nummer, Logo, Name) -->
+    <LinearLayout
+        android:id="@+id/channelHeader"
+        android:layout_width="200dp"
+        android:layout_height="match_parent"
+        android:background="#141414"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="8dp"
+        android:layout_marginEnd="6dp">
+
+        <TextView
+            android:id="@+id/txtChannelNum"
+            android:layout_width="24dp"
+            android:layout_height="wrap_content"
+            android:text="1"
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <ImageView
+            android:id="@+id/imgChannelLogo"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_marginEnd="8dp"
+            android:src="@drawable/tv_banner" />
+
+        <TextView
+            android:id="@+id/txtChannelName"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="Sendername"
+            android:textColor="@color/text_primary"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- Rechter horizontaler EPG Timeline Zeitstrahl -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recyclerChannelPrograms"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:orientation="horizontal" />
+
+</LinearLayout>
