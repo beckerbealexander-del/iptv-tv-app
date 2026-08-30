@@ -13,32 +13,42 @@ import androidx.media3.extractor.ts.DefaultTsPayloadReaderFactory
 object PlayerUtils {
 
     fun createExoPlayer(context: Context): ExoPlayer {
-        // 1. Robuster HTTP DataSource mit langen Timeouts & Redirect Support (ideal für 2.4GHz & weite Distanzen)
+        // 1. Ultra-robuster HTTP DataSource mit langen Timeouts & Redirect Support (optimal für Schlafzimmer / 2.4GHz)
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent("IPTVSmartersPro/1.0.0 (Linux; Android 11; TV)")
+            .setUserAgent("VLC/3.0.18 (Linux; Android 11; TV) ExoPlayerLib/2.18.2")
             .setAllowCrossProtocolRedirects(true)
             .setKeepPostFor302Redirects(true)
-            .setConnectTimeoutMs(30000)
-            .setReadTimeoutMs(35000)
+            .setConnectTimeoutMs(40000)
+            .setReadTimeoutMs(45000)
+            .setDefaultRequestProperties(mapOf(
+                "Connection" to "keep-alive",
+                "Accept" to "*/*"
+            ))
 
-        // 2. TS Stream Extractor Optimierung
+        // 2. All-Format TS / MKV / MP4 / HLS Stream Extractor Optimierung
         val extractorsFactory = DefaultExtractorsFactory()
-            .setTsExtractorFlags(DefaultTsPayloadReaderFactory.FLAG_ALLOW_NON_IDR_KEYFRAMES or DefaultTsPayloadReaderFactory.FLAG_DETECT_ACCESS_UNITS)
+            .setTsExtractorFlags(
+                DefaultTsPayloadReaderFactory.FLAG_ALLOW_NON_IDR_KEYFRAMES or
+                DefaultTsPayloadReaderFactory.FLAG_DETECT_ACCESS_UNITS or
+                DefaultTsPayloadReaderFactory.FLAG_IGNORE_SPLICE_INFO_STREAM
+            )
+            .setConstantBitrateSeekingEnabled(true)
 
         val mediaSourceFactory = DefaultMediaSourceFactory(httpDataSourceFactory, extractorsFactory)
 
-        // 3. Hardware Rendering bevorzugen
+        // 3. Fallback auf Software-Decoding falls Hardware-Decoder im Schlafzimmer zickt
         val renderersFactory = DefaultRenderersFactory(context)
             .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
+            .setEnableDecoderFallback(true)
 
-        // 4. Intelligente Puffersteuerung (LoadControl) für schwache / weiter entfernte WLAN-Signale
+        // 4. Intelligente Puffersteuerung (LoadControl) für WLAN-Schwankungen
         val loadControl = DefaultLoadControl.Builder()
             .setAllocator(DefaultAllocator(true, 64 * 1024))
             .setBufferDurationsMs(
-                /* minBufferMs = */ 45000,   // Hält mindestens 45 Sek. Puffer
-                /* maxBufferMs = */ 90000,   // Puffert bis zu 90 Sek. vor
-                /* bufferForPlaybackMs = */ 2000, // Spielt nach 2 Sek. sofort flüssig an
-                /* bufferForPlaybackAfterRebufferMs = */ 4000 // Rebuffer Schutz
+                /* minBufferMs = */ 45000,
+                /* maxBufferMs = */ 90000,
+                /* bufferForPlaybackMs = */ 1500, // Schneller Start
+                /* bufferForPlaybackAfterRebufferMs = */ 3000
             )
             .setBackBuffer(
                 /* backBufferDurationMs = */ 30000,

@@ -51,7 +51,13 @@ class PlayerActivity : AppCompatActivity() {
     private val osdHandler = Handler(Looper.getMainLooper())
     private val progressHandler = Handler(Looper.getMainLooper())
     private val scrubHandler = Handler(Looper.getMainLooper())
+    private val retryHandler = Handler(Looper.getMainLooper())
     private var epgJob: Job? = null
+
+    // Automatischer Reconnect & Retry
+    private var retryCount = 0
+    private val maxRetries = 5
+    private var lastKnownPosition: Long = 0L
 
     // Netflix-Style Spulen Variablen
     private var targetSeekPosition: Long = -1
@@ -83,6 +89,9 @@ class PlayerActivity : AppCompatActivity() {
         episodeList = (intent.getSerializableExtra("EPISODE_LIST") as? ArrayList<EpisodeItem>) ?: emptyList()
 
         isLive = streamList.isNotEmpty() || currentType == "LIVE"
+
+        // Vor dem Start den neuesten Stand synchronisieren
+        historyManager.syncWithCloud(client.username)
 
         setupUI()
         setupPlayer(currentStreamUrl, currentStreamName, currentStreamId)
@@ -177,6 +186,7 @@ class PlayerActivity : AppCompatActivity() {
         seasonNum = ep.season
         episodeNum = ep.episodeNum
         currentPosterUrl = ep.info?.movieImage ?: currentPosterUrl
+        retryCount = 0
 
         updateEpisodeButtons()
         showOsd(currentStreamName, currentStreamId)
@@ -189,6 +199,7 @@ class PlayerActivity : AppCompatActivity() {
 
     private fun setupPlayer(url: String, name: String, streamId: Int) {
         showOsd(name, streamId)
+        retryCount = 0
 
         exoPlayer = PlayerUtils.createExoPlayer(this).apply {
             binding.playerView.player = this
@@ -199,6 +210,7 @@ class PlayerActivity : AppCompatActivity() {
                         if (state == Player.STATE_BUFFERING) View.VISIBLE else View.GONE
 
                     if (state == Player.STATE_READY) {
+                        retryCount = 0 // Erfolgreich verbunden
                         updateQualityAndAudioBadges()
                     }
 
@@ -216,7 +228,29 @@ class PlayerActivity : AppCompatActivity() {
                 }
 
                 override fun onPlayerError(error: PlaybackException) {
-                    Toast.makeText(this@PlayerActivity, "Wiedergabefehler: ${error.message}", Toast.LENGTH_SHORT).show()
+                    val pos = if (currentPosition > 0) currentPosition else lastKnownPosition
+                    if (retryCount < maxRetries) {
+                        retryCount++
+                        Toast.makeText(this@PlayerActivity, "⚠️ Verbindungsversuch (${retryCount}/${maxRetries})...", Toast.LENGTH_SHORT).show()
+                        binding.playerLoading.visibility = View.VISIBLE
+
+                        // Container-Fallback nach 2 Fehlversuchen (z.B. .mp4 <-> .mkv <-> .ts)
+                        if (retryCount == 3) {
+                            if (currentStreamUrl.endsWith(".mp4")) {
+                                currentStreamUrl = currentStreamUrl.replace(".mp4", ".mkv")
+                            } else if (currentStreamUrl.endsWith(".mkv")) {
+                                currentStreamUrl = currentStreamUrl.replace(".mkv", ".ts")
+                            }
+                        }
+
+                        retryHandler.removeCallbacksAndMessages(null)
+                        retryHandler.postDelayed({
+                            reconnectStream(pos)
+                        }, 1500)
+                    } else {
+                        Toast.makeText(this@PlayerActivity, "Wiedergabefehler: ${error.message} (Server antwortet nicht)", Toast.LENGTH_LONG).show()
+                        binding.playerLoading.visibility = View.GONE
+                    }
                 }
             })
 
@@ -228,6 +262,7 @@ class PlayerActivity : AppCompatActivity() {
             if (!isLive) {
                 val resumePos = historyManager.getResumePosition(url)
                 if (resumePos > 15_000) {
+                    lastKnownPosition = resumePos
                     seekTo(resumePos)
                     Toast.makeText(this@PlayerActivity, "Fortgesetzt bei ${formatTime(resumePos)}", Toast.LENGTH_SHORT).show()
                 }
@@ -237,6 +272,18 @@ class PlayerActivity : AppCompatActivity() {
         }
 
         startProgressUpdater()
+    }
+
+    private fun reconnectStream(seekPos: Long) {
+        val player = exoPlayer ?: return
+        player.stop()
+        val mediaItem = MediaItem.fromUri(currentStreamUrl)
+        player.setMediaItem(mediaItem)
+        player.prepare()
+        if (seekPos > 10_000 && !isLive) {
+            player.seekTo(seekPos)
+        }
+        player.playWhenReady = true
     }
 
     private fun updateQualityAndAudioBadges() {
@@ -275,6 +322,7 @@ class PlayerActivity : AppCompatActivity() {
                 if (player != null && !isLive && player.duration > 0 && targetSeekPosition < 0) {
                     val current = player.currentPosition
                     val total = player.duration
+                    if (current > 0) lastKnownPosition = current
                     binding.txtTimeCurrent.text = formatTime(current)
                     binding.txtTimeTotal.text = formatTime(total)
                     binding.playerSeekBar.progress = ((current * 1000) / total).toInt()
@@ -484,21 +532,18 @@ class PlayerActivity : AppCompatActivity() {
                     return true
                 }
             }
-            // Netflix-Style Spulen vorwärts
             KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {
                 if (!isLive && !isOsdFocused()) {
                     performNetflixScrub(true)
                     return true
                 }
             }
-            // Netflix-Style Spulen rückwärts
             KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_MEDIA_REWIND -> {
                 if (!isLive && !isOsdFocused()) {
                     performNetflixScrub(false)
                     return true
                 }
             }
-            // Runter-Taste: OSD öffnen & zur Zeitleiste navigieren
             KeyEvent.KEYCODE_DPAD_DOWN -> {
                 if (isLive) {
                     zapPreviousChannel()
@@ -513,7 +558,6 @@ class PlayerActivity : AppCompatActivity() {
                     return true
                 }
             }
-            // Hoch-Taste: 2-Stufen-Navigation (Von Buttons -> SeekBar -> Film)
             KeyEvent.KEYCODE_DPAD_UP -> {
                 if (isLive) {
                     zapNextChannel()
@@ -530,7 +574,6 @@ class PlayerActivity : AppCompatActivity() {
                     return true
                 }
             }
-            // OK-Taste: Toggle Pause / Play (außer wenn Button gedrückt wird)
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
                 if (!isLive) {
                     if (binding.btnAudioTracks.hasFocus()) {
@@ -559,7 +602,7 @@ class PlayerActivity : AppCompatActivity() {
                 }
             }
         }
-        return super.onKeyDown(keyCode, event)
+        return super.dispatchKeyEvent(event)
     }
 
     private fun zapNextChannel() {
@@ -582,6 +625,7 @@ class PlayerActivity : AppCompatActivity() {
         currentStreamId = stream.streamId
         currentStreamName = stream.name
         currentStreamUrl = client.getLiveStreamUrl(stream.streamId)
+        retryCount = 0
         showOsd(stream.name, stream.streamId)
         val mediaItem = MediaItem.fromUri(currentStreamUrl)
         exoPlayer?.setMediaItem(mediaItem)
@@ -618,6 +662,7 @@ class PlayerActivity : AppCompatActivity() {
         osdHandler.removeCallbacksAndMessages(null)
         progressHandler.removeCallbacksAndMessages(null)
         scrubHandler.removeCallbacksAndMessages(null)
+        retryHandler.removeCallbacksAndMessages(null)
         exoPlayer?.release()
         exoPlayer = null
     }
