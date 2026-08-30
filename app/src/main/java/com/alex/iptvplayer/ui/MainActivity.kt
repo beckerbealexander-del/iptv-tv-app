@@ -88,7 +88,11 @@ class MainActivity : AppCompatActivity() {
         val allHistory = historyManager.getHistory()
 
         // 1. Film-Verlauf
-        val moviesHistory = allHistory.filter { it.type == "VOD" }
+        val moviesHistory = allHistory.filter { 
+            (it.type == "VOD" || it.streamUrl.contains("/movie/")) && 
+            !it.streamUrl.contains("/series/") && 
+            !it.title.contains(" - S") 
+        }
         if (moviesHistory.isNotEmpty()) {
             binding.txtNoMovieHistory.visibility = View.GONE
             binding.recyclerMovieHistory.visibility = View.VISIBLE
@@ -101,7 +105,11 @@ class MainActivity : AppCompatActivity() {
         }
 
         // 2. Serien-Verlauf
-        val seriesHistory = allHistory.filter { it.type == "SERIES" }
+        val seriesHistory = allHistory.filter { 
+            it.type == "SERIES" || 
+            it.streamUrl.contains("/series/") || 
+            it.title.contains(" - S") 
+        }
         if (seriesHistory.isNotEmpty()) {
             binding.txtNoSeriesHistory.visibility = View.GONE
             binding.recyclerSeriesHistory.visibility = View.VISIBLE

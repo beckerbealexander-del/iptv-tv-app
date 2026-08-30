@@ -173,7 +173,7 @@ class LiveTvActivity : AppCompatActivity() {
         startActivity(intent)
     }
 
-    // --- Hard D-Pad Navigation Lock: Verhindert 100% jegliches Springen beim vertikalen Scrollen ---
+    // --- Absolute Hardware D-Pad Sperre: Fokus kann die Senderliste NIEMALS ungewollt verlassen ---
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.action == KeyEvent.ACTION_DOWN) {
             val focused = currentFocus
@@ -184,46 +184,59 @@ class LiveTvActivity : AppCompatActivity() {
                     KeyEvent.KEYCODE_DPAD_DOWN -> {
                         if (channelPos < currentStreams.size - 1) {
                             val nextPos = channelPos + 1
-                            binding.recyclerChannels.smoothScrollToPosition(nextPos)
-                            val nextHolder = binding.recyclerChannels.findViewHolderForAdapterPosition(nextPos) as? ChannelAdapter.ViewHolder
-                            if (nextHolder != null) {
-                                nextHolder.header.requestFocus()
-                            } else {
-                                binding.recyclerChannels.postDelayed({
-                                    (binding.recyclerChannels.findViewHolderForAdapterPosition(nextPos) as? ChannelAdapter.ViewHolder)?.header?.requestFocus()
-                                }, 70)
+                            binding.recyclerChannels.scrollToPosition(nextPos)
+                            binding.recyclerChannels.post {
+                                val holder = binding.recyclerChannels.findViewHolderForAdapterPosition(nextPos) as? ChannelAdapter.ViewHolder
+                                holder?.header?.requestFocus()
                             }
-                            return true
                         }
+                        // Wenn am Ende der Liste: Nichts tun, aber Event schlucken (Niemals zu Kategorien springen!)
+                        return true
                     }
                     KeyEvent.KEYCODE_DPAD_UP -> {
                         if (channelPos > 0) {
                             val prevPos = channelPos - 1
-                            binding.recyclerChannels.smoothScrollToPosition(prevPos)
-                            val prevHolder = binding.recyclerChannels.findViewHolderForAdapterPosition(prevPos) as? ChannelAdapter.ViewHolder
-                            if (prevHolder != null) {
-                                prevHolder.header.requestFocus()
-                            } else {
-                                binding.recyclerChannels.postDelayed({
-                                    (binding.recyclerChannels.findViewHolderForAdapterPosition(prevPos) as? ChannelAdapter.ViewHolder)?.header?.requestFocus()
-                                }, 70)
+                            binding.recyclerChannels.scrollToPosition(prevPos)
+                            binding.recyclerChannels.post {
+                                val holder = binding.recyclerChannels.findViewHolderForAdapterPosition(prevPos) as? ChannelAdapter.ViewHolder
+                                holder?.header?.requestFocus()
                             }
-                            return true
                         } else if (channelPos == 0) {
+                            // Am Anfang der Liste: optional Suche fokussieren oder bleiben
                             binding.editLiveSearch.requestFocus()
-                            return true
                         }
+                        // Niemals zu Kategorien springen!
+                        return true
                     }
                     KeyEvent.KEYCODE_DPAD_LEFT -> {
                         if (isHeaderFocused(focused)) {
-                            binding.recyclerCategories.requestFocus()
+                            // Nur bei bewusstem Druck nach LINKS auf dem Senderkopf zu den Kategorien wechseln
+                            val curCatHolder = binding.recyclerCategories.findViewHolderForAdapterPosition(0) as? CategoryAdapter.ViewHolder
+                            curCatHolder?.itemView?.requestFocus() ?: binding.recyclerCategories.requestFocus()
                             return true
                         }
                     }
                 }
+            } else if (isViewInRecyclerView(focused, binding.recyclerCategories)) {
+                // In den Kategorien
+                if (event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
+                    val curChanHolder = binding.recyclerChannels.findViewHolderForAdapterPosition(0) as? ChannelAdapter.ViewHolder
+                    curChanHolder?.header?.requestFocus() ?: binding.recyclerChannels.requestFocus()
+                    return true
+                }
             }
         }
         return super.dispatchKeyEvent(event)
+    }
+
+    private fun isViewInRecyclerView(view: View?, rv: RecyclerView): Boolean {
+        var current: View? = view
+        while (current != null) {
+            if (current == rv) return true
+            val parent = current.parent
+            current = parent as? View
+        }
+        return false
     }
 
     private fun getFocusedChannelPosition(view: View?): Int {
@@ -262,23 +275,22 @@ class LiveTvActivity : AppCompatActivity() {
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val cat = items[position]
             holder.txtName.text = cat.name
-            holder.itemView.setOnClickListener { onSelect(cat) }
+
+            holder.itemView.setOnClickListener {
+                onSelect(cat)
+            }
+
+            // Ruhigeres Wechseln beim bewussten Scrollen durch Kategorien
             holder.itemView.setOnFocusChangeListener { _, hasFocus ->
                 if (hasFocus) {
                     focusJob?.cancel()
                     focusJob = lifecycleScope.launch {
-                        delay(350)
-                        onSelect(cat)
+                        delay(600)
+                        if (holder.itemView.hasFocus()) {
+                            onSelect(cat)
+                        }
                     }
                 }
-            }
-
-            holder.itemView.setOnKeyListener { _, keyCode, event ->
-                if (event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
-                    val firstHolder = binding.recyclerChannels.findViewHolderForAdapterPosition(0) as? ChannelAdapter.ViewHolder
-                    firstHolder?.header?.requestFocus() ?: binding.recyclerChannels.requestFocus()
-                    true
-                } else false
             }
         }
 

@@ -123,6 +123,11 @@ class SeriesDetailActivity : AppCompatActivity() {
         val intent = Intent(this, PlayerActivity::class.java).apply {
             putExtra("STREAM_URL", client.getSeriesStreamUrl(ep.id, ep.containerExtension ?: "mp4"))
             putExtra("STREAM_NAME", "$sName - S${ep.season}E${ep.episodeNum} ${ep.title}")
+            putExtra("POSTER_URL", ep.info?.movieImage ?: seriesItem?.cover)
+            putExtra("STREAM_TYPE", "SERIES")
+            putExtra("STREAM_ID", ep.id)
+            putExtra("SEASON_NUM", ep.season)
+            putExtra("EPISODE_NUM", ep.episodeNum)
         }
         startActivity(intent)
     }

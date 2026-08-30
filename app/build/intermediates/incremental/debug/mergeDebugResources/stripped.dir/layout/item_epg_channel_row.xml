@@ -7,7 +7,7 @@
     android:gravity="center_vertical"
     android:orientation="horizontal">
 
-    <!-- Schlanker Senderkopf (Höhe halbiert auf 36dp, Breite auf 280dp erweitert für vollen Sendernamen) -->
+    <!-- Schlanker Senderkopf mit striktem Fokus-Einschluss -->
     <LinearLayout
         android:id="@+id/channelHeader"
         android:layout_width="280dp"
@@ -19,6 +19,8 @@
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingHorizontal="8dp"
+        android:nextFocusLeft="@+id/channelHeader"
+        android:nextFocusRight="@+id/recyclerChannelPrograms"
         android:layout_marginEnd="4dp">
 
         <TextView
