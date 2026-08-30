@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="56dp"
-    android:layout_marginBottom="4dp"
+    android:layout_height="36dp"
+    android:layout_marginBottom="2dp"
     android:descendantFocusability="afterDescendants"
     android:gravity="center_vertical"
     android:orientation="horizontal">
 
-    <!-- Linker Senderkopf mit rotem Netflix-Fokus-Highlight -->
+    <!-- Schlanker Senderkopf (Höhe halbiert auf 36dp, Breite auf 280dp erweitert für vollen Sendernamen) -->
     <LinearLayout
         android:id="@+id/channelHeader"
-        android:layout_width="210dp"
+        android:layout_width="280dp"
         android:layout_height="match_parent"
         android:background="@drawable/card_focus_selector"
         android:clickable="true"
@@ -18,8 +18,8 @@
         android:focusableInTouchMode="true"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingHorizontal="10dp"
-        android:layout_marginEnd="6dp">
+        android:paddingHorizontal="8dp"
+        android:layout_marginEnd="4dp">
 
         <TextView
             android:id="@+id/txtChannelNum"
@@ -27,14 +27,14 @@
             android:layout_height="wrap_content"
             android:text="1"
             android:textColor="@color/text_secondary"
-            android:textSize="12sp"
+            android:textSize="11sp"
             android:textStyle="bold" />
 
         <ImageView
             android:id="@+id/imgChannelLogo"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
-            android:layout_marginEnd="8dp"
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:layout_marginEnd="6dp"
             android:src="@drawable/tv_banner" />
 
         <TextView
@@ -42,11 +42,11 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:ellipsize="end"
-            android:maxLines="1"
+            android:ellipsize="marquee"
+            android:singleLine="true"
             android:text="Sendername"
             android:textColor="@color/text_primary"
-            android:textSize="13sp"
+            android:textSize="12sp"
             android:textStyle="bold" />
     </LinearLayout>
 

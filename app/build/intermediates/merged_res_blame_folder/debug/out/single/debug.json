@@ -4,6 +4,10 @@
         "source": "C:\\Users\\becke\\.gradle\\daemon\\8.4\\com.alex.iptvplayer.app-main-6:\\layout\\activity_settings.xml"
     },
     {
+        "merged": "com.alex.iptvplayer.app-merged_res-4:/layout_item_category.xml.flat",
+        "source": "com.alex.iptvplayer.app-main-6:/layout/item_category.xml"
+    },
+    {
         "merged": "C:\\Users\\becke\\.gradle\\daemon\\8.4\\com.alex.iptvplayer.app-merged_res-4:\\layout_activity_search.xml.flat",
         "source": "C:\\Users\\becke\\.gradle\\daemon\\8.4\\com.alex.iptvplayer.app-main-6:\\layout\\activity_search.xml"
     },
@@ -50,6 +54,10 @@
     {
         "merged": "C:\\Users\\becke\\.gradle\\daemon\\8.4\\com.alex.iptvplayer.app-merged_res-4:\\layout_item_channel.xml.flat",
         "source": "C:\\Users\\becke\\.gradle\\daemon\\8.4\\com.alex.iptvplayer.app-main-6:\\layout\\item_channel.xml"
+    },
+    {
+        "merged": "com.alex.iptvplayer.app-merged_res-4:/layout_item_epg_program_block.xml.flat",
+        "source": "com.alex.iptvplayer.app-main-6:/layout/item_epg_program_block.xml"
     },
     {
         "merged": "com.alex.iptvplayer.app-merged_res-4:/layout_activity_live_tv.xml.flat",

@@ -11,28 +11,28 @@
         android:layout_height="match_parent"
         android:background="#0B0B0B"
         android:orientation="vertical"
-        android:padding="10dp">
+        android:padding="8dp">
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="TV-Kategorien"
             android:textColor="@color/text_primary"
-            android:textSize="15sp"
+            android:textSize="14sp"
             android:textStyle="bold"
-            android:layout_marginBottom="8dp" />
+            android:layout_marginBottom="6dp" />
 
         <!-- Schnellauswahl Filter-Buttons -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginBottom="8dp">
+            android:layout_marginBottom="6dp">
 
             <Button
                 android:id="@+id/btnLiveFilterDe"
                 android:layout_width="0dp"
-                android:layout_height="30dp"
+                android:layout_height="28dp"
                 android:layout_weight="1"
                 android:background="@drawable/card_focus_selector"
                 android:nextFocusDown="@+id/recyclerCategories"
@@ -44,7 +44,7 @@
             <Button
                 android:id="@+id/btnLiveFilterRu"
                 android:layout_width="0dp"
-                android:layout_height="30dp"
+                android:layout_height="28dp"
                 android:layout_weight="1"
                 android:background="@drawable/card_focus_selector"
                 android:nextFocusDown="@+id/recyclerCategories"
@@ -56,7 +56,7 @@
             <Button
                 android:id="@+id/btnLiveFilterAdult"
                 android:layout_width="0dp"
-                android:layout_height="30dp"
+                android:layout_height="28dp"
                 android:layout_weight="1"
                 android:background="@drawable/card_focus_selector"
                 android:nextFocusDown="@+id/recyclerCategories"
@@ -68,7 +68,7 @@
             <Button
                 android:id="@+id/btnLiveFilterAll"
                 android:layout_width="0dp"
-                android:layout_height="30dp"
+                android:layout_height="28dp"
                 android:layout_weight="1"
                 android:background="@drawable/card_focus_selector"
                 android:nextFocusDown="@+id/recyclerCategories"
@@ -99,16 +99,16 @@
         android:layout_height="match_parent"
         android:layout_weight="1"
         android:orientation="vertical"
-        android:padding="12dp">
+        android:padding="8dp">
 
         <!-- 1. Obere Leiste: Sendersuche & Programmbeschreibung -->
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="90dp"
+            android:layout_height="80dp"
             android:background="#121212"
             android:orientation="horizontal"
-            android:padding="10dp"
-            android:layout_marginBottom="8dp">
+            android:padding="8dp"
+            android:layout_marginBottom="6dp">
 
             <LinearLayout
                 android:layout_width="0dp"
@@ -131,7 +131,7 @@
                         android:maxLines="1"
                         android:text="Wähle einen Sender"
                         android:textColor="@color/text_primary"
-                        android:textSize="16sp"
+                        android:textSize="15sp"
                         android:textStyle="bold" />
 
                     <TextView
@@ -148,7 +148,7 @@
                     android:id="@+id/txtPreviewDesc"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="3dp"
+                    android:layout_marginTop="2dp"
                     android:ellipsize="end"
                     android:maxLines="2"
                     android:text="Drücke OK auf der Fernbedienung, um den Sender direkt im Vollbild zu starten."
@@ -159,7 +159,7 @@
             <EditText
                 android:id="@+id/editLiveSearch"
                 android:layout_width="200dp"
-                android:layout_height="36dp"
+                android:layout_height="34dp"
                 android:background="@drawable/card_focus_selector"
                 android:hint="🔍 Sender suchen..."
                 android:nextFocusDown="@+id/recyclerChannels"
@@ -167,31 +167,31 @@
                 android:textColor="@color/text_primary"
                 android:textColorHint="@color/text_secondary"
                 android:textSize="12sp"
-                android:paddingHorizontal="12dp"
+                android:paddingHorizontal="10dp"
                 android:singleLine="true"
-                android:layout_marginStart="14dp"
+                android:layout_marginStart="12dp"
                 android:layout_gravity="center_vertical" />
         </LinearLayout>
 
         <!-- 2. TiviMate Zeitstrahl-Kopfleiste (Vergangenheit bis Zukunft) -->
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="28dp"
+            android:layout_height="24dp"
             android:background="#181818"
             android:gravity="center_vertical"
             android:orientation="horizontal"
             android:paddingHorizontal="8dp"
-            android:layout_marginBottom="4dp">
+            android:layout_marginBottom="3dp">
 
             <TextView
                 android:id="@+id/txtCurrentLiveTime"
-                android:layout_width="210dp"
+                android:layout_width="280dp"
                 android:layout_height="wrap_content"
                 android:text="🔴 LIVE TV GUIDE"
                 android:textColor="@color/netflix_red"
                 android:textSize="11sp"
                 android:textStyle="bold"
-                android:layout_marginEnd="6dp" />
+                android:layout_marginEnd="4dp" />
 
             <TextView
                 android:layout_width="wrap_content"
