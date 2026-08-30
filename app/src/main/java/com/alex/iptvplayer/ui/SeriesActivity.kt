@@ -34,6 +34,7 @@ class SeriesActivity : AppCompatActivity() {
     private var allCategories: List<Category> = emptyList()
     private var currentFilter = LangFilter.AUTO_DE_RU_ADULT
     private var currentSeries: List<SeriesItem> = emptyList()
+    private var allSeriesGlobal: List<SeriesItem> = emptyList()
     private var selectedCategoryId: String? = null
     private var loadJob: Job? = null
 
@@ -59,19 +60,41 @@ class SeriesActivity : AppCompatActivity() {
         setupFilterButtons()
         setupSearch()
         loadCategories()
+        preloadGlobalCatalog()
+    }
+
+    private fun preloadGlobalCatalog() {
+        lifecycleScope.launch {
+            try {
+                allSeriesGlobal = client.getAllSeries()
+            } catch (e: Exception) {
+                // Silent
+            }
+        }
     }
 
     private fun setupSearch() {
         binding.editSeriesSearch.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                val q = s?.toString()?.trim()?.lowercase() ?: ""
-                val filtered = if (q.isEmpty()) currentSeries else currentSeries.filter { it.name.lowercase().contains(q) }
-                binding.recyclerSeriesGrid.adapter = SeriesAdapter(filtered, { series ->
-                    updateHeroBanner(series)
-                }, { series ->
-                    openSeriesDetail(series)
-                })
+                val q = s?.toString()?.trim() ?: ""
+                if (q.isEmpty()) {
+                    binding.txtSeriesCategoryTitle.text = "Serien"
+                    binding.recyclerSeriesGrid.adapter = SeriesAdapter(currentSeries, { series ->
+                        updateHeroBanner(series)
+                    }, { series ->
+                        openSeriesDetail(series)
+                    })
+                } else {
+                    val pool = if (allSeriesGlobal.isNotEmpty()) allSeriesGlobal else currentSeries
+                    val filtered = pool.filter { it.name.contains(q, ignoreCase = true) }
+                    binding.txtSeriesCategoryTitle.text = "Suchergebnisse (${filtered.size})"
+                    binding.recyclerSeriesGrid.adapter = SeriesAdapter(filtered, { series ->
+                        updateHeroBanner(series)
+                    }, { series ->
+                        openSeriesDetail(series)
+                    })
+                }
             }
             override fun afterTextChanged(s: Editable?) {}
         })
@@ -80,13 +103,15 @@ class SeriesActivity : AppCompatActivity() {
     private fun setupFilterButtons() {
         binding.btnSeriesFilterDe.setOnClickListener { applyFilter(LangFilter.DE) }
         binding.btnSeriesFilterRu.setOnClickListener { applyFilter(LangFilter.RU) }
-        binding.btnSeriesFilterAdult.setOnClickListener { applyFilter(LangFilter.ADULT) }
         binding.btnSeriesFilterAll.setOnClickListener { applyFilter(LangFilter.ALL) }
     }
 
     private fun applyFilter(filter: LangFilter) {
         currentFilter = filter
-        val filtered = client.filterCategories(allCategories, filter)
+        val filtered = client.filterCategories(allCategories, filter).toMutableList()
+        if (filtered.none { it.id == "ALL_SERIES" }) {
+            filtered.add(0, Category(id = "ALL_SERIES", name = "✨ Alle Serien"))
+        }
         binding.recyclerSeriesCategories.adapter = SeriesCategoryAdapter(filtered) { cat ->
             loadSeries(cat)
         }

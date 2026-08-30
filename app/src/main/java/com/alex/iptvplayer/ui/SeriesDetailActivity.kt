@@ -29,6 +29,11 @@ class SeriesDetailActivity : AppCompatActivity() {
     private lateinit var client: XtreamClient
     private var seriesItem: SeriesItem? = null
     private var seriesInfo: SeriesInfoResponse? = null
+    private var seriesId: Int = -1
+    private var targetSeason: Int = -1
+    private var targetEpisode: Int = -1
+    private var autoPlay: Boolean = false
+    private var hasAutoPlayed: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -39,8 +44,14 @@ class SeriesDetailActivity : AppCompatActivity() {
 
         @Suppress("DEPRECATION")
         seriesItem = intent.getSerializableExtra("SERIES_ITEM") as? SeriesItem
+        seriesId = intent.getIntExtra("SERIES_ID", seriesItem?.seriesId ?: -1)
+        targetSeason = intent.getIntExtra("TARGET_SEASON", -1)
+        targetEpisode = intent.getIntExtra("TARGET_EPISODE", -1)
+        autoPlay = intent.getBooleanExtra("AUTO_PLAY", false)
 
-        if (seriesItem == null) {
+        val extraTitle = intent.getStringExtra("SERIES_NAME")
+
+        if (seriesId <= 0 && seriesItem == null) {
             finish()
             return
         }
@@ -56,7 +67,12 @@ class SeriesDetailActivity : AppCompatActivity() {
             setItemViewCacheSize(30)
         }
 
-        displayInitialInfo()
+        if (seriesItem != null) {
+            displayInitialInfo()
+        } else if (!extraTitle.isNullOrEmpty()) {
+            binding.txtDetailSeriesTitle.text = extraTitle
+        }
+
         loadFullSeriesInfo()
     }
 
@@ -77,34 +93,43 @@ class SeriesDetailActivity : AppCompatActivity() {
     }
 
     private fun loadFullSeriesInfo() {
-        val s = seriesItem ?: return
+        val targetId = if (seriesItem != null) seriesItem!!.seriesId else seriesId
         binding.progressEpisodes.visibility = View.VISIBLE
 
         lifecycleScope.launch {
             try {
-                val info = client.getSeriesInfo(s.seriesId)
+                val info = client.getSeriesInfo(targetId)
                 seriesInfo = info
                 binding.progressEpisodes.visibility = View.GONE
 
-                // Aktualisiere Beschreibung & Genre aus Info
                 if (info.info != null) {
+                    if (!info.info.name.isNullOrEmpty()) binding.txtDetailSeriesTitle.text = info.info.name
                     if (!info.info.plot.isNullOrEmpty()) binding.txtDetailSeriesPlot.text = info.info.plot
                     if (!info.info.genre.isNullOrEmpty()) binding.txtDetailSeriesGenre.text = info.info.genre
                     if (!info.info.rating.isNullOrEmpty()) binding.txtDetailSeriesRating.text = "⭐ ${info.info.rating}"
+
+                    if (!info.info.cover.isNullOrEmpty()) {
+                        Glide.with(this@SeriesDetailActivity)
+                            .load(info.info.cover)
+                            .override(320, 420)
+                            .diskCacheStrategy(DiskCacheStrategy.ALL)
+                            .placeholder(R.drawable.tv_banner)
+                            .into(binding.imgDetailSeriesCover)
+                    }
                 }
 
                 val seasons = info.seasons ?: emptyList()
+                val initialSeasonNum = if (targetSeason > 0) targetSeason else (seasons.firstOrNull()?.seasonNumber ?: 1)
+
                 if (seasons.isNotEmpty()) {
                     binding.recyclerSeasons.adapter = SeasonAdapter(seasons) { season ->
                         loadEpisodesForSeason(season.seasonNumber)
                     }
-                    // Staffel 1 standardmäßig laden
-                    loadEpisodesForSeason(seasons[0].seasonNumber)
+                    loadEpisodesForSeason(initialSeasonNum)
                 } else {
-                    // Fallback wenn keine seasons deklariert sind: alle Episoden
                     val all = mutableListOf<EpisodeItem>()
                     info.episodes?.values?.forEach { all.addAll(it) }
-                    binding.recyclerEpisodes.adapter = EpisodeAdapter(all)
+                    displayEpisodes(all)
                 }
             } catch (e: Exception) {
                 binding.progressEpisodes.visibility = View.GONE
@@ -115,19 +140,43 @@ class SeriesDetailActivity : AppCompatActivity() {
 
     private fun loadEpisodesForSeason(seasonNum: Int) {
         val epList = seriesInfo?.episodes?.get(seasonNum.toString()) ?: emptyList()
-        binding.recyclerEpisodes.adapter = EpisodeAdapter(epList)
+        displayEpisodes(epList)
     }
 
-    private fun playEpisode(ep: EpisodeItem) {
-        val sName = seriesItem?.name ?: "Serie"
+    private fun displayEpisodes(epList: List<EpisodeItem>) {
+        binding.recyclerEpisodes.adapter = EpisodeAdapter(epList)
+
+        // Wenn Ziel-Episode angegeben (z.B. vom Weiterschauen im Main Screen)
+        val targetIdx = if (targetEpisode > 0) {
+            epList.indexOfFirst { it.episodeNum == targetEpisode }.coerceAtLeast(0)
+        } else 0
+
+        if (epList.isNotEmpty()) {
+            binding.recyclerEpisodes.scrollToPosition(targetIdx)
+            binding.recyclerEpisodes.post {
+                val holder = binding.recyclerEpisodes.findViewHolderForAdapterPosition(targetIdx)
+                holder?.itemView?.requestFocus()
+            }
+
+            if (autoPlay && !hasAutoPlayed) {
+                hasAutoPlayed = true
+                playEpisode(epList[targetIdx], targetIdx, epList)
+            }
+        }
+    }
+
+    private fun playEpisode(ep: EpisodeItem, index: Int, list: List<EpisodeItem>) {
+        val sName = seriesItem?.name ?: seriesInfo?.info?.name ?: "Serie"
         val intent = Intent(this, PlayerActivity::class.java).apply {
             putExtra("STREAM_URL", client.getSeriesStreamUrl(ep.id, ep.containerExtension ?: "mp4"))
             putExtra("STREAM_NAME", "$sName - S${ep.season}E${ep.episodeNum} ${ep.title}")
-            putExtra("POSTER_URL", ep.info?.movieImage ?: seriesItem?.cover)
+            putExtra("POSTER_URL", ep.info?.movieImage ?: seriesItem?.cover ?: seriesInfo?.info?.cover)
             putExtra("STREAM_TYPE", "SERIES")
-            putExtra("STREAM_ID", ep.id)
+            putExtra("STREAM_ID", ep.id.toIntOrNull() ?: -1)
             putExtra("SEASON_NUM", ep.season)
             putExtra("EPISODE_NUM", ep.episodeNum)
+            putExtra("EPISODE_INDEX", index)
+            putExtra("EPISODE_LIST", ArrayList(list))
         }
         startActivity(intent)
     }
@@ -181,7 +230,7 @@ class SeriesDetailActivity : AppCompatActivity() {
             val plotText = ep.info?.plot
             holder.txtPlot.text = if (!plotText.isNullOrEmpty()) plotText else "Keine Beschreibung verfügbar."
 
-            val imgUrl = ep.info?.movieImage
+            val imgUrl = ep.info?.movieImage ?: seriesInfo?.info?.cover ?: seriesItem?.cover
             if (!imgUrl.isNullOrEmpty()) {
                 Glide.with(holder.itemView)
                     .load(imgUrl)
@@ -193,7 +242,7 @@ class SeriesDetailActivity : AppCompatActivity() {
                 holder.imgThumb.setImageResource(R.drawable.tv_banner)
             }
 
-            holder.itemView.setOnClickListener { playEpisode(ep) }
+            holder.itemView.setOnClickListener { playEpisode(ep, position, episodes) }
         }
 
         override fun getItemCount() = episodes.size

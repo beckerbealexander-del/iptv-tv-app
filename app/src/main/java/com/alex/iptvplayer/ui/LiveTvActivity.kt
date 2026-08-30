@@ -137,7 +137,6 @@ class LiveTvActivity : AppCompatActivity() {
     private fun setupFilterButtons() {
         binding.btnLiveFilterDe.setOnClickListener { applyFilter(LangFilter.DE) }
         binding.btnLiveFilterRu.setOnClickListener { applyFilter(LangFilter.RU) }
-        binding.btnLiveFilterAdult.setOnClickListener { applyFilter(LangFilter.ADULT) }
         binding.btnLiveFilterAll.setOnClickListener { applyFilter(LangFilter.ALL) }
     }
 

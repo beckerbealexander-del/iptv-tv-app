@@ -25,9 +25,6 @@ public final class ActivitySeriesBinding implements ViewBinding {
   private final LinearLayout rootView;
 
   @NonNull
-  public final Button btnSeriesFilterAdult;
-
-  @NonNull
   public final Button btnSeriesFilterAll;
 
   @NonNull
@@ -69,8 +66,7 @@ public final class ActivitySeriesBinding implements ViewBinding {
   @NonNull
   public final TextView txtSeriesCategoryTitle;
 
-  private ActivitySeriesBinding(@NonNull LinearLayout rootView,
-      @NonNull Button btnSeriesFilterAdult, @NonNull Button btnSeriesFilterAll,
+  private ActivitySeriesBinding(@NonNull LinearLayout rootView, @NonNull Button btnSeriesFilterAll,
       @NonNull Button btnSeriesFilterDe, @NonNull Button btnSeriesFilterRu,
       @NonNull EditText editSeriesSearch, @NonNull ImageView imgHeroSeriesCover,
       @NonNull ProgressBar progressSeries, @NonNull ProgressBar progressSeriesCats,
@@ -79,7 +75,6 @@ public final class ActivitySeriesBinding implements ViewBinding {
       @NonNull TextView txtHeroSeriesRating, @NonNull TextView txtHeroSeriesTitle,
       @NonNull TextView txtSeriesCategoryTitle) {
     this.rootView = rootView;
-    this.btnSeriesFilterAdult = btnSeriesFilterAdult;
     this.btnSeriesFilterAll = btnSeriesFilterAll;
     this.btnSeriesFilterDe = btnSeriesFilterDe;
     this.btnSeriesFilterRu = btnSeriesFilterRu;
@@ -123,12 +118,6 @@ public final class ActivitySeriesBinding implements ViewBinding {
     // This is done to optimize the compiled bytecode for size and performance.
     int id;
     missingId: {
-      id = R.id.btnSeriesFilterAdult;
-      Button btnSeriesFilterAdult = ViewBindings.findChildViewById(rootView, id);
-      if (btnSeriesFilterAdult == null) {
-        break missingId;
-      }
-
       id = R.id.btnSeriesFilterAll;
       Button btnSeriesFilterAll = ViewBindings.findChildViewById(rootView, id);
       if (btnSeriesFilterAll == null) {
@@ -213,11 +202,11 @@ public final class ActivitySeriesBinding implements ViewBinding {
         break missingId;
       }
 
-      return new ActivitySeriesBinding((LinearLayout) rootView, btnSeriesFilterAdult,
-          btnSeriesFilterAll, btnSeriesFilterDe, btnSeriesFilterRu, editSeriesSearch,
-          imgHeroSeriesCover, progressSeries, progressSeriesCats, recyclerSeriesCategories,
-          recyclerSeriesGrid, seriesHeroBanner, txtHeroSeriesHint, txtHeroSeriesRating,
-          txtHeroSeriesTitle, txtSeriesCategoryTitle);
+      return new ActivitySeriesBinding((LinearLayout) rootView, btnSeriesFilterAll,
+          btnSeriesFilterDe, btnSeriesFilterRu, editSeriesSearch, imgHeroSeriesCover,
+          progressSeries, progressSeriesCats, recyclerSeriesCategories, recyclerSeriesGrid,
+          seriesHeroBanner, txtHeroSeriesHint, txtHeroSeriesRating, txtHeroSeriesTitle,
+          txtSeriesCategoryTitle);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));

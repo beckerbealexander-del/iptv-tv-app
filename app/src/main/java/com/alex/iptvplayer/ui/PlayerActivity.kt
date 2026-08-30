@@ -18,6 +18,7 @@ import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.exoplayer.ExoPlayer
 import com.alex.iptvplayer.R
+import com.alex.iptvplayer.data.EpisodeItem
 import com.alex.iptvplayer.data.HistoryManager
 import com.alex.iptvplayer.data.LiveStream
 import com.alex.iptvplayer.data.XtreamClient
@@ -36,7 +37,9 @@ class PlayerActivity : AppCompatActivity() {
 
     private var isLive: Boolean = false
     private var streamList: List<LiveStream> = emptyList()
+    private var episodeList: List<EpisodeItem> = emptyList()
     private var currentIndex: Int = -1
+    private var currentEpisodeIndex: Int = -1
     private var currentStreamId: Int = -1
     private var currentStreamUrl: String = ""
     private var currentStreamName: String = ""
@@ -69,12 +72,16 @@ class PlayerActivity : AppCompatActivity() {
         currentPosterUrl = intent.getStringExtra("POSTER_URL")
         currentStreamId = intent.getIntExtra("STREAM_ID", -1)
         currentIndex = intent.getIntExtra("CURRENT_INDEX", -1)
+        currentEpisodeIndex = intent.getIntExtra("EPISODE_INDEX", -1)
         currentType = intent.getStringExtra("STREAM_TYPE") ?: if (intent.hasExtra("STREAM_LIST")) "LIVE" else "VOD"
         seasonNum = intent.getIntExtra("SEASON_NUM", 1)
         episodeNum = intent.getIntExtra("EPISODE_NUM", 1)
 
         @Suppress("DEPRECATION")
         streamList = (intent.getSerializableExtra("STREAM_LIST") as? ArrayList<LiveStream>) ?: emptyList()
+        @Suppress("DEPRECATION")
+        episodeList = (intent.getSerializableExtra("EPISODE_LIST") as? ArrayList<EpisodeItem>) ?: emptyList()
+
         isLive = streamList.isNotEmpty() || currentType == "LIVE"
 
         setupUI()
@@ -85,15 +92,25 @@ class PlayerActivity : AppCompatActivity() {
         if (isLive) {
             binding.layoutTimeline.visibility = View.GONE
             binding.txtHintControls.text = "▲ / ▼ Umschalten | OK Info"
+            binding.btnPrevEpisode.visibility = View.GONE
+            binding.btnNextEpisode.visibility = View.GONE
         } else {
             binding.layoutTimeline.visibility = View.VISIBLE
-            binding.txtHintControls.text = "OK Pause | ◀ / ▶ Spulen | ▲ Zurück"
+            binding.txtHintControls.text = "OK Pause | ◀ / ▶ Spulen | ▲ OSD"
+
+            if (currentType == "SERIES" && episodeList.isNotEmpty()) {
+                updateEpisodeButtons()
+                binding.btnPrevEpisode.setOnClickListener { playPreviousEpisode() }
+                binding.btnNextEpisode.setOnClickListener { playNextEpisode() }
+            } else {
+                binding.btnPrevEpisode.visibility = View.GONE
+                binding.btnNextEpisode.visibility = View.GONE
+            }
         }
 
         binding.btnAudioTracks.setOnClickListener { showAudioTrackDialog() }
         binding.btnSubtitles.setOnClickListener { showSubtitleDialog() }
 
-        // Navigation: Von Buttons hoch zur SeekBar
         val buttonKeyHandler = View.OnKeyListener { _, keyCode, event ->
             if (event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_UP) {
                 binding.playerSeekBar.requestFocus()
@@ -102,8 +119,9 @@ class PlayerActivity : AppCompatActivity() {
         }
         binding.btnAudioTracks.setOnKeyListener(buttonKeyHandler)
         binding.btnSubtitles.setOnKeyListener(buttonKeyHandler)
+        binding.btnPrevEpisode.setOnKeyListener(buttonKeyHandler)
+        binding.btnNextEpisode.setOnKeyListener(buttonKeyHandler)
 
-        // Navigation: Von SeekBar hoch zum Film (OSD schließen)
         binding.playerSeekBar.setOnKeyListener { _, keyCode, event ->
             if (event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_UP) {
                 hideOsd()
@@ -126,6 +144,49 @@ class PlayerActivity : AppCompatActivity() {
         })
     }
 
+    private fun updateEpisodeButtons() {
+        if (currentType != "SERIES" || episodeList.isEmpty()) {
+            binding.btnPrevEpisode.visibility = View.GONE
+            binding.btnNextEpisode.visibility = View.GONE
+            return
+        }
+        binding.btnPrevEpisode.visibility = if (currentEpisodeIndex > 0) View.VISIBLE else View.GONE
+        binding.btnNextEpisode.visibility = if (currentEpisodeIndex < episodeList.size - 1) View.VISIBLE else View.GONE
+    }
+
+    private fun playNextEpisode() {
+        if (currentEpisodeIndex < episodeList.size - 1) {
+            playEpisodeAtIndex(currentEpisodeIndex + 1)
+        }
+    }
+
+    private fun playPreviousEpisode() {
+        if (currentEpisodeIndex > 0) {
+            playEpisodeAtIndex(currentEpisodeIndex - 1)
+        }
+    }
+
+    private fun playEpisodeAtIndex(index: Int) {
+        if (index < 0 || index >= episodeList.size) return
+        currentEpisodeIndex = index
+        val ep = episodeList[index]
+        val seriesTitle = currentStreamName.substringBefore(" - S")
+        currentStreamName = "$seriesTitle - S${ep.season}E${ep.episodeNum} ${ep.title}"
+        currentStreamUrl = client.getSeriesStreamUrl(ep.id, ep.containerExtension ?: "mp4")
+        currentStreamId = ep.id.toIntOrNull() ?: -1
+        seasonNum = ep.season
+        episodeNum = ep.episodeNum
+        currentPosterUrl = ep.info?.movieImage ?: currentPosterUrl
+
+        updateEpisodeButtons()
+        showOsd(currentStreamName, currentStreamId)
+
+        val mediaItem = MediaItem.fromUri(currentStreamUrl)
+        exoPlayer?.setMediaItem(mediaItem)
+        exoPlayer?.prepare()
+        exoPlayer?.playWhenReady = true
+    }
+
     private fun setupPlayer(url: String, name: String, streamId: Int) {
         showOsd(name, streamId)
 
@@ -139,6 +200,14 @@ class PlayerActivity : AppCompatActivity() {
 
                     if (state == Player.STATE_READY) {
                         updateQualityAndAudioBadges()
+                    }
+
+                    // Automatisch nächste Folge abspielen
+                    if (state == Player.STATE_ENDED && currentType == "SERIES") {
+                        if (currentEpisodeIndex < episodeList.size - 1) {
+                            Toast.makeText(this@PlayerActivity, "Nächste Folge startet...", Toast.LENGTH_SHORT).show()
+                            playNextEpisode()
+                        }
                     }
                 }
 
@@ -283,6 +352,8 @@ class PlayerActivity : AppCompatActivity() {
     private fun isOsdFocused(): Boolean {
         return binding.btnAudioTracks.hasFocus() ||
                 binding.btnSubtitles.hasFocus() ||
+                binding.btnPrevEpisode.hasFocus() ||
+                binding.btnNextEpisode.hasFocus() ||
                 binding.playerSeekBar.hasFocus()
     }
 
@@ -448,7 +519,7 @@ class PlayerActivity : AppCompatActivity() {
                     zapNextChannel()
                     return true
                 } else {
-                    if (binding.btnAudioTracks.hasFocus() || binding.btnSubtitles.hasFocus()) {
+                    if (binding.btnAudioTracks.hasFocus() || binding.btnSubtitles.hasFocus() || binding.btnPrevEpisode.hasFocus() || binding.btnNextEpisode.hasFocus()) {
                         binding.playerSeekBar.requestFocus()
                     } else if (binding.playerSeekBar.hasFocus() || binding.osdBottom.visibility == View.VISIBLE) {
                         hideOsd()
@@ -459,7 +530,7 @@ class PlayerActivity : AppCompatActivity() {
                     return true
                 }
             }
-            // OK-Taste: Toggle Pause / Play (außer wenn Audio/Untertitel-Button gedrückt wird)
+            // OK-Taste: Toggle Pause / Play (außer wenn Button gedrückt wird)
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
                 if (!isLive) {
                     if (binding.btnAudioTracks.hasFocus()) {
@@ -467,6 +538,13 @@ class PlayerActivity : AppCompatActivity() {
                         return true
                     } else if (binding.btnSubtitles.hasFocus()) {
                         showSubtitleDialog()
+                        return true
+                    } else if (binding.btnPrevEpisode.hasFocus()) {
+                        playPreviousEpisode()
+                        return true
+                    } else if (binding.btnNextEpisode.hasFocus()) {
+                        playNextEpisode()
+                        return true
                     } else {
                         togglePlayPause()
                     }

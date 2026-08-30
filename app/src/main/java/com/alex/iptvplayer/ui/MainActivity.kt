@@ -9,6 +9,7 @@ import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.alex.iptvplayer.R
@@ -19,12 +20,15 @@ import com.alex.iptvplayer.data.XtreamClient
 import com.alex.iptvplayer.databinding.ActivityMainBinding
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
+import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var client: XtreamClient
     private lateinit var historyManager: HistoryManager
+
+    private val posterLookupMap = HashMap<Int, String>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -36,6 +40,7 @@ class MainActivity : AppCompatActivity() {
 
         setupSidebar()
         setupRecyclers()
+        preloadPosters()
 
         historyManager.syncWithCloud(client.username) {
             runOnUiThread { loadAllHistoryRows() }
@@ -45,6 +50,24 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         loadAllHistoryRows()
+    }
+
+    private fun preloadPosters() {
+        lifecycleScope.launch {
+            try {
+                val movies = client.getAllVodStreams()
+                movies.forEach { m ->
+                    if (!m.streamIcon.isNullOrEmpty()) posterLookupMap[m.streamId] = m.streamIcon
+                }
+                val series = client.getAllSeries()
+                series.forEach { s ->
+                    if (!s.cover.isNullOrEmpty()) posterLookupMap[s.seriesId] = s.cover
+                }
+                loadAllHistoryRows()
+            } catch (e: Exception) {
+                // Silent
+            }
+        }
     }
 
     private fun setupSidebar() {
@@ -105,7 +128,7 @@ class MainActivity : AppCompatActivity() {
             binding.txtNoSeriesHistory.visibility = View.GONE
             binding.recyclerSeriesHistory.visibility = View.VISIBLE
             binding.recyclerSeriesHistory.adapter = HistoryAdapter(seriesHistory) { item ->
-                playHistoryItem(item)
+                playSeriesHistoryItem(item)
             }
         } else {
             binding.txtNoSeriesHistory.visibility = View.VISIBLE
@@ -122,7 +145,7 @@ class MainActivity : AppCompatActivity() {
             binding.txtNoMovieHistory.visibility = View.GONE
             binding.recyclerMovieHistory.visibility = View.VISIBLE
             binding.recyclerMovieHistory.adapter = HistoryAdapter(moviesHistory) { item ->
-                playHistoryItem(item)
+                playMovieHistoryItem(item)
             }
         } else {
             binding.txtNoMovieHistory.visibility = View.VISIBLE
@@ -130,15 +153,25 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun playHistoryItem(item: HistoryItem) {
+    private fun playSeriesHistoryItem(item: HistoryItem) {
+        val intent = Intent(this, SeriesDetailActivity::class.java).apply {
+            putExtra("SERIES_ID", item.streamId)
+            putExtra("SERIES_NAME", item.title.substringBefore(" - S"))
+            putExtra("TARGET_SEASON", item.season)
+            putExtra("TARGET_EPISODE", item.episodeNum)
+            putExtra("AUTO_PLAY", true)
+        }
+        startActivity(intent)
+    }
+
+    private fun playMovieHistoryItem(item: HistoryItem) {
+        val poster = item.posterUrl ?: posterLookupMap[item.streamId]
         val intent = Intent(this, PlayerActivity::class.java).apply {
             putExtra("STREAM_URL", item.streamUrl)
             putExtra("STREAM_NAME", item.title)
-            putExtra("POSTER_URL", item.posterUrl)
-            putExtra("STREAM_TYPE", item.type)
+            putExtra("POSTER_URL", poster)
+            putExtra("STREAM_TYPE", "VOD")
             putExtra("STREAM_ID", item.streamId)
-            putExtra("SEASON_NUM", item.season)
-            putExtra("EPISODE_NUM", item.episodeNum)
         }
         startActivity(intent)
     }
@@ -190,10 +223,12 @@ class MainActivity : AppCompatActivity() {
             holder.sub.text = "Bei ${formatTime(item.positionMs)}"
             holder.bar.progress = item.progressPercent
 
-            if (!item.posterUrl.isNullOrEmpty()) {
+            val poster = item.posterUrl ?: posterLookupMap[item.streamId]
+
+            if (!poster.isNullOrEmpty()) {
                 Glide.with(holder.itemView)
-                    .load(item.posterUrl)
-                    .override(110, 150)
+                    .load(poster)
+                    .override(130, 115)
                     .diskCacheStrategy(DiskCacheStrategy.ALL)
                     .placeholder(R.drawable.tv_banner)
                     .into(holder.img)

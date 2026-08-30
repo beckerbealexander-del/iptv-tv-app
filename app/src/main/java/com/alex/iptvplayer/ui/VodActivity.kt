@@ -34,6 +34,7 @@ class VodActivity : AppCompatActivity() {
     private var allCategories: List<Category> = emptyList()
     private var currentFilter = LangFilter.AUTO_DE_RU_ADULT
     private var currentMovies: List<VodStream> = emptyList()
+    private var allMoviesGlobal: List<VodStream> = emptyList()
     private var selectedCategoryId: String? = null
     private var loadJob: Job? = null
 
@@ -59,19 +60,41 @@ class VodActivity : AppCompatActivity() {
         setupFilterButtons()
         setupSearch()
         loadCategories()
+        preloadGlobalCatalog()
+    }
+
+    private fun preloadGlobalCatalog() {
+        lifecycleScope.launch {
+            try {
+                allMoviesGlobal = client.getAllVodStreams()
+            } catch (e: Exception) {
+                // Silent
+            }
+        }
     }
 
     private fun setupSearch() {
         binding.editVodSearch.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                val q = s?.toString()?.trim()?.lowercase() ?: ""
-                val filtered = if (q.isEmpty()) currentMovies else currentMovies.filter { it.name.lowercase().contains(q) }
-                binding.recyclerVodGrid.adapter = MovieAdapter(filtered, { movie ->
-                    updateHeroBanner(movie)
-                }, { movie ->
-                    playMovie(movie)
-                })
+                val q = s?.toString()?.trim() ?: ""
+                if (q.isEmpty()) {
+                    binding.txtVodCategoryTitle.text = "Filme"
+                    binding.recyclerVodGrid.adapter = MovieAdapter(currentMovies, { movie ->
+                        updateHeroBanner(movie)
+                    }, { movie ->
+                        playMovie(movie)
+                    })
+                } else {
+                    val pool = if (allMoviesGlobal.isNotEmpty()) allMoviesGlobal else currentMovies
+                    val filtered = pool.filter { it.name.contains(q, ignoreCase = true) }
+                    binding.txtVodCategoryTitle.text = "Suchergebnisse (${filtered.size})"
+                    binding.recyclerVodGrid.adapter = MovieAdapter(filtered, { movie ->
+                        updateHeroBanner(movie)
+                    }, { movie ->
+                        playMovie(movie)
+                    })
+                }
             }
             override fun afterTextChanged(s: Editable?) {}
         })
@@ -80,13 +103,15 @@ class VodActivity : AppCompatActivity() {
     private fun setupFilterButtons() {
         binding.btnVodFilterDe.setOnClickListener { applyFilter(LangFilter.DE) }
         binding.btnVodFilterRu.setOnClickListener { applyFilter(LangFilter.RU) }
-        binding.btnVodFilterAdult.setOnClickListener { applyFilter(LangFilter.ADULT) }
         binding.btnVodFilterAll.setOnClickListener { applyFilter(LangFilter.ALL) }
     }
 
     private fun applyFilter(filter: LangFilter) {
         currentFilter = filter
-        val filtered = client.filterCategories(allCategories, filter)
+        val filtered = client.filterCategories(allCategories, filter).toMutableList()
+        if (filtered.none { it.id == "ALL_MOVIES" }) {
+            filtered.add(0, Category(id = "ALL_MOVIES", name = "✨ Alle Filme"))
+        }
         binding.recyclerVodCategories.adapter = VodCategoryAdapter(filtered) { cat ->
             loadMovies(cat)
         }
@@ -119,17 +144,17 @@ class VodActivity : AppCompatActivity() {
         loadJob?.cancel()
         loadJob = lifecycleScope.launch {
             try {
-                val movies = client.getVodStreams(category.id)
-                currentMovies = movies
+                val list = client.getVodStreams(category.id)
+                currentMovies = list
                 binding.progressVod.visibility = View.GONE
-                binding.recyclerVodGrid.adapter = MovieAdapter(movies, { movie ->
+                binding.recyclerVodGrid.adapter = MovieAdapter(list, { movie ->
                     updateHeroBanner(movie)
                 }, { movie ->
                     playMovie(movie)
                 })
 
-                if (movies.isNotEmpty()) {
-                    updateHeroBanner(movies[0])
+                if (list.isNotEmpty()) {
+                    updateHeroBanner(list[0])
                 }
             } catch (e: Exception) {
                 binding.progressVod.visibility = View.GONE

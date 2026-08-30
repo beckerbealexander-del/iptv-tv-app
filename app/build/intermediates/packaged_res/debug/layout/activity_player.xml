@@ -78,7 +78,7 @@
             android:maxLines="1"
             android:text="Titel"
             android:textColor="@color/text_primary"
-            android:textSize="20sp"
+            android:textSize="18sp"
             android:textStyle="bold" />
 
         <!-- Qualitäts Badge -->
@@ -129,7 +129,7 @@
             android:layout_height="wrap_content"
             android:text=""
             android:textColor="@color/accent_gold"
-            android:textSize="15sp"
+            android:textSize="14sp"
             android:layout_marginBottom="6dp" />
 
         <!-- Timeline Zeitleiste & SeekBar -->
@@ -171,12 +171,42 @@
                 android:layout_marginStart="10dp" />
         </LinearLayout>
 
-        <!-- Schlanke Steuerleiste: Tonspur, Untertitel -->
+        <!-- Schlanke Steuerleiste: Tonspur, Untertitel, Nächste / Vorherige Folge -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center_vertical"
             android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnPrevEpisode"
+                android:layout_width="wrap_content"
+                android:layout_height="34dp"
+                android:background="@drawable/card_focus_selector"
+                android:clickable="true"
+                android:focusable="true"
+                android:nextFocusUp="@+id/playerSeekBar"
+                android:text="⏮ Vorherige Folge"
+                android:textColor="@color/text_primary"
+                android:textSize="12sp"
+                android:paddingHorizontal="12dp"
+                android:layout_marginEnd="8dp"
+                android:visibility="gone" />
+
+            <Button
+                android:id="@+id/btnNextEpisode"
+                android:layout_width="wrap_content"
+                android:layout_height="34dp"
+                android:background="@drawable/card_focus_selector"
+                android:clickable="true"
+                android:focusable="true"
+                android:nextFocusUp="@+id/playerSeekBar"
+                android:text="⏭ Nächste Folge"
+                android:textColor="@color/text_primary"
+                android:textSize="12sp"
+                android:paddingHorizontal="12dp"
+                android:layout_marginEnd="8dp"
+                android:visibility="gone" />
 
             <Button
                 android:id="@+id/btnAudioTracks"
@@ -189,8 +219,8 @@
                 android:text="🔊 Tonspur"
                 android:textColor="@color/text_primary"
                 android:textSize="12sp"
-                android:paddingHorizontal="14dp"
-                android:layout_marginEnd="10dp" />
+                android:paddingHorizontal="12dp"
+                android:layout_marginEnd="8dp" />
 
             <Button
                 android:id="@+id/btnSubtitles"
@@ -203,8 +233,8 @@
                 android:text="💬 Untertitel"
                 android:textColor="@color/text_primary"
                 android:textSize="12sp"
-                android:paddingHorizontal="14dp"
-                android:layout_marginEnd="10dp" />
+                android:paddingHorizontal="12dp"
+                android:layout_marginEnd="8dp" />
 
             <TextView
                 android:id="@+id/txtHintControls"
@@ -212,7 +242,7 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:gravity="end"
-                android:text="OK: Play/Pause | ▲ Hoch: Zurück zum Film"
+                android:text="OK: Pause | ◀/▶: Spulen | ▲: Menü"
                 android:textColor="@color/text_secondary"
                 android:textSize="12sp" />
         </LinearLayout>

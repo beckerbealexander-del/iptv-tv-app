@@ -23,7 +23,7 @@
             android:textStyle="bold"
             android:layout_marginBottom="6dp" />
 
-        <!-- Schnellauswahl Filter-Buttons -->
+        <!-- Schnellauswahl Filter-Buttons (DE, RU, Alle) -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -39,7 +39,7 @@
                 android:nextFocusDown="@+id/recyclerCategories"
                 android:text="🇩🇪 DE"
                 android:textColor="@color/text_primary"
-                android:textSize="10sp"
+                android:textSize="11sp"
                 android:layout_marginEnd="2dp" />
 
             <Button
@@ -51,19 +51,7 @@
                 android:nextFocusDown="@+id/recyclerCategories"
                 android:text="🇷🇺 RU"
                 android:textColor="@color/text_primary"
-                android:textSize="10sp"
-                android:layout_marginEnd="2dp" />
-
-            <Button
-                android:id="@+id/btnLiveFilterAdult"
-                android:layout_width="0dp"
-                android:layout_height="28dp"
-                android:layout_weight="1"
-                android:background="@drawable/card_focus_selector"
-                android:nextFocusDown="@+id/recyclerCategories"
-                android:text="🔞 XXX"
-                android:textColor="@color/text_primary"
-                android:textSize="10sp"
+                android:textSize="11sp"
                 android:layout_marginEnd="2dp" />
 
             <Button
@@ -75,7 +63,7 @@
                 android:nextFocusDown="@+id/recyclerCategories"
                 android:text="🌍 Alle"
                 android:textColor="@color/text_primary"
-                android:textSize="10sp" />
+                android:textSize="11sp" />
         </LinearLayout>
 
         <ProgressBar

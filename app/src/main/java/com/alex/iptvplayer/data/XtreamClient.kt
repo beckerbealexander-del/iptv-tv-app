@@ -12,10 +12,9 @@ import okhttp3.Request
 import java.util.concurrent.TimeUnit
 
 enum class LangFilter {
-    AUTO_DE_RU_ADULT, // Standard: Nur Deutsch, Russisch & Porno/Adult (XXX)
+    AUTO_DE_RU_ADULT, // Standard
     DE,               // Nur Deutsch
     RU,               // Nur Russisch
-    ADULT,            // Nur Porno/Adult (XXX)
     ALL               // Alle (DE, RU, Adult)
 }
 
@@ -31,7 +30,11 @@ class XtreamClient(context: Context) {
 
     private val gson = Gson()
 
-    // Original-Zugangsdaten vom Anbieter (cf.rilox.sbs)
+    // Global in-memory cache for instant global "enthält" search
+    private var cachedAllMovies: List<VodStream>? = null
+    private var cachedAllSeries: List<SeriesItem>? = null
+
+    // Zugangsdaten vom Anbieter (cf.rilox.sbs)
     var serverUrl: String
         get() = prefs.getString("server_url", "http://cf.rilox.sbs")!!.trimEnd('/')
         set(value) = prefs.edit().putString("server_url", value.trimEnd('/')).apply()
@@ -60,15 +63,13 @@ class XtreamClient(context: Context) {
         return "$serverUrl/series/$username/$password/$streamId.$extension"
     }
 
-    // Harter Filter: Nur Deutsch, Russisch und Porno/Adult (XXX) werden überhaupt durchgelassen
+    // Filter: Nur Deutsch, Russisch und Porno/Adult (unter Alle)
     fun filterCategories(categories: List<Category>, filter: LangFilter): List<Category> {
-        // Zuerst alles Fremdsprachige (Türkei, Polen, UK, Arabisch, etc.) komplett entfernen
         val baseAllowed = categories.filter { isGerman(it.name) || isRussian(it.name) || isAdult(it.name) }
 
         return when (filter) {
             LangFilter.DE -> baseAllowed.filter { isGerman(it.name) }
             LangFilter.RU -> baseAllowed.filter { isRussian(it.name) }
-            LangFilter.ADULT -> baseAllowed.filter { isAdult(it.name) }
             LangFilter.AUTO_DE_RU_ADULT, LangFilter.ALL -> baseAllowed
         }
     }
@@ -106,7 +107,7 @@ class XtreamClient(context: Context) {
     }
 
     suspend fun getLiveStreams(categoryId: String? = null): List<LiveStream> = withContext(Dispatchers.IO) {
-        val extra = if (categoryId != null) "&category_id=$categoryId" else ""
+        val extra = if (categoryId != null && categoryId != "ALL_CHANNELS") "&category_id=$categoryId" else ""
         val url = buildApiUrl("get_live_streams", extra)
         val json = executeGet(url)
         val type = object : TypeToken<List<LiveStream>>() {}.type
@@ -152,15 +153,29 @@ class XtreamClient(context: Context) {
         val json = executeGet(url)
         val type = object : TypeToken<List<Category>>() {}.type
         val raw: List<Category> = gson.fromJson(json, type) ?: emptyList()
-        filterCategories(raw, LangFilter.AUTO_DE_RU_ADULT)
+        val filtered = filterCategories(raw, LangFilter.AUTO_DE_RU_ADULT).toMutableList()
+        filtered.add(0, Category(id = "ALL_MOVIES", name = "✨ Alle Filme"))
+        filtered
     }
 
     suspend fun getVodStreams(categoryId: String? = null): List<VodStream> = withContext(Dispatchers.IO) {
-        val extra = if (categoryId != null) "&category_id=$categoryId" else ""
-        val url = buildApiUrl("get_vod_streams", extra)
+        if (categoryId == "ALL_MOVIES" || categoryId == null) {
+            return@withContext getAllVodStreams()
+        }
+        val url = buildApiUrl("get_vod_streams", "&category_id=$categoryId")
         val json = executeGet(url)
         val type = object : TypeToken<List<VodStream>>() {}.type
         gson.fromJson(json, type) ?: emptyList()
+    }
+
+    suspend fun getAllVodStreams(): List<VodStream> = withContext(Dispatchers.IO) {
+        if (!cachedAllMovies.isNullOrEmpty()) return@withContext cachedAllMovies!!
+        val url = buildApiUrl("get_vod_streams")
+        val json = executeGet(url)
+        val type = object : TypeToken<List<VodStream>>() {}.type
+        val list: List<VodStream> = gson.fromJson(json, type) ?: emptyList()
+        cachedAllMovies = list
+        list
     }
 
     // 3. Serien
@@ -169,15 +184,29 @@ class XtreamClient(context: Context) {
         val json = executeGet(url)
         val type = object : TypeToken<List<Category>>() {}.type
         val raw: List<Category> = gson.fromJson(json, type) ?: emptyList()
-        filterCategories(raw, LangFilter.AUTO_DE_RU_ADULT)
+        val filtered = filterCategories(raw, LangFilter.AUTO_DE_RU_ADULT).toMutableList()
+        filtered.add(0, Category(id = "ALL_SERIES", name = "✨ Alle Serien"))
+        filtered
     }
 
     suspend fun getSeries(categoryId: String? = null): List<SeriesItem> = withContext(Dispatchers.IO) {
-        val extra = if (categoryId != null) "&category_id=$categoryId" else ""
-        val url = buildApiUrl("get_series", extra)
+        if (categoryId == "ALL_SERIES" || categoryId == null) {
+            return@withContext getAllSeries()
+        }
+        val url = buildApiUrl("get_series", "&category_id=$categoryId")
         val json = executeGet(url)
         val type = object : TypeToken<List<SeriesItem>>() {}.type
         gson.fromJson(json, type) ?: emptyList()
+    }
+
+    suspend fun getAllSeries(): List<SeriesItem> = withContext(Dispatchers.IO) {
+        if (!cachedAllSeries.isNullOrEmpty()) return@withContext cachedAllSeries!!
+        val url = buildApiUrl("get_series")
+        val json = executeGet(url)
+        val type = object : TypeToken<List<SeriesItem>>() {}.type
+        val list: List<SeriesItem> = gson.fromJson(json, type) ?: emptyList()
+        cachedAllSeries = list
+        list
     }
 
     suspend fun getSeriesInfo(seriesId: Int): SeriesInfoResponse = withContext(Dispatchers.IO) {
