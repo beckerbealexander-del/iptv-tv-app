@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
+import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -55,13 +56,13 @@ class LiveTvActivity : AppCompatActivity() {
         binding.recyclerCategories.apply {
             layoutManager = LinearLayoutManager(this@LiveTvActivity)
             setHasFixedSize(true)
-            setItemViewCacheSize(40)
+            setItemViewCacheSize(50)
         }
 
         binding.recyclerChannels.apply {
             layoutManager = LinearLayoutManager(this@LiveTvActivity)
             setHasFixedSize(true)
-            setItemViewCacheSize(50)
+            setItemViewCacheSize(60)
         }
 
         setupFilterButtons()
@@ -202,6 +203,15 @@ class LiveTvActivity : AppCompatActivity() {
                     }
                 }
             }
+
+            // Strikter Tastatur-Handler: Rechts wechselt gezielt zu den Sendern
+            holder.itemView.setOnKeyListener { _, keyCode, event ->
+                if (event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
+                    val firstHolder = binding.recyclerChannels.findViewHolderForAdapterPosition(0) as? ChannelAdapter.ViewHolder
+                    firstHolder?.header?.requestFocus() ?: binding.recyclerChannels.requestFocus()
+                    true
+                } else false
+            }
         }
 
         override fun getItemCount() = items.size
@@ -246,6 +256,42 @@ class LiveTvActivity : AppCompatActivity() {
                 }
             }
 
+            // Fokus-Sperre: Verhindert jegliches Abdriften zu den Kategorien beim Scrollen
+            holder.header.setOnKeyListener { _, keyCode, event ->
+                if (event.action == KeyEvent.ACTION_DOWN) {
+                    when (keyCode) {
+                        KeyEvent.KEYCODE_DPAD_DOWN -> {
+                            if (position < items.size - 1) {
+                                binding.recyclerChannels.smoothScrollToPosition(position + 1)
+                                val nextHolder = binding.recyclerChannels.findViewHolderForAdapterPosition(position + 1) as? ChannelAdapter.ViewHolder
+                                nextHolder?.header?.requestFocus()
+                                return@setOnKeyListener true
+                            }
+                        }
+                        KeyEvent.KEYCODE_DPAD_UP -> {
+                            if (position > 0) {
+                                binding.recyclerChannels.smoothScrollToPosition(position - 1)
+                                val prevHolder = binding.recyclerChannels.findViewHolderForAdapterPosition(position - 1) as? ChannelAdapter.ViewHolder
+                                prevHolder?.header?.requestFocus()
+                                return@setOnKeyListener true
+                            } else {
+                                binding.editLiveSearch.requestFocus()
+                                return@setOnKeyListener true
+                            }
+                        }
+                        KeyEvent.KEYCODE_DPAD_LEFT -> {
+                            binding.recyclerCategories.requestFocus()
+                            return@setOnKeyListener true
+                        }
+                        KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                            holder.recyclerPrograms.requestFocus()
+                            return@setOnKeyListener true
+                        }
+                    }
+                }
+                false
+            }
+
             holder.recyclerPrograms.apply {
                 layoutManager = LinearLayoutManager(holder.itemView.context, LinearLayoutManager.HORIZONTAL, false)
                 setHasFixedSize(true)
@@ -254,16 +300,16 @@ class LiveTvActivity : AppCompatActivity() {
             // Gecachte EPG-Daten sofort anzeigen
             val cached = epgCache[s.streamId]
             if (cached != null) {
-                holder.recyclerPrograms.adapter = ProgramTimelineAdapter(s, position, cached)
+                holder.recyclerPrograms.adapter = ProgramTimelineAdapter(s, position, cached, holder)
             } else {
                 val fallback = listOf(EpgProgram("Lade EPG...", "", "16:00", "23:59", true))
-                holder.recyclerPrograms.adapter = ProgramTimelineAdapter(s, position, fallback)
+                holder.recyclerPrograms.adapter = ProgramTimelineAdapter(s, position, fallback, holder)
 
                 lifecycleScope.launch {
                     val epgList = client.getEpg(s.streamId)
                     if (epgList.isNotEmpty()) {
                         epgCache[s.streamId] = epgList
-                        holder.recyclerPrograms.adapter = ProgramTimelineAdapter(s, position, epgList)
+                        holder.recyclerPrograms.adapter = ProgramTimelineAdapter(s, position, epgList, holder)
                     }
                 }
             }
@@ -276,7 +322,8 @@ class LiveTvActivity : AppCompatActivity() {
     inner class ProgramTimelineAdapter(
         private val stream: LiveStream,
         private val channelIndex: Int,
-        private val programs: List<EpgProgram>
+        private val programs: List<EpgProgram>,
+        private val channelHolder: ChannelAdapter.ViewHolder
     ) : RecyclerView.Adapter<ProgramTimelineAdapter.ViewHolder>() {
 
         inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
@@ -308,6 +355,27 @@ class LiveTvActivity : AppCompatActivity() {
 
             holder.itemView.setOnClickListener {
                 openFullscreenPlayer(stream, channelIndex)
+            }
+
+            // Bei Links von der ersten Sendung zurück zum Senderkopf
+            holder.itemView.setOnKeyListener { _, keyCode, event ->
+                if (event.action == KeyEvent.ACTION_DOWN) {
+                    if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT && position == 0) {
+                        channelHolder.header.requestFocus()
+                        return@setOnKeyListener true
+                    } else if (keyCode == KeyEvent.KEYCODE_DPAD_UP && channelIndex > 0) {
+                        binding.recyclerChannels.smoothScrollToPosition(channelIndex - 1)
+                        val prevHolder = binding.recyclerChannels.findViewHolderForAdapterPosition(channelIndex - 1) as? ChannelAdapter.ViewHolder
+                        prevHolder?.header?.requestFocus()
+                        return@setOnKeyListener true
+                    } else if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN && channelIndex < currentStreams.size - 1) {
+                        binding.recyclerChannels.smoothScrollToPosition(channelIndex + 1)
+                        val nextHolder = binding.recyclerChannels.findViewHolderForAdapterPosition(channelIndex + 1) as? ChannelAdapter.ViewHolder
+                        nextHolder?.header?.requestFocus()
+                        return@setOnKeyListener true
+                    }
+                }
+                false
             }
         }
 
