@@ -2,6 +2,8 @@ package com.alex.iptvplayer.ui
 
 import android.content.Intent
 import android.os.Bundle
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -31,6 +33,7 @@ class VodActivity : AppCompatActivity() {
     private lateinit var client: XtreamClient
     private var allCategories: List<Category> = emptyList()
     private var currentFilter = LangFilter.AUTO_DE_RU_ADULT
+    private var currentMovies: List<VodStream> = emptyList()
     private var selectedCategoryId: String? = null
     private var loadJob: Job? = null
 
@@ -54,7 +57,24 @@ class VodActivity : AppCompatActivity() {
         }
 
         setupFilterButtons()
+        setupSearch()
         loadCategories()
+    }
+
+    private fun setupSearch() {
+        binding.editVodSearch.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                val q = s?.toString()?.trim()?.lowercase() ?: ""
+                val filtered = if (q.isEmpty()) currentMovies else currentMovies.filter { it.name.lowercase().contains(q) }
+                binding.recyclerVodGrid.adapter = MovieAdapter(filtered, { movie ->
+                    updateHeroBanner(movie)
+                }, { movie ->
+                    playMovie(movie)
+                })
+            }
+            override fun afterTextChanged(s: Editable?) {}
+        })
     }
 
     private fun setupFilterButtons() {
@@ -100,6 +120,7 @@ class VodActivity : AppCompatActivity() {
         loadJob = lifecycleScope.launch {
             try {
                 val movies = client.getVodStreams(category.id)
+                currentMovies = movies
                 binding.progressVod.visibility = View.GONE
                 binding.recyclerVodGrid.adapter = MovieAdapter(movies, { movie ->
                     updateHeroBanner(movie)
@@ -124,7 +145,7 @@ class VodActivity : AppCompatActivity() {
         if (!movie.streamIcon.isNullOrEmpty()) {
             Glide.with(this)
                 .load(movie.streamIcon)
-                .override(180, 260)
+                .override(140, 190)
                 .diskCacheStrategy(DiskCacheStrategy.ALL)
                 .placeholder(R.drawable.tv_banner)
                 .into(binding.imgHeroPoster)
@@ -168,7 +189,6 @@ class VodActivity : AppCompatActivity() {
                 onSelect(cat)
             }
 
-            // Debounce: Nur wenn der Nutzer 350ms auf einer Kategorie stehen bleibt, wird geladen
             holder.itemView.setOnFocusChangeListener { _, hasFocus ->
                 if (hasFocus) {
                     focusJob?.cancel()
@@ -206,7 +226,7 @@ class VodActivity : AppCompatActivity() {
             if (!movie.streamIcon.isNullOrEmpty()) {
                 Glide.with(holder.itemView)
                     .load(movie.streamIcon)
-                    .override(180, 260)
+                    .override(130, 180)
                     .diskCacheStrategy(DiskCacheStrategy.ALL)
                     .placeholder(R.drawable.tv_banner)
                     .into(holder.imgPoster)

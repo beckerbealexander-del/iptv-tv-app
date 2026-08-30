@@ -2294,6 +2294,7 @@ color mtrl_textinput_disabled_color
 color mtrl_textinput_filled_box_default_background_color
 color mtrl_textinput_focused_box_stroke_color
 color mtrl_textinput_hovered_box_stroke_color
+color netflix_red
 color notification_action_color_filter
 color notification_icon_bg_color
 color notification_material_background_media_default_color
@@ -3949,10 +3950,13 @@ id easeIn
 id easeInOut
 id easeOut
 id edge
+id editLiveSearch
 id editPassword
 id editSearchQuery
+id editSeriesSearch
 id editServerUrl
 id editUsername
+id editVodSearch
 id edit_query
 id edit_text_id
 id elastic
@@ -4240,7 +4244,6 @@ id multiply
 id navHome
 id navLiveTv
 id navMovies
-id navSearch
 id navSeries
 id navSettings
 id navigation_bar_item_active_indicator_view

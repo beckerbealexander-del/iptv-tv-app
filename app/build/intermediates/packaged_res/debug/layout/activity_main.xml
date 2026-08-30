@@ -5,107 +5,143 @@
     android:background="@color/bg_dark"
     android:orientation="horizontal">
 
-    <!-- 1. Netflix Sidebar / Navigation links -->
+    <!-- 1. Netflix Kompakte Sidebar links mit Beschriftung -->
     <LinearLayout
         android:id="@+id/sidebar"
-        android:layout_width="80dp"
+        android:layout_width="145dp"
         android:layout_height="match_parent"
-        android:background="#0B0E14"
-        android:gravity="center_horizontal"
+        android:background="#0F0F0F"
         android:orientation="vertical"
-        android:paddingVertical="24dp">
+        android:paddingHorizontal="10dp"
+        android:paddingVertical="18dp">
 
+        <!-- Netflix Style Logo -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="🍿"
-            android:textSize="28sp"
-            android:layout_marginBottom="32dp" />
+            android:text="ALEX TV"
+            android:textColor="@color/netflix_red"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.1"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginBottom="24dp" />
 
-        <!-- 🔍 Suche -->
-        <FrameLayout
-            android:id="@+id/navSearch"
-            android:layout_width="56dp"
-            android:layout_height="56dp"
-            android:background="@drawable/card_focus_selector"
-            android:clickable="true"
-            android:focusable="true"
-            android:layout_marginBottom="16dp">
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:text="🔍"
-                android:textSize="22sp" />
-        </FrameLayout>
-
-        <!-- 🏠 Home -->
-        <FrameLayout
+        <!-- 🏠 Startseite -->
+        <LinearLayout
             android:id="@+id/navHome"
-            android:layout_width="56dp"
-            android:layout_height="56dp"
+            android:layout_width="match_parent"
+            android:layout_height="40dp"
             android:background="@drawable/card_focus_selector"
             android:clickable="true"
             android:focusable="true"
-            android:layout_marginBottom="16dp">
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="12dp"
+            android:layout_marginBottom="8dp">
+
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_gravity="center"
                 android:text="🏠"
-                android:textSize="22sp" />
-        </FrameLayout>
+                android:textSize="14sp"
+                android:layout_marginEnd="8dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Startseite"
+                android:textColor="@color/text_primary"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+        </LinearLayout>
 
         <!-- 📺 Live TV -->
-        <FrameLayout
+        <LinearLayout
             android:id="@+id/navLiveTv"
-            android:layout_width="56dp"
-            android:layout_height="56dp"
+            android:layout_width="match_parent"
+            android:layout_height="40dp"
             android:background="@drawable/card_focus_selector"
             android:clickable="true"
             android:focusable="true"
-            android:layout_marginBottom="16dp">
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="12dp"
+            android:layout_marginBottom="8dp">
+
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_gravity="center"
                 android:text="📺"
-                android:textSize="22sp" />
-        </FrameLayout>
+                android:textSize="14sp"
+                android:layout_marginEnd="8dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Live TV"
+                android:textColor="@color/text_primary"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+        </LinearLayout>
 
         <!-- 🎬 Filme -->
-        <FrameLayout
+        <LinearLayout
             android:id="@+id/navMovies"
-            android:layout_width="56dp"
-            android:layout_height="56dp"
+            android:layout_width="match_parent"
+            android:layout_height="40dp"
             android:background="@drawable/card_focus_selector"
             android:clickable="true"
             android:focusable="true"
-            android:layout_marginBottom="16dp">
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="12dp"
+            android:layout_marginBottom="8dp">
+
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_gravity="center"
                 android:text="🎬"
-                android:textSize="22sp" />
-        </FrameLayout>
+                android:textSize="14sp"
+                android:layout_marginEnd="8dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Filme"
+                android:textColor="@color/text_primary"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+        </LinearLayout>
 
         <!-- 🍿 Serien -->
-        <FrameLayout
+        <LinearLayout
             android:id="@+id/navSeries"
-            android:layout_width="56dp"
-            android:layout_height="56dp"
+            android:layout_width="match_parent"
+            android:layout_height="40dp"
             android:background="@drawable/card_focus_selector"
             android:clickable="true"
             android:focusable="true"
-            android:layout_marginBottom="16dp">
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="12dp"
+            android:layout_marginBottom="8dp">
+
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_gravity="center"
                 android:text="🍿"
-                android:textSize="22sp" />
-        </FrameLayout>
+                android:textSize="14sp"
+                android:layout_marginEnd="8dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Serien"
+                android:textColor="@color/text_primary"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+        </LinearLayout>
 
         <View
             android:layout_width="match_parent"
@@ -113,56 +149,66 @@
             android:layout_weight="1" />
 
         <!-- ⚙️ Optionen -->
-        <FrameLayout
+        <LinearLayout
             android:id="@+id/navSettings"
-            android:layout_width="56dp"
-            android:layout_height="56dp"
+            android:layout_width="match_parent"
+            android:layout_height="40dp"
             android:background="@drawable/card_focus_selector"
             android:clickable="true"
-            android:focusable="true">
+            android:focusable="true"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="12dp">
+
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_gravity="center"
                 android:text="⚙️"
-                android:textSize="22sp" />
-        </FrameLayout>
+                android:textSize="14sp"
+                android:layout_marginEnd="8dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Optionen"
+                android:textColor="@color/text_secondary"
+                android:textSize="13sp" />
+        </LinearLayout>
 
     </LinearLayout>
 
-    <!-- 2. Netflix Hauptbereich (Hero Header + Horizontal Rows) -->
+    <!-- 2. Netflix Hauptbereich (Kompakter Hero Header + Horizontale Reihen) -->
     <ScrollView
         android:layout_width="0dp"
         android:layout_height="match_parent"
         android:layout_weight="1"
-        android:paddingStart="24dp"
-        android:paddingEnd="24dp"
-        android:paddingTop="20dp"
-        android:paddingBottom="40dp">
+        android:paddingHorizontal="20dp"
+        android:paddingTop="16dp"
+        android:paddingBottom="30dp">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
-            <!-- Netflix Hero Banner -->
+            <!-- Kompakter Netflix Hero Banner -->
             <LinearLayout
                 android:id="@+id/mainHeroBanner"
                 android:layout_width="match_parent"
-                android:layout_height="180dp"
-                android:background="#161B22"
+                android:layout_height="140dp"
+                android:background="#1B1B1B"
                 android:orientation="horizontal"
-                android:padding="20dp"
+                android:padding="14dp"
                 android:gravity="center_vertical"
-                android:layout_marginBottom="24dp">
+                android:layout_marginBottom="20dp">
 
                 <ImageView
                     android:id="@+id/imgMainHero"
-                    android:layout_width="110dp"
-                    android:layout_height="150dp"
+                    android:layout_width="85dp"
+                    android:layout_height="115dp"
                     android:scaleType="centerCrop"
                     android:src="@drawable/tv_banner"
-                    android:layout_marginEnd="20dp" />
+                    android:layout_marginEnd="16dp" />
 
                 <LinearLayout
                     android:layout_width="0dp"
@@ -176,31 +222,31 @@
                         android:layout_height="wrap_content"
                         android:ellipsize="end"
                         android:maxLines="1"
-                        android:text="Willkommen bei Alex IPTV"
+                        android:text="Alex IPTV"
                         android:textColor="@color/text_primary"
-                        android:textSize="26sp"
+                        android:textSize="20sp"
                         android:textStyle="bold" />
 
                     <TextView
                         android:id="@+id/txtMainHeroSubtitle"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:text="⭐ 9.0 | TV, Filme &amp; Serien wie auf Netflix"
+                        android:layout_marginTop="4dp"
+                        android:text="⭐ 8.8 | Highlights"
                         android:textColor="@color/accent_gold"
-                        android:textSize="14sp"
+                        android:textSize="13sp"
                         android:textStyle="bold" />
 
                     <Button
                         android:id="@+id/btnMainHeroPlay"
                         android:layout_width="wrap_content"
-                        android:layout_height="42dp"
-                        android:layout_marginTop="14dp"
+                        android:layout_height="36dp"
+                        android:layout_marginTop="10dp"
                         android:background="@drawable/card_focus_selector"
-                        android:paddingHorizontal="24dp"
-                        android:text="▶ Jetzt Weiterschauen"
+                        android:paddingHorizontal="18dp"
+                        android:text="▶ Weiterschauen"
                         android:textColor="@color/text_primary"
-                        android:textSize="14sp"
+                        android:textSize="12sp"
                         android:textStyle="bold" />
                 </LinearLayout>
             </LinearLayout>
@@ -213,23 +259,23 @@
                 android:layout_gravity="center"
                 android:visibility="gone" />
 
-            <!-- Row 1: 🕒 Weiterschauen / Verlauf (Netflix Progress Bar) -->
+            <!-- Row 1: 🕒 Weiterschauen & Verlauf -->
             <LinearLayout
                 android:id="@+id/layoutSectionHistory"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:layout_marginBottom="24dp"
+                android:layout_marginBottom="20dp"
                 android:visibility="gone">
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="🕒 Weiterschauen &amp; Verlauf"
+                    android:text="🕒 Weiterschauen"
                     android:textColor="@color/text_primary"
-                    android:textSize="20sp"
+                    android:textSize="16sp"
                     android:textStyle="bold"
-                    android:layout_marginBottom="10dp" />
+                    android:layout_marginBottom="8dp" />
 
                 <androidx.recyclerview.widget.RecyclerView
                     android:id="@+id/recyclerMainHistory"
@@ -238,22 +284,22 @@
                     android:orientation="horizontal" />
             </LinearLayout>
 
-            <!-- Row 2: 🇩🇪 Beliebte Deutsche Filme -->
+            <!-- Row 2: 🎬 Film-Highlights -->
             <LinearLayout
                 android:id="@+id/layoutSectionMovies"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:layout_marginBottom="24dp">
+                android:layout_marginBottom="20dp">
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="🎬 Film-Highlights (Deutsch &amp; International)"
-                    android:textColor="@color/accent_gold"
-                    android:textSize="20sp"
+                    android:text="🎬 Film-Highlights"
+                    android:textColor="@color/text_primary"
+                    android:textSize="16sp"
                     android:textStyle="bold"
-                    android:layout_marginBottom="10dp" />
+                    android:layout_marginBottom="8dp" />
 
                 <androidx.recyclerview.widget.RecyclerView
                     android:id="@+id/recyclerMainMovies"
@@ -262,22 +308,22 @@
                     android:orientation="horizontal" />
             </LinearLayout>
 
-            <!-- Row 3: 🍿 Serien Highlights -->
+            <!-- Row 3: 🍿 Serien-Hits -->
             <LinearLayout
                 android:id="@+id/layoutSectionSeries"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:layout_marginBottom="24dp">
+                android:layout_marginBottom="20dp">
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="🍿 Serien-Hits"
-                    android:textColor="@color/accent_blue"
-                    android:textSize="20sp"
+                    android:textColor="@color/text_primary"
+                    android:textSize="16sp"
                     android:textStyle="bold"
-                    android:layout_marginBottom="10dp" />
+                    android:layout_marginBottom="8dp" />
 
                 <androidx.recyclerview.widget.RecyclerView
                     android:id="@+id/recyclerMainSeries"
@@ -286,22 +332,22 @@
                     android:orientation="horizontal" />
             </LinearLayout>
 
-            <!-- Row 4: 📺 Live TV Favoriten -->
+            <!-- Row 4: 📺 Live TV Hauptsender -->
             <LinearLayout
                 android:id="@+id/layoutSectionLive"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:layout_marginBottom="24dp">
+                android:layout_marginBottom="20dp">
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="📺 Live TV Hauptsender"
                     android:textColor="@color/text_primary"
-                    android:textSize="20sp"
+                    android:textSize="16sp"
                     android:textStyle="bold"
-                    android:layout_marginBottom="10dp" />
+                    android:layout_marginBottom="8dp" />
 
                 <androidx.recyclerview.widget.RecyclerView
                     android:id="@+id/recyclerMainLive"

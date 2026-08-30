@@ -2,6 +2,8 @@ package com.alex.iptvplayer.ui
 
 import android.content.Intent
 import android.os.Bundle
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -20,6 +22,7 @@ import com.alex.iptvplayer.data.XtreamClient
 import com.alex.iptvplayer.databinding.ActivityLiveTvBinding
 import com.bumptech.glide.Glide
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class LiveTvActivity : AppCompatActivity() {
@@ -30,6 +33,7 @@ class LiveTvActivity : AppCompatActivity() {
     private var allCategories: List<Category> = emptyList()
     private var currentFilter = LangFilter.AUTO_DE_RU_ADULT
     private var currentStreams: List<LiveStream> = emptyList()
+    private var selectedCategoryId: String? = null
     private var epgJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -42,17 +46,34 @@ class LiveTvActivity : AppCompatActivity() {
         binding.recyclerCategories.apply {
             layoutManager = LinearLayoutManager(this@LiveTvActivity)
             setHasFixedSize(true)
-            setItemViewCacheSize(25)
+            setItemViewCacheSize(30)
         }
 
         binding.recyclerChannels.apply {
             layoutManager = LinearLayoutManager(this@LiveTvActivity)
             setHasFixedSize(true)
-            setItemViewCacheSize(35)
+            setItemViewCacheSize(40)
         }
 
         setupFilterButtons()
+        setupSearch()
         loadCategories()
+    }
+
+    private fun setupSearch() {
+        binding.editLiveSearch.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                val q = s?.toString()?.trim()?.lowercase() ?: ""
+                val filtered = if (q.isEmpty()) currentStreams else currentStreams.filter { it.name.lowercase().contains(q) }
+                binding.recyclerChannels.adapter = ChannelAdapter(filtered, { stream ->
+                    showChannelDetailAndEpg(stream)
+                }, { stream, position ->
+                    openFullscreenPlayer(stream, position)
+                })
+            }
+            override fun afterTextChanged(s: Editable?) {}
+        })
     }
 
     private fun setupFilterButtons() {
@@ -82,12 +103,15 @@ class LiveTvActivity : AppCompatActivity() {
                 applyFilter(currentFilter)
             } catch (e: Exception) {
                 binding.progressCategories.visibility = View.GONE
-                Toast.makeText(this@LiveTvActivity, "Fehler beim Laden: ${e.message}", Toast.LENGTH_LONG).show()
+                Toast.makeText(this@LiveTvActivity, "Fehler: ${e.message}", Toast.LENGTH_SHORT).show()
             }
         }
     }
 
     private fun loadChannels(category: Category) {
+        if (selectedCategoryId == category.id) return
+        selectedCategoryId = category.id
+
         binding.txtCategoryTitle.text = category.name
         binding.progressChannels.visibility = View.VISIBLE
         lifecycleScope.launch {
@@ -105,7 +129,7 @@ class LiveTvActivity : AppCompatActivity() {
                 }
             } catch (e: Exception) {
                 binding.progressChannels.visibility = View.GONE
-                Toast.makeText(this@LiveTvActivity, "Fehler beim Laden der Sender: ${e.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@LiveTvActivity, "Fehler beim Laden: ${e.message}", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -114,12 +138,11 @@ class LiveTvActivity : AppCompatActivity() {
         binding.txtDetailName.text = stream.name
 
         if (!stream.streamIcon.isNullOrEmpty()) {
-            Glide.with(this).load(stream.streamIcon).override(100, 100).into(binding.imgDetailLogo)
+            Glide.with(this).load(stream.streamIcon).override(80, 80).into(binding.imgDetailLogo)
         } else {
             binding.imgDetailLogo.setImageResource(R.drawable.tv_banner)
         }
 
-        // EPG für den aktuellen Sender laden
         epgJob?.cancel()
         binding.txtEpgCurrentTitle.text = "Lade EPG..."
         binding.txtEpgCurrentTime.text = ""
@@ -154,17 +177,31 @@ class LiveTvActivity : AppCompatActivity() {
         val intent = Intent(this, PlayerActivity::class.java).apply {
             putExtra("STREAM_URL", client.getLiveStreamUrl(stream.streamId))
             putExtra("STREAM_NAME", stream.name)
+            putExtra("POSTER_URL", stream.streamIcon)
             putExtra("STREAM_ID", stream.streamId)
+            putExtra("STREAM_TYPE", "LIVE")
             putExtra("STREAM_LIST", ArrayList(currentStreams))
             putExtra("CURRENT_INDEX", position)
         }
         startActivity(intent)
     }
 
+    override fun onPause() {
+        super.onPause()
+        epgJob?.cancel()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        epgJob?.cancel()
+    }
+
     inner class CategoryAdapter(
         private val items: List<Category>,
         private val onSelect: (Category) -> Unit
     ) : RecyclerView.Adapter<CategoryAdapter.ViewHolder>() {
+
+        private var focusJob: Job? = null
 
         inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
             val txtName: TextView = view.findViewById(R.id.txtCategoryName)
@@ -180,7 +217,13 @@ class LiveTvActivity : AppCompatActivity() {
             holder.txtName.text = cat.name
             holder.itemView.setOnClickListener { onSelect(cat) }
             holder.itemView.setOnFocusChangeListener { _, hasFocus ->
-                if (hasFocus) onSelect(cat)
+                if (hasFocus) {
+                    focusJob?.cancel()
+                    focusJob = lifecycleScope.launch {
+                        delay(350)
+                        onSelect(cat)
+                    }
+                }
             }
         }
 
@@ -208,7 +251,7 @@ class LiveTvActivity : AppCompatActivity() {
             holder.txtName.text = s.name
 
             if (!s.streamIcon.isNullOrEmpty()) {
-                Glide.with(holder.itemView).load(s.streamIcon).override(80, 80).into(holder.imgLogo)
+                Glide.with(holder.itemView).load(s.streamIcon).override(60, 60).into(holder.imgLogo)
             } else {
                 holder.imgLogo.setImageResource(R.drawable.tv_banner)
             }

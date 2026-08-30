@@ -1,19 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:layout_width="160dp"
-    android:layout_height="250dp"
-    android:layout_marginEnd="14dp"
+    android:layout_width="125dp"
+    android:layout_height="200dp"
+    android:layout_marginEnd="12dp"
     android:background="@drawable/card_focus_selector"
     android:clickable="true"
     android:focusable="true"
     android:orientation="vertical"
-    android:padding="8dp">
+    android:padding="6dp">
 
-    <!-- Poster Bild -->
     <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="180dp">
+        android:layout_height="145dp">
 
         <ImageView
             android:id="@+id/imgHistoryPoster"
@@ -22,40 +20,38 @@
             android:scaleType="centerCrop"
             android:src="@drawable/tv_banner" />
 
-        <!-- Roter Netflix Fortschrittsbalken am unteren Bildrand -->
         <ProgressBar
             android:id="@+id/progressHistoryBar"
             style="?android:attr/progressBarStyleHorizontal"
             android:layout_width="match_parent"
-            android:layout_height="6dp"
+            android:layout_height="4dp"
             android:layout_gravity="bottom"
             android:max="100"
             android:progress="45"
-            android:progressTint="#E50914" />
+            android:progressTint="@color/netflix_red" />
     </FrameLayout>
 
-    <!-- Titel & Fortschrittszeit -->
     <TextView
         android:id="@+id/txtHistoryTitle"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
+        android:layout_marginTop="5dp"
         android:ellipsize="end"
         android:maxLines="1"
         android:text="Titel"
         android:textColor="@color/text_primary"
-        android:textSize="13sp"
+        android:textSize="12sp"
         android:textStyle="bold" />
 
     <TextView
         android:id="@+id/txtHistorySubtitle"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
+        android:layout_marginTop="1dp"
         android:ellipsize="end"
         android:maxLines="1"
-        android:text="Fortsetzen bei 00:35:10"
-        android:textColor="@color/accent_gold"
-        android:textSize="11sp" />
+        android:text="00:35:10"
+        android:textColor="@color/text_secondary"
+        android:textSize="10sp" />
 
 </LinearLayout>

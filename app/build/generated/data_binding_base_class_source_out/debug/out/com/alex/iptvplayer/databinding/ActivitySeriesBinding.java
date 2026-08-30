@@ -5,6 +5,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
@@ -34,6 +35,9 @@ public final class ActivitySeriesBinding implements ViewBinding {
 
   @NonNull
   public final Button btnSeriesFilterRu;
+
+  @NonNull
+  public final EditText editSeriesSearch;
 
   @NonNull
   public final ImageView imgHeroSeriesCover;
@@ -68,16 +72,18 @@ public final class ActivitySeriesBinding implements ViewBinding {
   private ActivitySeriesBinding(@NonNull LinearLayout rootView,
       @NonNull Button btnSeriesFilterAdult, @NonNull Button btnSeriesFilterAll,
       @NonNull Button btnSeriesFilterDe, @NonNull Button btnSeriesFilterRu,
-      @NonNull ImageView imgHeroSeriesCover, @NonNull ProgressBar progressSeries,
-      @NonNull ProgressBar progressSeriesCats, @NonNull RecyclerView recyclerSeriesCategories,
-      @NonNull RecyclerView recyclerSeriesGrid, @NonNull LinearLayout seriesHeroBanner,
-      @NonNull TextView txtHeroSeriesHint, @NonNull TextView txtHeroSeriesRating,
-      @NonNull TextView txtHeroSeriesTitle, @NonNull TextView txtSeriesCategoryTitle) {
+      @NonNull EditText editSeriesSearch, @NonNull ImageView imgHeroSeriesCover,
+      @NonNull ProgressBar progressSeries, @NonNull ProgressBar progressSeriesCats,
+      @NonNull RecyclerView recyclerSeriesCategories, @NonNull RecyclerView recyclerSeriesGrid,
+      @NonNull LinearLayout seriesHeroBanner, @NonNull TextView txtHeroSeriesHint,
+      @NonNull TextView txtHeroSeriesRating, @NonNull TextView txtHeroSeriesTitle,
+      @NonNull TextView txtSeriesCategoryTitle) {
     this.rootView = rootView;
     this.btnSeriesFilterAdult = btnSeriesFilterAdult;
     this.btnSeriesFilterAll = btnSeriesFilterAll;
     this.btnSeriesFilterDe = btnSeriesFilterDe;
     this.btnSeriesFilterRu = btnSeriesFilterRu;
+    this.editSeriesSearch = editSeriesSearch;
     this.imgHeroSeriesCover = imgHeroSeriesCover;
     this.progressSeries = progressSeries;
     this.progressSeriesCats = progressSeriesCats;
@@ -138,6 +144,12 @@ public final class ActivitySeriesBinding implements ViewBinding {
       id = R.id.btnSeriesFilterRu;
       Button btnSeriesFilterRu = ViewBindings.findChildViewById(rootView, id);
       if (btnSeriesFilterRu == null) {
+        break missingId;
+      }
+
+      id = R.id.editSeriesSearch;
+      EditText editSeriesSearch = ViewBindings.findChildViewById(rootView, id);
+      if (editSeriesSearch == null) {
         break missingId;
       }
 
@@ -202,10 +214,10 @@ public final class ActivitySeriesBinding implements ViewBinding {
       }
 
       return new ActivitySeriesBinding((LinearLayout) rootView, btnSeriesFilterAdult,
-          btnSeriesFilterAll, btnSeriesFilterDe, btnSeriesFilterRu, imgHeroSeriesCover,
-          progressSeries, progressSeriesCats, recyclerSeriesCategories, recyclerSeriesGrid,
-          seriesHeroBanner, txtHeroSeriesHint, txtHeroSeriesRating, txtHeroSeriesTitle,
-          txtSeriesCategoryTitle);
+          btnSeriesFilterAll, btnSeriesFilterDe, btnSeriesFilterRu, editSeriesSearch,
+          imgHeroSeriesCover, progressSeries, progressSeriesCats, recyclerSeriesCategories,
+          recyclerSeriesGrid, seriesHeroBanner, txtHeroSeriesHint, txtHeroSeriesRating,
+          txtHeroSeriesTitle, txtSeriesCategoryTitle);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));

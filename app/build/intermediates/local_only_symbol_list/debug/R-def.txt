@@ -6,6 +6,7 @@ color bg_card
 color bg_card_focused
 color bg_dark
 color border_focused
+color netflix_red
 color text_primary
 color text_secondary
 drawable card_focus_selector
@@ -31,10 +32,13 @@ id btnVodFilterAdult
 id btnVodFilterAll
 id btnVodFilterDe
 id btnVodFilterRu
+id editLiveSearch
 id editPassword
 id editSearchQuery
+id editSeriesSearch
 id editServerUrl
 id editUsername
+id editVodSearch
 id headerChannels
 id headerMovies
 id headerSeries
@@ -56,7 +60,6 @@ id mainHeroBanner
 id navHome
 id navLiveTv
 id navMovies
-id navSearch
 id navSeries
 id navSettings
 id osdBottom

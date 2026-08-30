@@ -2,6 +2,8 @@ package com.alex.iptvplayer.ui
 
 import android.content.Intent
 import android.os.Bundle
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -31,6 +33,7 @@ class SeriesActivity : AppCompatActivity() {
     private lateinit var client: XtreamClient
     private var allCategories: List<Category> = emptyList()
     private var currentFilter = LangFilter.AUTO_DE_RU_ADULT
+    private var currentSeries: List<SeriesItem> = emptyList()
     private var selectedCategoryId: String? = null
     private var loadJob: Job? = null
 
@@ -54,7 +57,24 @@ class SeriesActivity : AppCompatActivity() {
         }
 
         setupFilterButtons()
+        setupSearch()
         loadCategories()
+    }
+
+    private fun setupSearch() {
+        binding.editSeriesSearch.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                val q = s?.toString()?.trim()?.lowercase() ?: ""
+                val filtered = if (q.isEmpty()) currentSeries else currentSeries.filter { it.name.lowercase().contains(q) }
+                binding.recyclerSeriesGrid.adapter = SeriesAdapter(filtered, { series ->
+                    updateHeroBanner(series)
+                }, { series ->
+                    openSeriesDetail(series)
+                })
+            }
+            override fun afterTextChanged(s: Editable?) {}
+        })
     }
 
     private fun setupFilterButtons() {
@@ -100,6 +120,7 @@ class SeriesActivity : AppCompatActivity() {
         loadJob = lifecycleScope.launch {
             try {
                 val list = client.getSeries(category.id)
+                currentSeries = list
                 binding.progressSeries.visibility = View.GONE
                 binding.recyclerSeriesGrid.adapter = SeriesAdapter(list, { series ->
                     updateHeroBanner(series)
@@ -124,7 +145,7 @@ class SeriesActivity : AppCompatActivity() {
         if (!series.cover.isNullOrEmpty()) {
             Glide.with(this)
                 .load(series.cover)
-                .override(180, 260)
+                .override(140, 190)
                 .diskCacheStrategy(DiskCacheStrategy.ALL)
                 .placeholder(R.drawable.tv_banner)
                 .into(binding.imgHeroSeriesCover)
@@ -164,7 +185,6 @@ class SeriesActivity : AppCompatActivity() {
                 onSelect(cat)
             }
 
-            // Debounce: Verhindert Fokus-Springen beim schnellen Scrollen
             holder.itemView.setOnFocusChangeListener { _, hasFocus ->
                 if (hasFocus) {
                     focusJob?.cancel()
@@ -202,7 +222,7 @@ class SeriesActivity : AppCompatActivity() {
             if (!s.cover.isNullOrEmpty()) {
                 Glide.with(holder.itemView)
                     .load(s.cover)
-                    .override(180, 260)
+                    .override(130, 180)
                     .diskCacheStrategy(DiskCacheStrategy.ALL)
                     .placeholder(R.drawable.tv_banner)
                     .into(holder.imgPoster)

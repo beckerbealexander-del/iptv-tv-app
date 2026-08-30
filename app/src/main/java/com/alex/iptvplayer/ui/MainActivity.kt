@@ -52,9 +52,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupSidebar() {
-        binding.navSearch.setOnClickListener {
-            startActivity(Intent(this, SearchActivity::class.java))
-        }
         binding.navLiveTv.setOnClickListener {
             startActivity(Intent(this, LiveTvActivity::class.java))
         }
@@ -103,11 +100,10 @@ class MainActivity : AppCompatActivity() {
             binding.recyclerMainHistory.adapter = HistoryAdapter(history) { item ->
                 playHistoryItem(item)
             }
-            // Erstes Weiterschauen-Item in Hero Banner anzeigen
             val top = history[0]
             updateHeroBanner(
                 title = top.title,
-                subtitle = "🕒 Fortsetzen bei ${formatTime(top.positionMs)} / ${formatTime(top.durationMs)}",
+                subtitle = "🕒 Fortsetzen bei ${formatTime(top.positionMs)}",
                 posterUrl = top.posterUrl,
                 btnText = "▶ Weiter ansehen"
             ) {
@@ -168,7 +164,7 @@ class MainActivity : AppCompatActivity() {
         if (!posterUrl.isNullOrEmpty()) {
             Glide.with(this)
                 .load(posterUrl)
-                .override(220, 300)
+                .override(180, 240)
                 .diskCacheStrategy(DiskCacheStrategy.ALL)
                 .placeholder(R.drawable.tv_banner)
                 .into(binding.imgMainHero)
@@ -199,7 +195,7 @@ class MainActivity : AppCompatActivity() {
         else "%02d:%02d".format(minutes, seconds)
     }
 
-    // --- Adapter 1: Weiterschauen (History) ---
+    // --- Adapter 1: Weiterschauen ---
     inner class HistoryAdapter(
         private val list: List<HistoryItem>,
         private val onClick: (HistoryItem) -> Unit
@@ -226,7 +222,7 @@ class MainActivity : AppCompatActivity() {
             if (!item.posterUrl.isNullOrEmpty()) {
                 Glide.with(holder.itemView)
                     .load(item.posterUrl)
-                    .override(160, 240)
+                    .override(130, 180)
                     .diskCacheStrategy(DiskCacheStrategy.ALL)
                     .placeholder(R.drawable.tv_banner)
                     .into(holder.img)
@@ -238,7 +234,7 @@ class MainActivity : AppCompatActivity() {
                 if (hasFocus) {
                     updateHeroBanner(
                         title = item.title,
-                        subtitle = "🕒 Fortsetzen bei ${formatTime(item.positionMs)} / ${formatTime(item.durationMs)}",
+                        subtitle = "🕒 Fortsetzen bei ${formatTime(item.positionMs)}",
                         posterUrl = item.posterUrl,
                         btnText = "▶ Jetzt Weiterschauen"
                     ) {
@@ -274,7 +270,7 @@ class MainActivity : AppCompatActivity() {
             if (!movie.streamIcon.isNullOrEmpty()) {
                 Glide.with(holder.itemView)
                     .load(movie.streamIcon)
-                    .override(180, 260)
+                    .override(130, 180)
                     .diskCacheStrategy(DiskCacheStrategy.ALL)
                     .into(holder.img)
             } else {
@@ -332,7 +328,7 @@ class MainActivity : AppCompatActivity() {
             if (!s.cover.isNullOrEmpty()) {
                 Glide.with(holder.itemView)
                     .load(s.cover)
-                    .override(180, 260)
+                    .override(130, 180)
                     .diskCacheStrategy(DiskCacheStrategy.ALL)
                     .into(holder.img)
             } else {
@@ -386,7 +382,7 @@ class MainActivity : AppCompatActivity() {
             if (!s.streamIcon.isNullOrEmpty()) {
                 Glide.with(holder.itemView)
                     .load(s.streamIcon)
-                    .override(80, 80)
+                    .override(60, 60)
                     .into(holder.img)
             } else {
                 holder.img.setImageResource(R.drawable.tv_banner)

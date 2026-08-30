@@ -7,70 +7,70 @@
 
     <!-- Linke Spalte: Filter & Kategorien -->
     <LinearLayout
-        android:layout_width="280dp"
+        android:layout_width="240dp"
         android:layout_height="match_parent"
-        android:background="#12161D"
+        android:background="#161616"
         android:orientation="vertical"
-        android:padding="16dp">
+        android:padding="12dp">
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="TV-Kategorien"
-            android:textColor="@color/accent_blue"
-            android:textSize="20sp"
+            android:textColor="@color/text_primary"
+            android:textSize="16sp"
             android:textStyle="bold"
-            android:layout_marginBottom="12dp" />
+            android:layout_marginBottom="8dp" />
 
         <!-- Schnellauswahl Filter-Buttons -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginBottom="12dp">
+            android:layout_marginBottom="8dp">
 
             <Button
                 android:id="@+id/btnLiveFilterDe"
                 android:layout_width="0dp"
-                android:layout_height="36dp"
+                android:layout_height="32dp"
                 android:layout_weight="1"
                 android:background="@drawable/card_focus_selector"
                 android:text="🇩🇪 DE"
                 android:textColor="@color/text_primary"
-                android:textSize="11sp"
-                android:layout_marginEnd="4dp" />
+                android:textSize="10sp"
+                android:layout_marginEnd="3dp" />
 
             <Button
                 android:id="@+id/btnLiveFilterRu"
                 android:layout_width="0dp"
-                android:layout_height="36dp"
+                android:layout_height="32dp"
                 android:layout_weight="1"
                 android:background="@drawable/card_focus_selector"
                 android:text="🇷🇺 RU"
                 android:textColor="@color/text_primary"
-                android:textSize="11sp"
-                android:layout_marginEnd="4dp" />
+                android:textSize="10sp"
+                android:layout_marginEnd="3dp" />
 
             <Button
                 android:id="@+id/btnLiveFilterAdult"
                 android:layout_width="0dp"
-                android:layout_height="36dp"
+                android:layout_height="32dp"
                 android:layout_weight="1"
                 android:background="@drawable/card_focus_selector"
                 android:text="🔞 XXX"
                 android:textColor="@color/text_primary"
-                android:textSize="11sp"
-                android:layout_marginEnd="4dp" />
+                android:textSize="10sp"
+                android:layout_marginEnd="3dp" />
 
             <Button
                 android:id="@+id/btnLiveFilterAll"
                 android:layout_width="0dp"
-                android:layout_height="36dp"
+                android:layout_height="32dp"
                 android:layout_weight="1"
                 android:background="@drawable/card_focus_selector"
                 android:text="🌍 Alle"
                 android:textColor="@color/text_primary"
-                android:textSize="11sp" />
+                android:textSize="10sp" />
         </LinearLayout>
 
         <ProgressBar
@@ -86,13 +86,26 @@
             android:layout_height="match_parent" />
     </LinearLayout>
 
-    <!-- Mittlere Spalte: Senderliste -->
+    <!-- Mittlere Spalte: Sendersuche & Senderliste -->
     <LinearLayout
-        android:layout_width="380dp"
+        android:layout_width="320dp"
         android:layout_height="match_parent"
-        android:background="#161B22"
+        android:background="#1B1B1B"
         android:orientation="vertical"
-        android:padding="16dp">
+        android:padding="12dp">
+
+        <EditText
+            android:id="@+id/editLiveSearch"
+            android:layout_width="match_parent"
+            android:layout_height="38dp"
+            android:background="@drawable/card_focus_selector"
+            android:hint="🔍 Sender suchen..."
+            android:textColor="@color/text_primary"
+            android:textColorHint="@color/text_secondary"
+            android:textSize="13sp"
+            android:paddingHorizontal="14dp"
+            android:singleLine="true"
+            android:layout_marginBottom="10dp" />
 
         <TextView
             android:id="@+id/txtCategoryTitle"
@@ -100,9 +113,9 @@
             android:layout_height="wrap_content"
             android:text="Sender"
             android:textColor="@color/text_primary"
-            android:textSize="20sp"
+            android:textSize="15sp"
             android:textStyle="bold"
-            android:layout_marginBottom="12dp" />
+            android:layout_marginBottom="8dp" />
 
         <ProgressBar
             android:id="@+id/progressChannels"
@@ -117,12 +130,12 @@
             android:layout_height="match_parent" />
     </LinearLayout>
 
-    <!-- Rechte Spalte: Detail & EPG Programm-Vorschau -->
+    <!-- Rechte Spalte: Detail & EPG -->
     <ScrollView
         android:layout_width="0dp"
         android:layout_height="match_parent"
         android:layout_weight="1"
-        android:padding="28dp">
+        android:padding="20dp">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -135,13 +148,13 @@
                 android:layout_height="wrap_content"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
-                android:layout_marginBottom="20dp">
+                android:layout_marginBottom="16dp">
 
                 <ImageView
                     android:id="@+id/imgDetailLogo"
-                    android:layout_width="64dp"
-                    android:layout_height="64dp"
-                    android:layout_marginEnd="16dp"
+                    android:layout_width="52dp"
+                    android:layout_height="52dp"
+                    android:layout_marginEnd="14dp"
                     android:src="@drawable/tv_banner" />
 
                 <TextView
@@ -150,17 +163,17 @@
                     android:layout_height="wrap_content"
                     android:text="Sender wählen"
                     android:textColor="@color/text_primary"
-                    android:textSize="24sp"
+                    android:textSize="20sp"
                     android:textStyle="bold" />
             </LinearLayout>
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="▶ Drücke OK auf der Fernbedienung zum Abspielen"
-                android:textColor="@color/accent_blue"
-                android:textSize="15sp"
-                android:layout_marginBottom="24dp" />
+                android:text="▶ Drücke OK zum Abspielen"
+                android:textColor="@color/netflix_red"
+                android:textSize="13sp"
+                android:layout_marginBottom="16dp" />
 
             <!-- EPG Box: Aktuelle Sendung -->
             <LinearLayout
@@ -169,25 +182,25 @@
                 android:layout_height="wrap_content"
                 android:background="@drawable/card_focus_selector"
                 android:orientation="vertical"
-                android:padding="16dp"
-                android:layout_marginBottom="16dp">
+                android:padding="14dp"
+                android:layout_marginBottom="14dp">
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="🔴 JETZT IM TV (EPG)"
                     android:textColor="@color/accent_gold"
-                    android:textSize="13sp"
+                    android:textSize="12sp"
                     android:textStyle="bold" />
 
                 <TextView
                     android:id="@+id/txtEpgCurrentTitle"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp"
+                    android:layout_marginTop="4dp"
                     android:text="Keine EPG-Informationen verfügbar"
                     android:textColor="@color/text_primary"
-                    android:textSize="18sp"
+                    android:textSize="16sp"
                     android:textStyle="bold" />
 
                 <TextView
@@ -196,17 +209,17 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="2dp"
                     android:text=""
-                    android:textColor="@color/accent_blue"
-                    android:textSize="14sp" />
+                    android:textColor="@color/netflix_red"
+                    android:textSize="13sp" />
 
                 <TextView
                     android:id="@+id/txtEpgCurrentDesc"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
+                    android:layout_marginTop="6dp"
                     android:text=""
                     android:textColor="@color/text_secondary"
-                    android:textSize="13sp" />
+                    android:textSize="12sp" />
             </LinearLayout>
 
             <!-- EPG Box: Nächste Sendung -->
@@ -216,7 +229,7 @@
                 android:layout_height="wrap_content"
                 android:background="@drawable/card_focus_selector"
                 android:orientation="vertical"
-                android:padding="16dp"
+                android:padding="14dp"
                 android:visibility="gone">
 
                 <TextView
@@ -224,26 +237,26 @@
                     android:layout_height="wrap_content"
                     android:text="🕒 DANACH"
                     android:textColor="@color/text_secondary"
-                    android:textSize="13sp"
+                    android:textSize="12sp"
                     android:textStyle="bold" />
 
                 <TextView
                     android:id="@+id/txtEpgNextTitle"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
+                    android:layout_marginTop="3dp"
                     android:text=""
                     android:textColor="@color/text_primary"
-                    android:textSize="16sp" />
+                    android:textSize="14sp" />
 
                 <TextView
                     android:id="@+id/txtEpgNextTime"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="2dp"
+                    android:layout_marginTop="1dp"
                     android:text=""
-                    android:textColor="@color/accent_blue"
-                    android:textSize="13sp" />
+                    android:textColor="@color/netflix_red"
+                    android:textSize="12sp" />
             </LinearLayout>
 
         </LinearLayout>

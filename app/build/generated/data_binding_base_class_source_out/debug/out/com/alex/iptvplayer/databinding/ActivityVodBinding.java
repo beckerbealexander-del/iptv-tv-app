@@ -5,6 +5,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
@@ -34,6 +35,9 @@ public final class ActivityVodBinding implements ViewBinding {
 
   @NonNull
   public final Button btnVodFilterRu;
+
+  @NonNull
+  public final EditText editVodSearch;
 
   @NonNull
   public final ImageView imgHeroPoster;
@@ -67,17 +71,18 @@ public final class ActivityVodBinding implements ViewBinding {
 
   private ActivityVodBinding(@NonNull LinearLayout rootView, @NonNull Button btnVodFilterAdult,
       @NonNull Button btnVodFilterAll, @NonNull Button btnVodFilterDe,
-      @NonNull Button btnVodFilterRu, @NonNull ImageView imgHeroPoster,
-      @NonNull ProgressBar progressVod, @NonNull ProgressBar progressVodCats,
-      @NonNull RecyclerView recyclerVodCategories, @NonNull RecyclerView recyclerVodGrid,
-      @NonNull TextView txtHeroHint, @NonNull TextView txtHeroRating,
-      @NonNull TextView txtHeroTitle, @NonNull TextView txtVodCategoryTitle,
-      @NonNull LinearLayout vodHeroBanner) {
+      @NonNull Button btnVodFilterRu, @NonNull EditText editVodSearch,
+      @NonNull ImageView imgHeroPoster, @NonNull ProgressBar progressVod,
+      @NonNull ProgressBar progressVodCats, @NonNull RecyclerView recyclerVodCategories,
+      @NonNull RecyclerView recyclerVodGrid, @NonNull TextView txtHeroHint,
+      @NonNull TextView txtHeroRating, @NonNull TextView txtHeroTitle,
+      @NonNull TextView txtVodCategoryTitle, @NonNull LinearLayout vodHeroBanner) {
     this.rootView = rootView;
     this.btnVodFilterAdult = btnVodFilterAdult;
     this.btnVodFilterAll = btnVodFilterAll;
     this.btnVodFilterDe = btnVodFilterDe;
     this.btnVodFilterRu = btnVodFilterRu;
+    this.editVodSearch = editVodSearch;
     this.imgHeroPoster = imgHeroPoster;
     this.progressVod = progressVod;
     this.progressVodCats = progressVodCats;
@@ -138,6 +143,12 @@ public final class ActivityVodBinding implements ViewBinding {
       id = R.id.btnVodFilterRu;
       Button btnVodFilterRu = ViewBindings.findChildViewById(rootView, id);
       if (btnVodFilterRu == null) {
+        break missingId;
+      }
+
+      id = R.id.editVodSearch;
+      EditText editVodSearch = ViewBindings.findChildViewById(rootView, id);
+      if (editVodSearch == null) {
         break missingId;
       }
 
@@ -202,9 +213,9 @@ public final class ActivityVodBinding implements ViewBinding {
       }
 
       return new ActivityVodBinding((LinearLayout) rootView, btnVodFilterAdult, btnVodFilterAll,
-          btnVodFilterDe, btnVodFilterRu, imgHeroPoster, progressVod, progressVodCats,
-          recyclerVodCategories, recyclerVodGrid, txtHeroHint, txtHeroRating, txtHeroTitle,
-          txtVodCategoryTitle, vodHeroBanner);
+          btnVodFilterDe, btnVodFilterRu, editVodSearch, imgHeroPoster, progressVod,
+          progressVodCats, recyclerVodCategories, recyclerVodGrid, txtHeroHint, txtHeroRating,
+          txtHeroTitle, txtVodCategoryTitle, vodHeroBanner);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));

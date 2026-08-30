@@ -5,7 +5,6 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
-import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
@@ -46,22 +45,19 @@ public final class ActivityMainBinding implements ViewBinding {
   public final LinearLayout mainHeroBanner;
 
   @NonNull
-  public final FrameLayout navHome;
+  public final LinearLayout navHome;
 
   @NonNull
-  public final FrameLayout navLiveTv;
+  public final LinearLayout navLiveTv;
 
   @NonNull
-  public final FrameLayout navMovies;
+  public final LinearLayout navMovies;
 
   @NonNull
-  public final FrameLayout navSearch;
+  public final LinearLayout navSeries;
 
   @NonNull
-  public final FrameLayout navSeries;
-
-  @NonNull
-  public final FrameLayout navSettings;
+  public final LinearLayout navSettings;
 
   @NonNull
   public final ProgressBar progressMainHome;
@@ -91,9 +87,9 @@ public final class ActivityMainBinding implements ViewBinding {
       @NonNull ImageView imgMainHero, @NonNull LinearLayout layoutSectionHistory,
       @NonNull LinearLayout layoutSectionLive, @NonNull LinearLayout layoutSectionMovies,
       @NonNull LinearLayout layoutSectionSeries, @NonNull LinearLayout mainHeroBanner,
-      @NonNull FrameLayout navHome, @NonNull FrameLayout navLiveTv, @NonNull FrameLayout navMovies,
-      @NonNull FrameLayout navSearch, @NonNull FrameLayout navSeries,
-      @NonNull FrameLayout navSettings, @NonNull ProgressBar progressMainHome,
+      @NonNull LinearLayout navHome, @NonNull LinearLayout navLiveTv,
+      @NonNull LinearLayout navMovies, @NonNull LinearLayout navSeries,
+      @NonNull LinearLayout navSettings, @NonNull ProgressBar progressMainHome,
       @NonNull RecyclerView recyclerMainHistory, @NonNull RecyclerView recyclerMainLive,
       @NonNull RecyclerView recyclerMainMovies, @NonNull RecyclerView recyclerMainSeries,
       @NonNull LinearLayout sidebar, @NonNull TextView txtMainHeroSubtitle,
@@ -109,7 +105,6 @@ public final class ActivityMainBinding implements ViewBinding {
     this.navHome = navHome;
     this.navLiveTv = navLiveTv;
     this.navMovies = navMovies;
-    this.navSearch = navSearch;
     this.navSeries = navSeries;
     this.navSettings = navSettings;
     this.progressMainHome = progressMainHome;
@@ -192,37 +187,31 @@ public final class ActivityMainBinding implements ViewBinding {
       }
 
       id = R.id.navHome;
-      FrameLayout navHome = ViewBindings.findChildViewById(rootView, id);
+      LinearLayout navHome = ViewBindings.findChildViewById(rootView, id);
       if (navHome == null) {
         break missingId;
       }
 
       id = R.id.navLiveTv;
-      FrameLayout navLiveTv = ViewBindings.findChildViewById(rootView, id);
+      LinearLayout navLiveTv = ViewBindings.findChildViewById(rootView, id);
       if (navLiveTv == null) {
         break missingId;
       }
 
       id = R.id.navMovies;
-      FrameLayout navMovies = ViewBindings.findChildViewById(rootView, id);
+      LinearLayout navMovies = ViewBindings.findChildViewById(rootView, id);
       if (navMovies == null) {
         break missingId;
       }
 
-      id = R.id.navSearch;
-      FrameLayout navSearch = ViewBindings.findChildViewById(rootView, id);
-      if (navSearch == null) {
-        break missingId;
-      }
-
       id = R.id.navSeries;
-      FrameLayout navSeries = ViewBindings.findChildViewById(rootView, id);
+      LinearLayout navSeries = ViewBindings.findChildViewById(rootView, id);
       if (navSeries == null) {
         break missingId;
       }
 
       id = R.id.navSettings;
-      FrameLayout navSettings = ViewBindings.findChildViewById(rootView, id);
+      LinearLayout navSettings = ViewBindings.findChildViewById(rootView, id);
       if (navSettings == null) {
         break missingId;
       }
@@ -277,9 +266,9 @@ public final class ActivityMainBinding implements ViewBinding {
 
       return new ActivityMainBinding((LinearLayout) rootView, btnMainHeroPlay, imgMainHero,
           layoutSectionHistory, layoutSectionLive, layoutSectionMovies, layoutSectionSeries,
-          mainHeroBanner, navHome, navLiveTv, navMovies, navSearch, navSeries, navSettings,
-          progressMainHome, recyclerMainHistory, recyclerMainLive, recyclerMainMovies,
-          recyclerMainSeries, sidebar, txtMainHeroSubtitle, txtMainHeroTitle);
+          mainHeroBanner, navHome, navLiveTv, navMovies, navSeries, navSettings, progressMainHome,
+          recyclerMainHistory, recyclerMainLive, recyclerMainMovies, recyclerMainSeries, sidebar,
+          txtMainHeroSubtitle, txtMainHeroTitle);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));
