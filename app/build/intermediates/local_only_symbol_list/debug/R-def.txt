@@ -18,7 +18,6 @@ id btnLiveFilterAdult
 id btnLiveFilterAll
 id btnLiveFilterDe
 id btnLiveFilterRu
-id btnMainHeroPlay
 id btnSaveSettings
 id btnSearchClear
 id btnSeriesFilterAdult
@@ -48,13 +47,12 @@ id imgHeroPoster
 id imgHeroSeriesCover
 id imgHistoryChannelLogo
 id imgHistoryPoster
-id imgMainHero
 id imgPoster
 id layoutSectionChannelHistory
 id layoutSectionMovieHistory
 id layoutSectionSeriesHistory
 id layoutTimeline
-id mainHeroBanner
+id livePipPlayerView
 id navLiveTv
 id navMovies
 id navSeries
@@ -115,8 +113,6 @@ id txtHintControls
 id txtHistoryChannelName
 id txtHistorySubtitle
 id txtHistoryTitle
-id txtMainHeroSubtitle
-id txtMainHeroTitle
 id txtNoChannelHistory
 id txtNoMovieHistory
 id txtNoResults

@@ -3847,7 +3847,6 @@ id btnLiveFilterAdult
 id btnLiveFilterAll
 id btnLiveFilterDe
 id btnLiveFilterRu
-id btnMainHeroPlay
 id btnSaveSettings
 id btnSearchClear
 id btnSeriesFilterAdult
@@ -4098,7 +4097,6 @@ id imgHeroPoster
 id imgHeroSeriesCover
 id imgHistoryChannelLogo
 id imgHistoryPoster
-id imgMainHero
 id imgPoster
 id indeterminate
 id info
@@ -4161,10 +4159,10 @@ id line3
 id linear
 id listMode
 id list_item
+id livePipPlayerView
 id logo
 id m3_side_sheet
 id main
-id mainHeroBanner
 id mainOnly
 id main_icon
 id main_image
@@ -4492,8 +4490,6 @@ id txtHintControls
 id txtHistoryChannelName
 id txtHistorySubtitle
 id txtHistoryTitle
-id txtMainHeroSubtitle
-id txtMainHeroTitle
 id txtNoChannelHistory
 id txtNoMovieHistory
 id txtNoResults

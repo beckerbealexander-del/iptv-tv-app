@@ -11,6 +11,7 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.media3.ui.PlayerView;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewbinding.ViewBinding;
 import androidx.viewbinding.ViewBindings;
@@ -39,6 +40,9 @@ public final class ActivityLiveTvBinding implements ViewBinding {
   public final EditText editLiveSearch;
 
   @NonNull
+  public final PlayerView livePipPlayerView;
+
+  @NonNull
   public final ProgressBar progressCategories;
 
   @NonNull
@@ -65,16 +69,18 @@ public final class ActivityLiveTvBinding implements ViewBinding {
   private ActivityLiveTvBinding(@NonNull LinearLayout rootView, @NonNull Button btnLiveFilterAdult,
       @NonNull Button btnLiveFilterAll, @NonNull Button btnLiveFilterDe,
       @NonNull Button btnLiveFilterRu, @NonNull EditText editLiveSearch,
-      @NonNull ProgressBar progressCategories, @NonNull ProgressBar progressChannels,
-      @NonNull RecyclerView recyclerCategories, @NonNull RecyclerView recyclerChannels,
-      @NonNull TextView txtCurrentLiveTime, @NonNull TextView txtPreviewDesc,
-      @NonNull TextView txtPreviewTime, @NonNull TextView txtPreviewTitle) {
+      @NonNull PlayerView livePipPlayerView, @NonNull ProgressBar progressCategories,
+      @NonNull ProgressBar progressChannels, @NonNull RecyclerView recyclerCategories,
+      @NonNull RecyclerView recyclerChannels, @NonNull TextView txtCurrentLiveTime,
+      @NonNull TextView txtPreviewDesc, @NonNull TextView txtPreviewTime,
+      @NonNull TextView txtPreviewTitle) {
     this.rootView = rootView;
     this.btnLiveFilterAdult = btnLiveFilterAdult;
     this.btnLiveFilterAll = btnLiveFilterAll;
     this.btnLiveFilterDe = btnLiveFilterDe;
     this.btnLiveFilterRu = btnLiveFilterRu;
     this.editLiveSearch = editLiveSearch;
+    this.livePipPlayerView = livePipPlayerView;
     this.progressCategories = progressCategories;
     this.progressChannels = progressChannels;
     this.recyclerCategories = recyclerCategories;
@@ -142,6 +148,12 @@ public final class ActivityLiveTvBinding implements ViewBinding {
         break missingId;
       }
 
+      id = R.id.livePipPlayerView;
+      PlayerView livePipPlayerView = ViewBindings.findChildViewById(rootView, id);
+      if (livePipPlayerView == null) {
+        break missingId;
+      }
+
       id = R.id.progressCategories;
       ProgressBar progressCategories = ViewBindings.findChildViewById(rootView, id);
       if (progressCategories == null) {
@@ -191,9 +203,9 @@ public final class ActivityLiveTvBinding implements ViewBinding {
       }
 
       return new ActivityLiveTvBinding((LinearLayout) rootView, btnLiveFilterAdult,
-          btnLiveFilterAll, btnLiveFilterDe, btnLiveFilterRu, editLiveSearch, progressCategories,
-          progressChannels, recyclerCategories, recyclerChannels, txtCurrentLiveTime,
-          txtPreviewDesc, txtPreviewTime, txtPreviewTitle);
+          btnLiveFilterAll, btnLiveFilterDe, btnLiveFilterRu, editLiveSearch, livePipPlayerView,
+          progressCategories, progressChannels, recyclerCategories, recyclerChannels,
+          txtCurrentLiveTime, txtPreviewDesc, txtPreviewTime, txtPreviewTitle);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));

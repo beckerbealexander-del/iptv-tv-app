@@ -4,8 +4,6 @@ package com.alex.iptvplayer.databinding;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Button;
-import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
@@ -23,12 +21,6 @@ public final class ActivityMainBinding implements ViewBinding {
   private final LinearLayout rootView;
 
   @NonNull
-  public final Button btnMainHeroPlay;
-
-  @NonNull
-  public final ImageView imgMainHero;
-
-  @NonNull
   public final LinearLayout layoutSectionChannelHistory;
 
   @NonNull
@@ -36,9 +28,6 @@ public final class ActivityMainBinding implements ViewBinding {
 
   @NonNull
   public final LinearLayout layoutSectionSeriesHistory;
-
-  @NonNull
-  public final LinearLayout mainHeroBanner;
 
   @NonNull
   public final LinearLayout navLiveTv;
@@ -65,12 +54,6 @@ public final class ActivityMainBinding implements ViewBinding {
   public final LinearLayout sidebar;
 
   @NonNull
-  public final TextView txtMainHeroSubtitle;
-
-  @NonNull
-  public final TextView txtMainHeroTitle;
-
-  @NonNull
   public final TextView txtNoChannelHistory;
 
   @NonNull
@@ -79,24 +62,19 @@ public final class ActivityMainBinding implements ViewBinding {
   @NonNull
   public final TextView txtNoSeriesHistory;
 
-  private ActivityMainBinding(@NonNull LinearLayout rootView, @NonNull Button btnMainHeroPlay,
-      @NonNull ImageView imgMainHero, @NonNull LinearLayout layoutSectionChannelHistory,
+  private ActivityMainBinding(@NonNull LinearLayout rootView,
+      @NonNull LinearLayout layoutSectionChannelHistory,
       @NonNull LinearLayout layoutSectionMovieHistory,
-      @NonNull LinearLayout layoutSectionSeriesHistory, @NonNull LinearLayout mainHeroBanner,
-      @NonNull LinearLayout navLiveTv, @NonNull LinearLayout navMovies,
-      @NonNull LinearLayout navSeries, @NonNull LinearLayout navSettings,
-      @NonNull RecyclerView recyclerChannelHistory, @NonNull RecyclerView recyclerMovieHistory,
-      @NonNull RecyclerView recyclerSeriesHistory, @NonNull LinearLayout sidebar,
-      @NonNull TextView txtMainHeroSubtitle, @NonNull TextView txtMainHeroTitle,
-      @NonNull TextView txtNoChannelHistory, @NonNull TextView txtNoMovieHistory,
-      @NonNull TextView txtNoSeriesHistory) {
+      @NonNull LinearLayout layoutSectionSeriesHistory, @NonNull LinearLayout navLiveTv,
+      @NonNull LinearLayout navMovies, @NonNull LinearLayout navSeries,
+      @NonNull LinearLayout navSettings, @NonNull RecyclerView recyclerChannelHistory,
+      @NonNull RecyclerView recyclerMovieHistory, @NonNull RecyclerView recyclerSeriesHistory,
+      @NonNull LinearLayout sidebar, @NonNull TextView txtNoChannelHistory,
+      @NonNull TextView txtNoMovieHistory, @NonNull TextView txtNoSeriesHistory) {
     this.rootView = rootView;
-    this.btnMainHeroPlay = btnMainHeroPlay;
-    this.imgMainHero = imgMainHero;
     this.layoutSectionChannelHistory = layoutSectionChannelHistory;
     this.layoutSectionMovieHistory = layoutSectionMovieHistory;
     this.layoutSectionSeriesHistory = layoutSectionSeriesHistory;
-    this.mainHeroBanner = mainHeroBanner;
     this.navLiveTv = navLiveTv;
     this.navMovies = navMovies;
     this.navSeries = navSeries;
@@ -105,8 +83,6 @@ public final class ActivityMainBinding implements ViewBinding {
     this.recyclerMovieHistory = recyclerMovieHistory;
     this.recyclerSeriesHistory = recyclerSeriesHistory;
     this.sidebar = sidebar;
-    this.txtMainHeroSubtitle = txtMainHeroSubtitle;
-    this.txtMainHeroTitle = txtMainHeroTitle;
     this.txtNoChannelHistory = txtNoChannelHistory;
     this.txtNoMovieHistory = txtNoMovieHistory;
     this.txtNoSeriesHistory = txtNoSeriesHistory;
@@ -139,18 +115,6 @@ public final class ActivityMainBinding implements ViewBinding {
     // This is done to optimize the compiled bytecode for size and performance.
     int id;
     missingId: {
-      id = R.id.btnMainHeroPlay;
-      Button btnMainHeroPlay = ViewBindings.findChildViewById(rootView, id);
-      if (btnMainHeroPlay == null) {
-        break missingId;
-      }
-
-      id = R.id.imgMainHero;
-      ImageView imgMainHero = ViewBindings.findChildViewById(rootView, id);
-      if (imgMainHero == null) {
-        break missingId;
-      }
-
       id = R.id.layoutSectionChannelHistory;
       LinearLayout layoutSectionChannelHistory = ViewBindings.findChildViewById(rootView, id);
       if (layoutSectionChannelHistory == null) {
@@ -166,12 +130,6 @@ public final class ActivityMainBinding implements ViewBinding {
       id = R.id.layoutSectionSeriesHistory;
       LinearLayout layoutSectionSeriesHistory = ViewBindings.findChildViewById(rootView, id);
       if (layoutSectionSeriesHistory == null) {
-        break missingId;
-      }
-
-      id = R.id.mainHeroBanner;
-      LinearLayout mainHeroBanner = ViewBindings.findChildViewById(rootView, id);
-      if (mainHeroBanner == null) {
         break missingId;
       }
 
@@ -223,18 +181,6 @@ public final class ActivityMainBinding implements ViewBinding {
         break missingId;
       }
 
-      id = R.id.txtMainHeroSubtitle;
-      TextView txtMainHeroSubtitle = ViewBindings.findChildViewById(rootView, id);
-      if (txtMainHeroSubtitle == null) {
-        break missingId;
-      }
-
-      id = R.id.txtMainHeroTitle;
-      TextView txtMainHeroTitle = ViewBindings.findChildViewById(rootView, id);
-      if (txtMainHeroTitle == null) {
-        break missingId;
-      }
-
       id = R.id.txtNoChannelHistory;
       TextView txtNoChannelHistory = ViewBindings.findChildViewById(rootView, id);
       if (txtNoChannelHistory == null) {
@@ -253,11 +199,10 @@ public final class ActivityMainBinding implements ViewBinding {
         break missingId;
       }
 
-      return new ActivityMainBinding((LinearLayout) rootView, btnMainHeroPlay, imgMainHero,
-          layoutSectionChannelHistory, layoutSectionMovieHistory, layoutSectionSeriesHistory,
-          mainHeroBanner, navLiveTv, navMovies, navSeries, navSettings, recyclerChannelHistory,
-          recyclerMovieHistory, recyclerSeriesHistory, sidebar, txtMainHeroSubtitle,
-          txtMainHeroTitle, txtNoChannelHistory, txtNoMovieHistory, txtNoSeriesHistory);
+      return new ActivityMainBinding((LinearLayout) rootView, layoutSectionChannelHistory,
+          layoutSectionMovieHistory, layoutSectionSeriesHistory, navLiveTv, navMovies, navSeries,
+          navSettings, recyclerChannelHistory, recyclerMovieHistory, recyclerSeriesHistory, sidebar,
+          txtNoChannelHistory, txtNoMovieHistory, txtNoSeriesHistory);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));

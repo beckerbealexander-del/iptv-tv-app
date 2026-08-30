@@ -26,8 +26,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var client: XtreamClient
     private lateinit var historyManager: HistoryManager
 
-    private var activeHeroPlayAction: (() -> Unit)? = null
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
@@ -62,15 +60,12 @@ class MainActivity : AppCompatActivity() {
         binding.navSettings.setOnClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))
         }
-        binding.btnMainHeroPlay.setOnClickListener {
-            activeHeroPlayAction?.invoke()
-        }
 
         binding.navLiveTv.requestFocus()
     }
 
     private fun setupRecyclers() {
-        binding.recyclerMovieHistory.apply {
+        binding.recyclerChannelHistory.apply {
             layoutManager = LinearLayoutManager(this@MainActivity, LinearLayoutManager.HORIZONTAL, false)
             setHasFixedSize(true)
         }
@@ -78,7 +73,7 @@ class MainActivity : AppCompatActivity() {
             layoutManager = LinearLayoutManager(this@MainActivity, LinearLayoutManager.HORIZONTAL, false)
             setHasFixedSize(true)
         }
-        binding.recyclerChannelHistory.apply {
+        binding.recyclerMovieHistory.apply {
             layoutManager = LinearLayoutManager(this@MainActivity, LinearLayoutManager.HORIZONTAL, false)
             setHasFixedSize(true)
         }
@@ -87,21 +82,17 @@ class MainActivity : AppCompatActivity() {
     private fun loadAllHistoryRows() {
         val allHistory = historyManager.getHistory()
 
-        // 1. Film-Verlauf
-        val moviesHistory = allHistory.filter { 
-            (it.type == "VOD" || it.streamUrl.contains("/movie/")) && 
-            !it.streamUrl.contains("/series/") && 
-            !it.title.contains(" - S") 
-        }
-        if (moviesHistory.isNotEmpty()) {
-            binding.txtNoMovieHistory.visibility = View.GONE
-            binding.recyclerMovieHistory.visibility = View.VISIBLE
-            binding.recyclerMovieHistory.adapter = HistoryAdapter(moviesHistory) { item ->
-                playHistoryItem(item)
+        // 1. TV-Sender Verlauf (Zuletzt gesehen - 1. Reihe)
+        val channelHistory = historyManager.getRecentLiveChannels()
+        if (channelHistory.isNotEmpty()) {
+            binding.txtNoChannelHistory.visibility = View.GONE
+            binding.recyclerChannelHistory.visibility = View.VISIBLE
+            binding.recyclerChannelHistory.adapter = ChannelHistoryAdapter(channelHistory) { stream, pos ->
+                playLiveChannel(stream, channelHistory, pos)
             }
         } else {
-            binding.txtNoMovieHistory.visibility = View.VISIBLE
-            binding.recyclerMovieHistory.visibility = View.GONE
+            binding.txtNoChannelHistory.visibility = View.VISIBLE
+            binding.recyclerChannelHistory.visibility = View.GONE
         }
 
         // 2. Serien-Verlauf
@@ -121,64 +112,21 @@ class MainActivity : AppCompatActivity() {
             binding.recyclerSeriesHistory.visibility = View.GONE
         }
 
-        // 3. TV-Sender Verlauf (Zuletzt gesehen)
-        val channelHistory = historyManager.getRecentLiveChannels()
-        if (channelHistory.isNotEmpty()) {
-            binding.txtNoChannelHistory.visibility = View.GONE
-            binding.recyclerChannelHistory.visibility = View.VISIBLE
-            binding.recyclerChannelHistory.adapter = ChannelHistoryAdapter(channelHistory) { stream, pos ->
-                playLiveChannel(stream, channelHistory, pos)
+        // 3. Film-Verlauf
+        val moviesHistory = allHistory.filter { 
+            (it.type == "VOD" || it.streamUrl.contains("/movie/")) && 
+            !it.streamUrl.contains("/series/") && 
+            !it.title.contains(" - S") 
+        }
+        if (moviesHistory.isNotEmpty()) {
+            binding.txtNoMovieHistory.visibility = View.GONE
+            binding.recyclerMovieHistory.visibility = View.VISIBLE
+            binding.recyclerMovieHistory.adapter = HistoryAdapter(moviesHistory) { item ->
+                playHistoryItem(item)
             }
         } else {
-            binding.txtNoChannelHistory.visibility = View.VISIBLE
-            binding.recyclerChannelHistory.visibility = View.GONE
-        }
-
-        // Hero Banner auf das allerletzte angeschaute Element setzen
-        val mostRecent = allHistory.firstOrNull()
-        if (mostRecent != null) {
-            updateHeroBanner(
-                title = mostRecent.title,
-                subtitle = "🕒 Fortsetzen bei ${formatTime(mostRecent.positionMs)}",
-                posterUrl = mostRecent.posterUrl,
-                btnText = "▶ Jetzt Weiterschauen"
-            ) {
-                playHistoryItem(mostRecent)
-            }
-        } else if (channelHistory.isNotEmpty()) {
-            val topChan = channelHistory[0]
-            updateHeroBanner(
-                title = topChan.name,
-                subtitle = "🔴 Zuletzt gesehener TV-Sender",
-                posterUrl = topChan.streamIcon,
-                btnText = "▶ Live einschalten"
-            ) {
-                playLiveChannel(topChan, channelHistory, 0)
-            }
-        }
-    }
-
-    private fun updateHeroBanner(
-        title: String,
-        subtitle: String,
-        posterUrl: String?,
-        btnText: String,
-        onPlay: () -> Unit
-    ) {
-        binding.txtMainHeroTitle.text = title
-        binding.txtMainHeroSubtitle.text = subtitle
-        binding.btnMainHeroPlay.text = btnText
-        activeHeroPlayAction = onPlay
-
-        if (!posterUrl.isNullOrEmpty()) {
-            Glide.with(this)
-                .load(posterUrl)
-                .override(180, 240)
-                .diskCacheStrategy(DiskCacheStrategy.ALL)
-                .placeholder(R.drawable.tv_banner)
-                .into(binding.imgMainHero)
-        } else {
-            binding.imgMainHero.setImageResource(R.drawable.tv_banner)
+            binding.txtNoMovieHistory.visibility = View.VISIBLE
+            binding.recyclerMovieHistory.visibility = View.GONE
         }
     }
 
@@ -245,25 +193,12 @@ class MainActivity : AppCompatActivity() {
             if (!item.posterUrl.isNullOrEmpty()) {
                 Glide.with(holder.itemView)
                     .load(item.posterUrl)
-                    .override(130, 180)
+                    .override(110, 150)
                     .diskCacheStrategy(DiskCacheStrategy.ALL)
                     .placeholder(R.drawable.tv_banner)
                     .into(holder.img)
             } else {
                 holder.img.setImageResource(R.drawable.tv_banner)
-            }
-
-            holder.itemView.setOnFocusChangeListener { _, hasFocus ->
-                if (hasFocus) {
-                    updateHeroBanner(
-                        title = item.title,
-                        subtitle = "🕒 Fortsetzen bei ${formatTime(item.positionMs)}",
-                        posterUrl = item.posterUrl,
-                        btnText = "▶ Jetzt Weiterschauen"
-                    ) {
-                        onClick(item)
-                    }
-                }
             }
 
             holder.itemView.setOnClickListener { onClick(item) }
@@ -295,23 +230,10 @@ class MainActivity : AppCompatActivity() {
             if (!stream.streamIcon.isNullOrEmpty()) {
                 Glide.with(holder.itemView)
                     .load(stream.streamIcon)
-                    .override(50, 50)
+                    .override(40, 40)
                     .into(holder.img)
             } else {
                 holder.img.setImageResource(R.drawable.tv_banner)
-            }
-
-            holder.itemView.setOnFocusChangeListener { _, hasFocus ->
-                if (hasFocus) {
-                    updateHeroBanner(
-                        title = stream.name,
-                        subtitle = "🔴 Zuletzt gesehener TV-Sender",
-                        posterUrl = stream.streamIcon,
-                        btnText = "▶ Live einschalten"
-                    ) {
-                        onClick(stream, position)
-                    }
-                }
             }
 
             holder.itemView.setOnClickListener { onClick(stream, position) }

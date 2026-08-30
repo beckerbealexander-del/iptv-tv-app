@@ -13,6 +13,8 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import androidx.media3.common.MediaItem
+import androidx.media3.exoplayer.ExoPlayer
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.alex.iptvplayer.R
@@ -23,6 +25,7 @@ import com.alex.iptvplayer.data.LangFilter
 import com.alex.iptvplayer.data.LiveStream
 import com.alex.iptvplayer.data.XtreamClient
 import com.alex.iptvplayer.databinding.ActivityLiveTvBinding
+import com.alex.iptvplayer.util.PlayerUtils
 import com.bumptech.glide.Glide
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -43,6 +46,10 @@ class LiveTvActivity : AppCompatActivity() {
     private var selectedCategoryId: String? = null
     private val epgCache = HashMap<Int, List<EpgProgram>>()
 
+    // PIP Mini-Player
+    private var pipPlayer: ExoPlayer? = null
+    private var activePipStream: LiveStream? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityLiveTvBinding.inflate(layoutInflater)
@@ -51,6 +58,7 @@ class LiveTvActivity : AppCompatActivity() {
         client = XtreamClient(this)
         historyManager = HistoryManager(this)
 
+        setupPipPlayer()
         updateLiveTimeHeader()
 
         binding.recyclerCategories.apply {
@@ -68,6 +76,38 @@ class LiveTvActivity : AppCompatActivity() {
         setupFilterButtons()
         setupSearch()
         loadCategories()
+    }
+
+    private fun setupPipPlayer() {
+        pipPlayer = PlayerUtils.createExoPlayer(this).apply {
+            binding.livePipPlayerView.player = this
+            playWhenReady = true
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        activePipStream?.let { playPipStream(it) }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        pipPlayer?.pause()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        pipPlayer?.release()
+        pipPlayer = null
+    }
+
+    private fun playPipStream(stream: LiveStream) {
+        activePipStream = stream
+        val url = client.getLiveStreamUrl(stream.streamId)
+        val mediaItem = MediaItem.fromUri(url)
+        pipPlayer?.setMediaItem(mediaItem)
+        pipPlayer?.prepare()
+        pipPlayer?.playWhenReady = true
     }
 
     private fun updateLiveTimeHeader() {
@@ -132,6 +172,7 @@ class LiveTvActivity : AppCompatActivity() {
 
                 if (currentStreams.isNotEmpty()) {
                     showChannelPreview(currentStreams[0], null)
+                    playPipStream(currentStreams[0])
                 }
             } catch (e: Exception) {
                 binding.progressChannels.visibility = View.GONE
@@ -160,6 +201,7 @@ class LiveTvActivity : AppCompatActivity() {
     }
 
     private fun openFullscreenPlayer(stream: LiveStream, position: Int) {
+        pipPlayer?.pause()
         historyManager.saveLiveChannel(stream)
         val intent = Intent(this, PlayerActivity::class.java).apply {
             putExtra("STREAM_URL", client.getLiveStreamUrl(stream.streamId))
@@ -190,7 +232,6 @@ class LiveTvActivity : AppCompatActivity() {
                                 holder?.header?.requestFocus()
                             }
                         }
-                        // Wenn am Ende der Liste: Nichts tun, aber Event schlucken (Niemals zu Kategorien springen!)
                         return true
                     }
                     KeyEvent.KEYCODE_DPAD_UP -> {
@@ -202,15 +243,12 @@ class LiveTvActivity : AppCompatActivity() {
                                 holder?.header?.requestFocus()
                             }
                         } else if (channelPos == 0) {
-                            // Am Anfang der Liste: optional Suche fokussieren oder bleiben
                             binding.editLiveSearch.requestFocus()
                         }
-                        // Niemals zu Kategorien springen!
                         return true
                     }
                     KeyEvent.KEYCODE_DPAD_LEFT -> {
                         if (isHeaderFocused(focused)) {
-                            // Nur bei bewusstem Druck nach LINKS auf dem Senderkopf zu den Kategorien wechseln
                             val curCatHolder = binding.recyclerCategories.findViewHolderForAdapterPosition(0) as? CategoryAdapter.ViewHolder
                             curCatHolder?.itemView?.requestFocus() ?: binding.recyclerCategories.requestFocus()
                             return true
@@ -218,7 +256,6 @@ class LiveTvActivity : AppCompatActivity() {
                     }
                 }
             } else if (isViewInRecyclerView(focused, binding.recyclerCategories)) {
-                // In den Kategorien
                 if (event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
                     val curChanHolder = binding.recyclerChannels.findViewHolderForAdapterPosition(0) as? ChannelAdapter.ViewHolder
                     curChanHolder?.header?.requestFocus() ?: binding.recyclerChannels.requestFocus()
@@ -280,7 +317,6 @@ class LiveTvActivity : AppCompatActivity() {
                 onSelect(cat)
             }
 
-            // Ruhigeres Wechseln beim bewussten Scrollen durch Kategorien
             holder.itemView.setOnFocusChangeListener { _, hasFocus ->
                 if (hasFocus) {
                     focusJob?.cancel()
@@ -333,6 +369,7 @@ class LiveTvActivity : AppCompatActivity() {
             holder.header.setOnFocusChangeListener { _, hasFocus ->
                 if (hasFocus) {
                     showChannelPreview(s, null)
+                    playPipStream(s)
                 }
             }
 
