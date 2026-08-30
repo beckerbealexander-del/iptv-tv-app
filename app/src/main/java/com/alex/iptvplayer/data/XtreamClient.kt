@@ -1,0 +1,119 @@
+package com.alex.iptvplayer.data
+
+import android.content.Context
+import android.content.SharedPreferences
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import java.util.concurrent.TimeUnit
+
+class XtreamClient(context: Context) {
+
+    private val prefs: SharedPreferences =
+        context.getSharedPreferences("iptv_settings", Context.MODE_PRIVATE)
+
+    private val httpClient = OkHttpClient.Builder()
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(20, TimeUnit.SECONDS)
+        .build()
+
+    private val gson = Gson()
+
+    // Standard-Server und Easy-Login Voreinstellungen
+    var serverUrl: String
+        get() = prefs.getString("server_url", "https://iptvproxy-pbfh.onrender.com")!!.trimEnd('/')
+        set(value) = prefs.edit().putString("server_url", value.trimEnd('/')).apply()
+
+    var username: String
+        get() = prefs.getString("username", "1")!!
+        set(value) = prefs.edit().putString("username", value).apply()
+
+    var password: String
+        get() = prefs.getString("password", "1")!!
+        set(value) = prefs.edit().putString("password", value).apply()
+
+    private fun buildApiUrl(action: String, extraParams: String = ""): String {
+        return "$serverUrl/player_api.php?username=$username&password=$password&action=$action$extraParams"
+    }
+
+    // Stream URLs für den ExoPlayer
+    fun getLiveStreamUrl(streamId: Int): String {
+        return "$serverUrl/live/$username/$password/$streamId.ts"
+    }
+
+    fun getVodStreamUrl(streamId: Int, extension: String = "mp4"): String {
+        return "$serverUrl/movie/$username/$password/$streamId.$extension"
+    }
+
+    fun getSeriesStreamUrl(streamId: String, extension: String = "mp4"): String {
+        return "$serverUrl/series/$username/$password/$streamId.$extension"
+    }
+
+    // 1. Live TV
+    suspend fun getLiveCategories(): List<Category> = withContext(Dispatchers.IO) {
+        val url = buildApiUrl("get_live_categories")
+        val json = executeGet(url)
+        val type = object : TypeToken<List<Category>>() {}.type
+        gson.fromJson(json, type) ?: emptyList()
+    }
+
+    suspend fun getLiveStreams(categoryId: String? = null): List<LiveStream> = withContext(Dispatchers.IO) {
+        val extra = if (categoryId != null) "&category_id=$categoryId" else ""
+        val url = buildApiUrl("get_live_streams", extra)
+        val json = executeGet(url)
+        val type = object : TypeToken<List<LiveStream>>() {}.type
+        gson.fromJson(json, type) ?: emptyList()
+    }
+
+    // 2. VOD Filme
+    suspend fun getVodCategories(): List<Category> = withContext(Dispatchers.IO) {
+        val url = buildApiUrl("get_vod_categories")
+        val json = executeGet(url)
+        val type = object : TypeToken<List<Category>>() {}.type
+        gson.fromJson(json, type) ?: emptyList()
+    }
+
+    suspend fun getVodStreams(categoryId: String? = null): List<VodStream> = withContext(Dispatchers.IO) {
+        val extra = if (categoryId != null) "&category_id=$categoryId" else ""
+        val url = buildApiUrl("get_vod_streams", extra)
+        val json = executeGet(url)
+        val type = object : TypeToken<List<VodStream>>() {}.type
+        gson.fromJson(json, type) ?: emptyList()
+    }
+
+    // 3. Serien
+    suspend fun getSeriesCategories(): List<Category> = withContext(Dispatchers.IO) {
+        val url = buildApiUrl("get_series_categories")
+        val json = executeGet(url)
+        val type = object : TypeToken<List<Category>>() {}.type
+        gson.fromJson(json, type) ?: emptyList()
+    }
+
+    suspend fun getSeries(categoryId: String? = null): List<SeriesItem> = withContext(Dispatchers.IO) {
+        val extra = if (categoryId != null) "&category_id=$categoryId" else ""
+        val url = buildApiUrl("get_series", extra)
+        val json = executeGet(url)
+        val type = object : TypeToken<List<SeriesItem>>() {}.type
+        gson.fromJson(json, type) ?: emptyList()
+    }
+
+    suspend fun getSeriesInfo(seriesId: Int): SeriesInfoResponse = withContext(Dispatchers.IO) {
+        val url = buildApiUrl("get_series_info", "&series_id=$seriesId")
+        val json = executeGet(url)
+        gson.fromJson(json, SeriesInfoResponse::class.java) ?: SeriesInfoResponse()
+    }
+
+    private fun executeGet(url: String): String {
+        val request = Request.Builder()
+            .url(url)
+            .header("User-Agent", "AlexIPTVPlayer/1.0 (Android TV)")
+            .build()
+        httpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw Exception("HTTP Error: ${response.code}")
+            return response.body?.string() ?: ""
+        }
+    }
+}

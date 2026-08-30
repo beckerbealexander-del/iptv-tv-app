@@ -1,0 +1,12 @@
+<resources>
+    <string name="app_name">Alex IPTV Player</string>
+    <string name="live_tv">Live TV</string>
+    <string name="movies">Filme</string>
+    <string name="series">Serien</string>
+    <string name="settings">Einstellungen</string>
+    <string name="loading">Wird geladen…</string>
+    <string name="no_content">Keine Inhalte gefunden</string>
+    <string name="play">Abspielen</string>
+    <string name="episodes">Episoden</string>
+    <string name="seasons">Staffeln</string>
+</resources>
