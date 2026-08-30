@@ -6,6 +6,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -24,22 +25,26 @@ public final class ItemEpisodeCardBinding implements ViewBinding {
   public final ImageView imgEpisodeThumb;
 
   @NonNull
+  public final ProgressBar progressEpisodeWatched;
+
+  @NonNull
   public final TextView txtEpisodeDuration;
 
   @NonNull
   public final TextView txtEpisodeNumAndTitle;
 
   @NonNull
-  public final TextView txtEpisodePlot;
+  public final TextView txtEpisodePlayIcon;
 
   private ItemEpisodeCardBinding(@NonNull LinearLayout rootView, @NonNull ImageView imgEpisodeThumb,
-      @NonNull TextView txtEpisodeDuration, @NonNull TextView txtEpisodeNumAndTitle,
-      @NonNull TextView txtEpisodePlot) {
+      @NonNull ProgressBar progressEpisodeWatched, @NonNull TextView txtEpisodeDuration,
+      @NonNull TextView txtEpisodeNumAndTitle, @NonNull TextView txtEpisodePlayIcon) {
     this.rootView = rootView;
     this.imgEpisodeThumb = imgEpisodeThumb;
+    this.progressEpisodeWatched = progressEpisodeWatched;
     this.txtEpisodeDuration = txtEpisodeDuration;
     this.txtEpisodeNumAndTitle = txtEpisodeNumAndTitle;
-    this.txtEpisodePlot = txtEpisodePlot;
+    this.txtEpisodePlayIcon = txtEpisodePlayIcon;
   }
 
   @Override
@@ -75,6 +80,12 @@ public final class ItemEpisodeCardBinding implements ViewBinding {
         break missingId;
       }
 
+      id = R.id.progressEpisodeWatched;
+      ProgressBar progressEpisodeWatched = ViewBindings.findChildViewById(rootView, id);
+      if (progressEpisodeWatched == null) {
+        break missingId;
+      }
+
       id = R.id.txtEpisodeDuration;
       TextView txtEpisodeDuration = ViewBindings.findChildViewById(rootView, id);
       if (txtEpisodeDuration == null) {
@@ -87,14 +98,14 @@ public final class ItemEpisodeCardBinding implements ViewBinding {
         break missingId;
       }
 
-      id = R.id.txtEpisodePlot;
-      TextView txtEpisodePlot = ViewBindings.findChildViewById(rootView, id);
-      if (txtEpisodePlot == null) {
+      id = R.id.txtEpisodePlayIcon;
+      TextView txtEpisodePlayIcon = ViewBindings.findChildViewById(rootView, id);
+      if (txtEpisodePlayIcon == null) {
         break missingId;
       }
 
       return new ItemEpisodeCardBinding((LinearLayout) rootView, imgEpisodeThumb,
-          txtEpisodeDuration, txtEpisodeNumAndTitle, txtEpisodePlot);
+          progressEpisodeWatched, txtEpisodeDuration, txtEpisodeNumAndTitle, txtEpisodePlayIcon);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));

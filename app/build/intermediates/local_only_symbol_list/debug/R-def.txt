@@ -65,6 +65,7 @@ id playerSeekBar
 id playerView
 id progressCategories
 id progressChannels
+id progressEpisodeWatched
 id progressEpisodes
 id progressHistoryBar
 id progressSearch
@@ -101,7 +102,7 @@ id txtEpgProgramTime
 id txtEpgProgramTitle
 id txtEpisodeDuration
 id txtEpisodeNumAndTitle
-id txtEpisodePlot
+id txtEpisodePlayIcon
 id txtHeroHint
 id txtHeroRating
 id txtHeroSeriesHint

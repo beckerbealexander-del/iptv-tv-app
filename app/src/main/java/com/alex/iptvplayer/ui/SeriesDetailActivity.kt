@@ -2,10 +2,12 @@ package com.alex.iptvplayer.ui
 
 import android.content.Intent
 import android.os.Bundle
+import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
+import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -14,6 +16,8 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.alex.iptvplayer.R
 import com.alex.iptvplayer.data.EpisodeItem
+import com.alex.iptvplayer.data.HistoryItem
+import com.alex.iptvplayer.data.HistoryManager
 import com.alex.iptvplayer.data.SeasonItem
 import com.alex.iptvplayer.data.SeriesInfoResponse
 import com.alex.iptvplayer.data.SeriesItem
@@ -27,6 +31,8 @@ class SeriesDetailActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivitySeriesDetailBinding
     private lateinit var client: XtreamClient
+    private lateinit var historyManager: HistoryManager
+
     private var seriesItem: SeriesItem? = null
     private var seriesInfo: SeriesInfoResponse? = null
     private var seriesId: Int = -1
@@ -34,6 +40,8 @@ class SeriesDetailActivity : AppCompatActivity() {
     private var targetEpisode: Int = -1
     private var autoPlay: Boolean = false
     private var hasAutoPlayed: Boolean = false
+    private var currentSeasonIndex: Int = 0
+    private var historyList: List<HistoryItem> = emptyList()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -41,6 +49,7 @@ class SeriesDetailActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         client = XtreamClient(this)
+        historyManager = HistoryManager(this)
 
         @Suppress("DEPRECATION")
         seriesItem = intent.getSerializableExtra("SERIES_ITEM") as? SeriesItem
@@ -74,6 +83,12 @@ class SeriesDetailActivity : AppCompatActivity() {
         } else {
             finish()
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        historyList = historyManager.getHistory()
+        binding.recyclerEpisodes.adapter?.notifyDataSetChanged()
     }
 
     private fun resolveSeriesByNameAndLoad(title: String) {
@@ -125,6 +140,7 @@ class SeriesDetailActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             try {
+                historyList = historyManager.getHistory()
                 val info = client.getSeriesInfo(targetId)
                 seriesInfo = info
                 binding.progressEpisodes.visibility = View.GONE
@@ -147,9 +163,11 @@ class SeriesDetailActivity : AppCompatActivity() {
 
                 val seasons = info.seasons ?: emptyList()
                 val initialSeasonNum = if (targetSeason > 0) targetSeason else (seasons.firstOrNull()?.seasonNumber ?: 1)
+                currentSeasonIndex = seasons.indexOfFirst { it.seasonNumber == initialSeasonNum }.coerceAtLeast(0)
 
                 if (seasons.isNotEmpty()) {
-                    binding.recyclerSeasons.adapter = SeasonAdapter(seasons) { season ->
+                    binding.recyclerSeasons.adapter = SeasonAdapter(seasons) { season, idx ->
+                        currentSeasonIndex = idx
                         loadEpisodesForSeason(season.seasonNumber, requestFocusOnEpisode = false)
                     }
                     loadEpisodesForSeason(initialSeasonNum, requestFocusOnEpisode = true)
@@ -212,7 +230,7 @@ class SeriesDetailActivity : AppCompatActivity() {
 
     inner class SeasonAdapter(
         private val seasons: List<SeasonItem>,
-        private val onSelect: (SeasonItem) -> Unit
+        private val onSelect: (SeasonItem, Int) -> Unit
     ) : RecyclerView.Adapter<SeasonAdapter.ViewHolder>() {
 
         inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
@@ -227,9 +245,28 @@ class SeriesDetailActivity : AppCompatActivity() {
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val season = seasons[position]
             holder.txtName.text = season.name ?: "Staffel ${season.seasonNumber}"
-            holder.itemView.setOnClickListener { onSelect(season) }
+
+            holder.itemView.setOnClickListener { onSelect(season, position) }
             holder.itemView.setOnFocusChangeListener { _, hasFocus ->
-                if (hasFocus) onSelect(season)
+                if (hasFocus) onSelect(season, position)
+            }
+
+            // D-Pad Randbegrenzung: Beim schnellen Scrollen/Halten NIEMALS in die Episoden springen!
+            holder.itemView.setOnKeyListener { _, keyCode, event ->
+                if (event.action == KeyEvent.ACTION_DOWN) {
+                    if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && position == seasons.size - 1) {
+                        return@setOnKeyListener true
+                    }
+                    if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT && position == 0) {
+                        return@setOnKeyListener true
+                    }
+                    if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+                        val firstEpHolder = binding.recyclerEpisodes.findViewHolderForAdapterPosition(0)
+                        firstEpHolder?.itemView?.requestFocus() ?: binding.recyclerEpisodes.requestFocus()
+                        return@setOnKeyListener true
+                    }
+                }
+                false
             }
         }
 
@@ -243,8 +280,9 @@ class SeriesDetailActivity : AppCompatActivity() {
         inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
             val txtTitle: TextView = view.findViewById(R.id.txtEpisodeNumAndTitle)
             val txtDuration: TextView = view.findViewById(R.id.txtEpisodeDuration)
-            val txtPlot: TextView = view.findViewById(R.id.txtEpisodePlot)
+            val txtPlayIcon: TextView = view.findViewById(R.id.txtEpisodePlayIcon)
             val imgThumb: ImageView = view.findViewById(R.id.imgEpisodeThumb)
+            val progressBar: ProgressBar = view.findViewById(R.id.progressEpisodeWatched)
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -256,14 +294,36 @@ class SeriesDetailActivity : AppCompatActivity() {
             val ep = episodes[position]
             holder.txtTitle.text = "Folge ${ep.episodeNum}: ${ep.title}"
             holder.txtDuration.text = ep.info?.duration ?: ""
-            val plotText = ep.info?.plot
-            holder.txtPlot.text = if (!plotText.isNullOrEmpty()) plotText else "Keine Beschreibung verfügbar."
+
+            // Gesehen-Fortschrittsbalken & Indikator
+            val epIdInt = ep.id.toIntOrNull() ?: -1
+            val historyEntry = historyList.firstOrNull { 
+                (epIdInt > 0 && it.streamId == epIdInt) || 
+                (it.season == ep.season && it.episodeNum == ep.episodeNum && (it.streamUrl.contains("/${ep.id}.") || it.title.contains("S${ep.season}E${ep.episodeNum}")))
+            }
+
+            if (historyEntry != null && historyEntry.progressPercent > 0) {
+                holder.progressBar.visibility = View.VISIBLE
+                val pct = if (historyEntry.progressPercent >= 85) 100 else historyEntry.progressPercent
+                holder.progressBar.progress = pct
+                if (pct == 100) {
+                    holder.txtPlayIcon.text = "✓"
+                    holder.txtPlayIcon.setTextColor(resources.getColor(R.color.accent_gold, null))
+                } else {
+                    holder.txtPlayIcon.text = "▶"
+                    holder.txtPlayIcon.setTextColor(resources.getColor(R.color.netflix_red, null))
+                }
+            } else {
+                holder.progressBar.visibility = View.GONE
+                holder.txtPlayIcon.text = "▶"
+                holder.txtPlayIcon.setTextColor(resources.getColor(R.color.netflix_red, null))
+            }
 
             val imgUrl = ep.info?.movieImage ?: seriesInfo?.info?.cover ?: seriesItem?.cover
             if (!imgUrl.isNullOrEmpty()) {
                 Glide.with(holder.itemView)
                     .load(imgUrl)
-                    .override(200, 120)
+                    .override(110, 70)
                     .diskCacheStrategy(DiskCacheStrategy.ALL)
                     .placeholder(R.drawable.tv_banner)
                     .into(holder.imgThumb)
@@ -272,6 +332,17 @@ class SeriesDetailActivity : AppCompatActivity() {
             }
 
             holder.itemView.setOnClickListener { playEpisode(ep, position, episodes) }
+
+            holder.itemView.setOnKeyListener { _, keyCode, event ->
+                if (event.action == KeyEvent.ACTION_DOWN) {
+                    if (keyCode == KeyEvent.KEYCODE_DPAD_UP && position == 0) {
+                        val seasonHolder = binding.recyclerSeasons.findViewHolderForAdapterPosition(currentSeasonIndex)
+                        seasonHolder?.itemView?.requestFocus() ?: binding.recyclerSeasons.requestFocus()
+                        return@setOnKeyListener true
+                    }
+                }
+                false
+            }
         }
 
         override fun getItemCount() = episodes.size
