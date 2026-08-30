@@ -51,11 +51,6 @@ class SeriesDetailActivity : AppCompatActivity() {
 
         val extraTitle = intent.getStringExtra("SERIES_NAME")
 
-        if (seriesId <= 0 && seriesItem == null) {
-            finish()
-            return
-        }
-
         binding.recyclerSeasons.apply {
             layoutManager = LinearLayoutManager(this@SeriesDetailActivity, LinearLayoutManager.HORIZONTAL, false)
             setHasFixedSize(true)
@@ -69,11 +64,41 @@ class SeriesDetailActivity : AppCompatActivity() {
 
         if (seriesItem != null) {
             displayInitialInfo()
+            loadFullSeriesInfo()
+        } else if (seriesId > 0) {
+            if (!extraTitle.isNullOrEmpty()) binding.txtDetailSeriesTitle.text = extraTitle
+            loadFullSeriesInfo()
         } else if (!extraTitle.isNullOrEmpty()) {
             binding.txtDetailSeriesTitle.text = extraTitle
+            resolveSeriesByNameAndLoad(extraTitle)
+        } else {
+            finish()
         }
+    }
 
-        loadFullSeriesInfo()
+    private fun resolveSeriesByNameAndLoad(title: String) {
+        binding.progressEpisodes.visibility = View.VISIBLE
+        lifecycleScope.launch {
+            try {
+                val clean = title.substringBefore(" - S").trim()
+                val all = client.getAllSeries()
+                val match = all.firstOrNull { it.name.trim().equals(clean, ignoreCase = true) }
+                    ?: all.firstOrNull { it.name.contains(clean, ignoreCase = true) }
+
+                if (match != null) {
+                    seriesItem = match
+                    seriesId = match.seriesId
+                    displayInitialInfo()
+                    loadFullSeriesInfo()
+                } else {
+                    binding.progressEpisodes.visibility = View.GONE
+                    Toast.makeText(this@SeriesDetailActivity, "Serie nicht gefunden: $title", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                binding.progressEpisodes.visibility = View.GONE
+                Toast.makeText(this@SeriesDetailActivity, "Fehler: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
     private fun displayInitialInfo() {
@@ -94,6 +119,8 @@ class SeriesDetailActivity : AppCompatActivity() {
 
     private fun loadFullSeriesInfo() {
         val targetId = if (seriesItem != null) seriesItem!!.seriesId else seriesId
+        if (targetId <= 0) return
+
         binding.progressEpisodes.visibility = View.VISIBLE
 
         lifecycleScope.launch {
@@ -123,13 +150,13 @@ class SeriesDetailActivity : AppCompatActivity() {
 
                 if (seasons.isNotEmpty()) {
                     binding.recyclerSeasons.adapter = SeasonAdapter(seasons) { season ->
-                        loadEpisodesForSeason(season.seasonNumber)
+                        loadEpisodesForSeason(season.seasonNumber, requestFocusOnEpisode = false)
                     }
-                    loadEpisodesForSeason(initialSeasonNum)
+                    loadEpisodesForSeason(initialSeasonNum, requestFocusOnEpisode = true)
                 } else {
                     val all = mutableListOf<EpisodeItem>()
                     info.episodes?.values?.forEach { all.addAll(it) }
-                    displayEpisodes(all)
+                    displayEpisodes(all, requestFocusOnEpisode = true)
                 }
             } catch (e: Exception) {
                 binding.progressEpisodes.visibility = View.GONE
@@ -138,24 +165,26 @@ class SeriesDetailActivity : AppCompatActivity() {
         }
     }
 
-    private fun loadEpisodesForSeason(seasonNum: Int) {
+    private fun loadEpisodesForSeason(seasonNum: Int, requestFocusOnEpisode: Boolean) {
         val epList = seriesInfo?.episodes?.get(seasonNum.toString()) ?: emptyList()
-        displayEpisodes(epList)
+        displayEpisodes(epList, requestFocusOnEpisode)
     }
 
-    private fun displayEpisodes(epList: List<EpisodeItem>) {
+    private fun displayEpisodes(epList: List<EpisodeItem>, requestFocusOnEpisode: Boolean) {
         binding.recyclerEpisodes.adapter = EpisodeAdapter(epList)
 
-        // Wenn Ziel-Episode angegeben (z.B. vom Weiterschauen im Main Screen)
         val targetIdx = if (targetEpisode > 0) {
             epList.indexOfFirst { it.episodeNum == targetEpisode }.coerceAtLeast(0)
         } else 0
 
         if (epList.isNotEmpty()) {
             binding.recyclerEpisodes.scrollToPosition(targetIdx)
-            binding.recyclerEpisodes.post {
-                val holder = binding.recyclerEpisodes.findViewHolderForAdapterPosition(targetIdx)
-                holder?.itemView?.requestFocus()
+
+            if (requestFocusOnEpisode) {
+                binding.recyclerEpisodes.post {
+                    val holder = binding.recyclerEpisodes.findViewHolderForAdapterPosition(targetIdx)
+                    holder?.itemView?.requestFocus()
+                }
             }
 
             if (autoPlay && !hasAutoPlayed) {

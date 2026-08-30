@@ -16,6 +16,7 @@ import com.alex.iptvplayer.R
 import com.alex.iptvplayer.data.HistoryItem
 import com.alex.iptvplayer.data.HistoryManager
 import com.alex.iptvplayer.data.LiveStream
+import com.alex.iptvplayer.data.SeriesItem
 import com.alex.iptvplayer.data.XtreamClient
 import com.alex.iptvplayer.databinding.ActivityMainBinding
 import com.bumptech.glide.Glide
@@ -29,6 +30,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var historyManager: HistoryManager
 
     private val posterLookupMap = HashMap<Int, String>()
+    private var allSeriesList: List<SeriesItem> = emptyList()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -60,6 +62,7 @@ class MainActivity : AppCompatActivity() {
                     if (!m.streamIcon.isNullOrEmpty()) posterLookupMap[m.streamId] = m.streamIcon
                 }
                 val series = client.getAllSeries()
+                allSeriesList = series
                 series.forEach { s ->
                     if (!s.cover.isNullOrEmpty()) posterLookupMap[s.seriesId] = s.cover
                 }
@@ -83,8 +86,6 @@ class MainActivity : AppCompatActivity() {
         binding.navSettings.setOnClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))
         }
-
-        binding.navLiveTv.requestFocus()
     }
 
     private fun setupRecyclers() {
@@ -154,9 +155,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun playSeriesHistoryItem(item: HistoryItem) {
+        val seriesTitle = item.title.substringBefore(" - S").trim()
+        val matchedSeries = allSeriesList.firstOrNull { it.name.trim().equals(seriesTitle, ignoreCase = true) }
+            ?: allSeriesList.firstOrNull { it.name.contains(seriesTitle, ignoreCase = true) }
+
         val intent = Intent(this, SeriesDetailActivity::class.java).apply {
-            putExtra("SERIES_ID", item.streamId)
-            putExtra("SERIES_NAME", item.title.substringBefore(" - S"))
+            if (matchedSeries != null) {
+                putExtra("SERIES_ITEM", matchedSeries)
+                putExtra("SERIES_ID", matchedSeries.seriesId)
+            } else {
+                putExtra("SERIES_ID", item.streamId)
+            }
+            putExtra("SERIES_NAME", seriesTitle)
             putExtra("TARGET_SEASON", item.season)
             putExtra("TARGET_EPISODE", item.episodeNum)
             putExtra("AUTO_PLAY", true)
