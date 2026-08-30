@@ -34,6 +34,7 @@ data class HistoryItem(
 data class CloudSyncPayload(
     val user: String,
     val history: List<HistoryItem>,
+    val recentChannels: List<LiveStream>? = null,
     val settings: Map<String, String>? = null
 )
 
@@ -43,8 +44,8 @@ class HistoryManager(context: Context) {
         context.getSharedPreferences("alex_iptv_history", Context.MODE_PRIVATE)
     private val gson = Gson()
     private val httpClient = OkHttpClient.Builder()
-        .connectTimeout(5, TimeUnit.SECONDS)
-        .readTimeout(5, TimeUnit.SECONDS)
+        .connectTimeout(6, TimeUnit.SECONDS)
+        .readTimeout(6, TimeUnit.SECONDS)
         .build()
 
     private val cloudSyncUrl = "https://iptvproxy-x8rs.onrender.com/api/sync"
@@ -68,7 +69,7 @@ class HistoryManager(context: Context) {
 
         if (durationMs > 0 && (positionMs.toFloat() / durationMs.toFloat()) > 0.92f) {
             saveList(list)
-            uploadToCloud(list)
+            uploadToCloud()
             return
         }
 
@@ -89,10 +90,9 @@ class HistoryManager(context: Context) {
 
         val trimmed = if (list.size > 50) list.take(50) else list
         saveList(trimmed)
-        uploadToCloud(trimmed)
+        uploadToCloud()
     }
 
-    // Speichert zuletzt gesehene Live TV Sender
     fun saveLiveChannel(stream: LiveStream) {
         val list = getRecentLiveChannels().toMutableList()
         list.removeAll { it.streamId == stream.streamId }
@@ -100,6 +100,7 @@ class HistoryManager(context: Context) {
         val trimmed = if (list.size > 10) list.take(10) else list
         val json = gson.toJson(trimmed)
         prefs.edit().putString("recent_live_channels", json).apply()
+        uploadToCloud()
     }
 
     fun getRecentLiveChannels(): List<LiveStream> {
@@ -132,10 +133,11 @@ class HistoryManager(context: Context) {
         prefs.edit().putString("history_items", json).apply()
     }
 
-    // Synchronisiert Weiterschauen & Verlauf automatisch mit der Cloud
+    // Bidirektionale Synchronisation mit der Cloud
     fun syncWithCloud(user: String, onComplete: (() -> Unit)? = null) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
+                // 1. Zuerst aktuelle Cloud-Daten abrufen
                 val req = Request.Builder()
                     .url("$cloudSyncUrl/load?user=$user")
                     .get()
@@ -145,19 +147,42 @@ class HistoryManager(context: Context) {
                         val body = resp.body?.string()
                         if (!body.isNullOrEmpty()) {
                             val payload = gson.fromJson(body, CloudSyncPayload::class.java)
-                            if (!payload?.history.isNullOrEmpty()) {
-                                val local = getHistory().toMutableList()
-                                payload.history.forEach { cloudItem ->
-                                    if (local.none { it.id == cloudItem.id }) {
-                                        local.add(cloudItem)
-                                    }
+
+                            // Historie mergen
+                            val local = getHistory().toMutableList()
+                            var changed = false
+                            payload?.history?.forEach { cloudItem ->
+                                if (local.none { it.id == cloudItem.id }) {
+                                    local.add(cloudItem)
+                                    changed = true
                                 }
+                            }
+                            if (changed) {
                                 local.sortByDescending { it.timestamp }
                                 saveList(local.take(50))
+                            }
+
+                            // Zuletzt gesehene TV-Sender mergen
+                            if (!payload?.recentChannels.isNullOrEmpty()) {
+                                val localChans = getRecentLiveChannels().toMutableList()
+                                var chanChanged = false
+                                payload?.recentChannels?.forEach { c ->
+                                    if (localChans.none { it.streamId == c.streamId }) {
+                                        localChans.add(c)
+                                        chanChanged = true
+                                    }
+                                }
+                                if (chanChanged) {
+                                    val trimmed = if (localChans.size > 10) localChans.take(10) else localChans
+                                    prefs.edit().putString("recent_live_channels", gson.toJson(trimmed)).apply()
+                                }
                             }
                         }
                     }
                 }
+
+                // 2. Lokale Daten nach oben pushen
+                uploadToCloudDirect(user)
             } catch (e: Exception) {
                 // Offline Fallback
             } finally {
@@ -166,10 +191,22 @@ class HistoryManager(context: Context) {
         }
     }
 
-    private fun uploadToCloud(list: List<HistoryItem>) {
+    fun uploadToCloud() {
+        uploadToCloudDirect("fb5940d0a3a0")
+    }
+
+    private fun uploadToCloudDirect(user: String) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val payload = CloudSyncPayload(user = "fb5940d0a3a0", history = list)
+                val list = getHistory()
+                val channels = getRecentLiveChannels()
+                if (list.isEmpty() && channels.isEmpty()) return@launch
+
+                val payload = CloudSyncPayload(
+                    user = user,
+                    history = list,
+                    recentChannels = channels
+                )
                 val json = gson.toJson(payload)
                 val body = json.toRequestBody("application/json; charset=utf-8".toMediaType())
                 val req = Request.Builder()
@@ -178,7 +215,7 @@ class HistoryManager(context: Context) {
                     .build()
                 httpClient.newCall(req).execute().close()
             } catch (e: Exception) {
-                // Ignore silent network errors
+                // Silent
             }
         }
     }
