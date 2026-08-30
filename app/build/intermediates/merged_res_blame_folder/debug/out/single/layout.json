@@ -1,0 +1,38 @@
+[
+    {
+        "merged": "com.alex.iptvplayer.app-mergeDebugResources-3:/layout/activity_player.xml",
+        "source": "com.alex.iptvplayer.app-main-6:/layout/activity_player.xml"
+    },
+    {
+        "merged": "com.alex.iptvplayer.app-mergeDebugResources-3:/layout/activity_vod.xml",
+        "source": "com.alex.iptvplayer.app-main-6:/layout/activity_vod.xml"
+    },
+    {
+        "merged": "com.alex.iptvplayer.app-mergeDebugResources-3:/layout/activity_live_tv.xml",
+        "source": "com.alex.iptvplayer.app-main-6:/layout/activity_live_tv.xml"
+    },
+    {
+        "merged": "com.alex.iptvplayer.app-mergeDebugResources-3:/layout/item_poster.xml",
+        "source": "com.alex.iptvplayer.app-main-6:/layout/item_poster.xml"
+    },
+    {
+        "merged": "com.alex.iptvplayer.app-mergeDebugResources-3:/layout/activity_series.xml",
+        "source": "com.alex.iptvplayer.app-main-6:/layout/activity_series.xml"
+    },
+    {
+        "merged": "com.alex.iptvplayer.app-mergeDebugResources-3:/layout/item_channel.xml",
+        "source": "com.alex.iptvplayer.app-main-6:/layout/item_channel.xml"
+    },
+    {
+        "merged": "com.alex.iptvplayer.app-mergeDebugResources-3:/layout/activity_settings.xml",
+        "source": "com.alex.iptvplayer.app-main-6:/layout/activity_settings.xml"
+    },
+    {
+        "merged": "com.alex.iptvplayer.app-mergeDebugResources-3:/layout/item_category.xml",
+        "source": "com.alex.iptvplayer.app-main-6:/layout/item_category.xml"
+    },
+    {
+        "merged": "com.alex.iptvplayer.app-mergeDebugResources-3:/layout/activity_main.xml",
+        "source": "com.alex.iptvplayer.app-main-6:/layout/activity_main.xml"
+    }
+]

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="accent_blue">#58A6FF</color>
+    <color name="accent_gold">#F2CC60</color>
+    <color name="bg_card">#161B22</color>
+    <color name="bg_card_focused">#1F6FEB</color>
+    <color name="bg_dark">#0D1117</color>
+    <color name="border_focused">#58A6FF</color>
+    <color name="text_primary">#F0F6FC</color>
+    <color name="text_secondary">#8B949E</color>
+    <string name="app_name">Alex IPTV Player</string>
+    <string name="episodes">Episoden</string>
+    <string name="live_tv">Live TV</string>
+    <string name="loading">Wird geladen…</string>
+    <string name="movies">Filme</string>
+    <string name="no_content">Keine Inhalte gefunden</string>
+    <string name="play">Abspielen</string>
+    <string name="seasons">Staffeln</string>
+    <string name="series">Serien</string>
+    <string name="settings">Einstellungen</string>
+    <style name="Theme.AlexIPTVPlayer" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">@color/bg_dark</item>
+        <item name="android:textColorPrimary">@color/text_primary</item>
+        <item name="android:textColorSecondary">@color/text_secondary</item>
+        <item name="colorPrimary">@color/accent_blue</item>
+        <item name="colorAccent">@color/accent_gold</item>
+    </style>
+</resources>

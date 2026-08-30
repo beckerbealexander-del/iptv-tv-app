@@ -14,10 +14,9 @@
 
     <application
         android:allowBackup="true"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@drawable/tv_banner"
         android:label="@string/app_name"
         android:banner="@drawable/tv_banner"
-        android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.AlexIPTVPlayer"
         android:usesCleartextTraffic="true">
@@ -26,7 +25,7 @@
             android:name=".ui.MainActivity"
             android:banner="@drawable/tv_banner"
             android:exported="true"
-            android:icon="@mipmap/ic_launcher"
+            android:icon="@drawable/tv_banner"
             android:label="@string/app_name"
             android:screenOrientation="landscape">
             <intent-filter>
