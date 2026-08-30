@@ -87,26 +87,29 @@ class PlayerActivity : AppCompatActivity() {
             binding.txtHintControls.text = "▲ / ▼ Umschalten | OK Info"
         } else {
             binding.layoutTimeline.visibility = View.VISIBLE
-            binding.txtHintControls.text = "◀ / ▶ Spulen | ▲ Zurück zum Film"
+            binding.txtHintControls.text = "OK Pause | ◀ / ▶ Spulen | ▲ Zurück"
         }
 
-        binding.btnPlayPause.setOnClickListener { togglePlayPause() }
         binding.btnAudioTracks.setOnClickListener { showAudioTrackDialog() }
         binding.btnSubtitles.setOnClickListener { showSubtitleDialog() }
 
-        // Wenn auf den Buttons DPAD_UP gedrückt wird: OSD verlassen und Fokus zurück zum Video!
-        val buttonKeyDispatcher = View.OnKeyListener { _, keyCode, event ->
+        // Navigation: Von Buttons hoch zur SeekBar
+        val buttonKeyHandler = View.OnKeyListener { _, keyCode, event ->
+            if (event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_UP) {
+                binding.playerSeekBar.requestFocus()
+                true
+            } else false
+        }
+        binding.btnAudioTracks.setOnKeyListener(buttonKeyHandler)
+        binding.btnSubtitles.setOnKeyListener(buttonKeyHandler)
+
+        // Navigation: Von SeekBar hoch zum Film (OSD schließen)
+        binding.playerSeekBar.setOnKeyListener { _, keyCode, event ->
             if (event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_UP) {
                 hideOsd()
                 true
-            } else {
-                false
-            }
+            } else false
         }
-        binding.btnPlayPause.setOnKeyListener(buttonKeyDispatcher)
-        binding.btnAudioTracks.setOnKeyListener(buttonKeyDispatcher)
-        binding.btnSubtitles.setOnKeyListener(buttonKeyDispatcher)
-        binding.playerSeekBar.setOnKeyListener(buttonKeyDispatcher)
 
         binding.playerSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
@@ -139,10 +142,6 @@ class PlayerActivity : AppCompatActivity() {
                     }
                 }
 
-                override fun onIsPlayingChanged(isPlaying: Boolean) {
-                    binding.btnPlayPause.text = if (isPlaying) "⏸ Pause" else "▶ Play"
-                }
-
                 override fun onTracksChanged(tracks: Tracks) {
                     updateQualityAndAudioBadges()
                 }
@@ -156,7 +155,7 @@ class PlayerActivity : AppCompatActivity() {
             setMediaItem(mediaItem)
             prepare()
 
-            // Weiterschauen / Resume Position prüfen
+            // Fortsetzen / Resume
             if (!isLive) {
                 val resumePos = historyManager.getResumePosition(url)
                 if (resumePos > 15_000) {
@@ -211,7 +210,6 @@ class PlayerActivity : AppCompatActivity() {
                     binding.txtTimeTotal.text = formatTime(total)
                     binding.playerSeekBar.progress = ((current * 1000) / total).toInt()
 
-                    // Fortschritt alle 5s im Verlauf speichern
                     if (current > 5000) {
                         historyManager.saveProgress(
                             id = if (currentStreamId > 0) currentStreamId.toString() else currentStreamUrl,
@@ -237,21 +235,19 @@ class PlayerActivity : AppCompatActivity() {
         val hours = totalSecs / 3600
         val minutes = (totalSecs % 3600) / 60
         val seconds = totalSecs % 60
-        return if (hours > 0) {
-            String.format(Locale.getDefault(), "%02d:%02d:%02d", hours, minutes, seconds)
-        } else {
-            String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds)
-        }
+        return if (hours > 0) String.format(Locale.getDefault(), "%02d:%02d:%02d", hours, minutes, seconds)
+        else String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds)
     }
 
     private fun togglePlayPause() {
         val player = exoPlayer ?: return
         if (player.isPlaying) {
             player.pause()
+            showOsd(binding.txtPlayerTitle.text.toString(), currentStreamId)
         } else {
             player.play()
+            showOsd(binding.txtPlayerTitle.text.toString(), currentStreamId)
         }
-        showOsd(binding.txtPlayerTitle.text.toString(), currentStreamId)
     }
 
     private fun showOsd(name: String, streamId: Int) {
@@ -285,8 +281,7 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     private fun isOsdFocused(): Boolean {
-        return binding.btnPlayPause.hasFocus() ||
-                binding.btnAudioTracks.hasFocus() ||
+        return binding.btnAudioTracks.hasFocus() ||
                 binding.btnSubtitles.hasFocus() ||
                 binding.playerSeekBar.hasFocus()
     }
@@ -413,24 +408,26 @@ class PlayerActivity : AppCompatActivity() {
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         when (keyCode) {
             KeyEvent.KEYCODE_BACK -> {
-                // Wenn OSD offen ist, erst OSD schließen statt App zu beenden
                 if (binding.osdBottom.visibility == View.VISIBLE) {
                     hideOsd()
                     return true
                 }
             }
+            // Netflix-Style Spulen vorwärts
             KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {
                 if (!isLive && !isOsdFocused()) {
                     performNetflixScrub(true)
                     return true
                 }
             }
+            // Netflix-Style Spulen rückwärts
             KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_MEDIA_REWIND -> {
                 if (!isLive && !isOsdFocused()) {
                     performNetflixScrub(false)
                     return true
                 }
             }
+            // Runter-Taste: OSD öffnen & zur Zeitleiste navigieren
             KeyEvent.KEYCODE_DPAD_DOWN -> {
                 if (isLive) {
                     zapPreviousChannel()
@@ -438,31 +435,42 @@ class PlayerActivity : AppCompatActivity() {
                 } else {
                     if (binding.osdBottom.visibility != View.VISIBLE) {
                         showOsd(binding.txtPlayerTitle.text.toString(), currentStreamId)
+                        binding.playerSeekBar.requestFocus()
+                    } else if (binding.playerSeekBar.hasFocus()) {
+                        binding.btnAudioTracks.requestFocus()
                     }
-                    binding.btnPlayPause.requestFocus()
                     return true
                 }
             }
+            // Hoch-Taste: 2-Stufen-Navigation (Von Buttons -> SeekBar -> Film)
             KeyEvent.KEYCODE_DPAD_UP -> {
                 if (isLive) {
                     zapNextChannel()
                     return true
                 } else {
-                    if (isOsdFocused() || binding.osdBottom.visibility == View.VISIBLE) {
+                    if (binding.btnAudioTracks.hasFocus() || binding.btnSubtitles.hasFocus()) {
+                        binding.playerSeekBar.requestFocus()
+                    } else if (binding.playerSeekBar.hasFocus() || binding.osdBottom.visibility == View.VISIBLE) {
                         hideOsd()
                     } else {
                         showOsd(binding.txtPlayerTitle.text.toString(), currentStreamId)
-                        binding.btnPlayPause.requestFocus()
+                        binding.playerSeekBar.requestFocus()
                     }
                     return true
                 }
             }
+            // OK-Taste: Toggle Pause / Play (außer wenn Audio/Untertitel-Button gedrückt wird)
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
                 if (!isLive) {
-                    if (!isOsdFocused()) {
-                        togglePlayPause()
+                    if (binding.btnAudioTracks.hasFocus()) {
+                        showAudioTrackDialog()
                         return true
+                    } else if (binding.btnSubtitles.hasFocus()) {
+                        showSubtitleDialog()
+                    } else {
+                        togglePlayPause()
                     }
+                    return true
                 } else {
                     if (binding.osdBottom.visibility == View.VISIBLE) {
                         hideOsd()

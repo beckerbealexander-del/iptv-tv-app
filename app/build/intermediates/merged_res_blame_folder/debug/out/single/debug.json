@@ -4,16 +4,8 @@
         "source": "C:\\Users\\becke\\.gradle\\daemon\\8.4\\com.alex.iptvplayer.app-main-6:\\layout\\activity_settings.xml"
     },
     {
-        "merged": "com.alex.iptvplayer.app-merged_res-4:/layout_activity_main.xml.flat",
-        "source": "com.alex.iptvplayer.app-main-6:/layout/activity_main.xml"
-    },
-    {
         "merged": "C:\\Users\\becke\\.gradle\\daemon\\8.4\\com.alex.iptvplayer.app-merged_res-4:\\layout_activity_search.xml.flat",
         "source": "C:\\Users\\becke\\.gradle\\daemon\\8.4\\com.alex.iptvplayer.app-main-6:\\layout\\activity_search.xml"
-    },
-    {
-        "merged": "com.alex.iptvplayer.app-merged_res-4:/layout_item_history_card.xml.flat",
-        "source": "com.alex.iptvplayer.app-main-6:/layout/item_history_card.xml"
     },
     {
         "merged": "C:\\Users\\becke\\.gradle\\daemon\\8.4\\com.alex.iptvplayer.app-merged_res-4:\\drawable_card_focus_selector.xml.flat",
@@ -26,6 +18,10 @@
     {
         "merged": "C:\\Users\\becke\\.gradle\\daemon\\8.4\\com.alex.iptvplayer.app-merged_res-4:\\layout_item_poster.xml.flat",
         "source": "C:\\Users\\becke\\.gradle\\daemon\\8.4\\com.alex.iptvplayer.app-main-6:\\layout\\item_poster.xml"
+    },
+    {
+        "merged": "com.alex.iptvplayer.app-merged_res-4:/layout_activity_player.xml.flat",
+        "source": "com.alex.iptvplayer.app-main-6:/layout/activity_player.xml"
     },
     {
         "merged": "C:\\Users\\becke\\.gradle\\daemon\\8.4\\com.alex.iptvplayer.app-merged_res-4:\\layout_item_episode_card.xml.flat",
@@ -58,6 +54,10 @@
     {
         "merged": "C:\\Users\\becke\\.gradle\\daemon\\8.4\\com.alex.iptvplayer.app-merged_res-4:\\layout_activity_series.xml.flat",
         "source": "C:\\Users\\becke\\.gradle\\daemon\\8.4\\com.alex.iptvplayer.app-main-6:\\layout\\activity_series.xml"
+    },
+    {
+        "merged": "C:\\Users\\becke\\.gradle\\daemon\\8.4\\com.alex.iptvplayer.app-merged_res-4:\\layout_item_history_card.xml.flat",
+        "source": "C:\\Users\\becke\\.gradle\\daemon\\8.4\\com.alex.iptvplayer.app-main-6:\\layout\\item_history_card.xml"
     },
     {
         "merged": "C:\\Users\\becke\\.gradle\\daemon\\8.4\\com.alex.iptvplayer.app-merged_res-4:\\layout_activity_series_detail.xml.flat",

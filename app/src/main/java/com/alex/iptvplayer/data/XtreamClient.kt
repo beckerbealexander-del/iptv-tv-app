@@ -12,11 +12,11 @@ import okhttp3.Request
 import java.util.concurrent.TimeUnit
 
 enum class LangFilter {
-    AUTO_DE_RU_ADULT, // Standard: Nur Deutsch, Russisch & Adult (XXX)
+    AUTO_DE_RU_ADULT, // Standard: Nur Deutsch, Russisch & Porno/Adult (XXX)
     DE,               // Nur Deutsch
     RU,               // Nur Russisch
-    ADULT,            // Nur Adult (XXX)
-    ALL               // Alle Kategorien weltweit
+    ADULT,            // Nur Porno/Adult (XXX)
+    ALL               // Alle (DE, RU, Adult)
 }
 
 class XtreamClient(context: Context) {
@@ -48,7 +48,6 @@ class XtreamClient(context: Context) {
         return "$serverUrl/player_api.php?username=$username&password=$password&action=$action$extraParams"
     }
 
-    // Stream URLs für den ExoPlayer
     fun getLiveStreamUrl(streamId: Int): String {
         return "$serverUrl/live/$username/$password/$streamId.ts"
     }
@@ -61,25 +60,27 @@ class XtreamClient(context: Context) {
         return "$serverUrl/series/$username/$password/$streamId.$extension"
     }
 
-    // Filter-Logik für Kategorien
+    // Harter Filter: Nur Deutsch, Russisch und Porno/Adult (XXX) werden überhaupt durchgelassen
     fun filterCategories(categories: List<Category>, filter: LangFilter): List<Category> {
+        // Zuerst alles Fremdsprachige (Türkei, Polen, UK, Arabisch, etc.) komplett entfernen
+        val baseAllowed = categories.filter { isGerman(it.name) || isRussian(it.name) || isAdult(it.name) }
+
         return when (filter) {
-            LangFilter.DE -> categories.filter { isGerman(it.name) }
-            LangFilter.RU -> categories.filter { isRussian(it.name) }
-            LangFilter.ADULT -> categories.filter { isAdult(it.name) }
-            LangFilter.AUTO_DE_RU_ADULT -> categories.filter { isGerman(it.name) || isRussian(it.name) || isAdult(it.name) }
-            LangFilter.ALL -> categories
+            LangFilter.DE -> baseAllowed.filter { isGerman(it.name) }
+            LangFilter.RU -> baseAllowed.filter { isRussian(it.name) }
+            LangFilter.ADULT -> baseAllowed.filter { isAdult(it.name) }
+            LangFilter.AUTO_DE_RU_ADULT, LangFilter.ALL -> baseAllowed
         }
     }
 
     private fun isGerman(name: String): Boolean {
         val u = name.uppercase()
-        if (u.contains("SUBS") || u.contains("OMU") || u.contains("SUB ENG")) return false
+        if (u.contains("SUBS") || u.contains("OMU") || u.contains("SUB ENG") || u.contains("SUB EN")) return false
         return u.startsWith("DE|") || u.startsWith("DE:") || u.startsWith("DE -") || u.startsWith("DE ") ||
                 u.startsWith("AT|") || u.startsWith("AT:") || u.startsWith("AT -") ||
-                u.contains("GERMANY") || u.contains("AUSTRIA") || u.contains("DEUTSCH") ||
-                u.contains("SKY ") || u.contains("DAZN") || u.contains("MAGENTA") ||
-                u.contains("JOYN") || u.contains("RTL+") || u.contains("WOW ")
+                u.startsWith("CH|") || u.startsWith("CH:") || u.startsWith("CH -") ||
+                u.startsWith("GERMANY") || u.contains("GERMAN") || u.contains("DEUTSCH") ||
+                u.startsWith("JOYN") || u.startsWith("SKY") || u.contains("MAGENTA") || u.contains("DAZN")
     }
 
     private fun isRussian(name: String): Boolean {
@@ -90,7 +91,7 @@ class XtreamClient(context: Context) {
 
     private fun isAdult(name: String): Boolean {
         val u = name.uppercase()
-        if (u.contains("ADULT SWIM") || u.contains("ADULT_SWIM")) return false
+        if (u.contains("ADULT SWIM") || u.contains("ADULT-SWIM") || u.contains("ADULT_SWIM")) return false
         return u.contains("FOR ADULTS") || u.contains("ADULT") || u.contains("XXX") ||
                 u.contains("18+") || u.contains("PORN") || u.contains("EROTIC")
     }
@@ -100,7 +101,8 @@ class XtreamClient(context: Context) {
         val url = buildApiUrl("get_live_categories")
         val json = executeGet(url)
         val type = object : TypeToken<List<Category>>() {}.type
-        gson.fromJson(json, type) ?: emptyList()
+        val raw: List<Category> = gson.fromJson(json, type) ?: emptyList()
+        filterCategories(raw, LangFilter.AUTO_DE_RU_ADULT)
     }
 
     suspend fun getLiveStreams(categoryId: String? = null): List<LiveStream> = withContext(Dispatchers.IO) {
@@ -111,7 +113,7 @@ class XtreamClient(context: Context) {
         gson.fromJson(json, type) ?: emptyList()
     }
 
-    // EPG Programmführer abrufen & Base64 dekodieren
+    // EPG
     suspend fun getEpg(streamId: Int): List<EpgProgram> = withContext(Dispatchers.IO) {
         try {
             val url = buildApiUrl("get_simple_data_table", "&stream_id=$streamId")
@@ -149,7 +151,8 @@ class XtreamClient(context: Context) {
         val url = buildApiUrl("get_vod_categories")
         val json = executeGet(url)
         val type = object : TypeToken<List<Category>>() {}.type
-        gson.fromJson(json, type) ?: emptyList()
+        val raw: List<Category> = gson.fromJson(json, type) ?: emptyList()
+        filterCategories(raw, LangFilter.AUTO_DE_RU_ADULT)
     }
 
     suspend fun getVodStreams(categoryId: String? = null): List<VodStream> = withContext(Dispatchers.IO) {
@@ -165,7 +168,8 @@ class XtreamClient(context: Context) {
         val url = buildApiUrl("get_series_categories")
         val json = executeGet(url)
         val type = object : TypeToken<List<Category>>() {}.type
-        gson.fromJson(json, type) ?: emptyList()
+        val raw: List<Category> = gson.fromJson(json, type) ?: emptyList()
+        filterCategories(raw, LangFilter.AUTO_DE_RU_ADULT)
     }
 
     suspend fun getSeries(categoryId: String? = null): List<SeriesItem> = withContext(Dispatchers.IO) {

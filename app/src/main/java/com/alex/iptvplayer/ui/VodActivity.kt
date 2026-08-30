@@ -21,6 +21,8 @@ import com.alex.iptvplayer.data.XtreamClient
 import com.alex.iptvplayer.databinding.ActivityVodBinding
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class VodActivity : AppCompatActivity() {
@@ -29,6 +31,8 @@ class VodActivity : AppCompatActivity() {
     private lateinit var client: XtreamClient
     private var allCategories: List<Category> = emptyList()
     private var currentFilter = LangFilter.AUTO_DE_RU_ADULT
+    private var selectedCategoryId: String? = null
+    private var loadJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -40,13 +44,13 @@ class VodActivity : AppCompatActivity() {
         binding.recyclerVodCategories.apply {
             layoutManager = LinearLayoutManager(this@VodActivity)
             setHasFixedSize(true)
-            setItemViewCacheSize(25)
+            setItemViewCacheSize(30)
         }
 
         binding.recyclerVodGrid.apply {
             layoutManager = GridLayoutManager(this@VodActivity, 5)
             setHasFixedSize(true)
-            setItemViewCacheSize(30)
+            setItemViewCacheSize(40)
         }
 
         setupFilterButtons()
@@ -86,9 +90,14 @@ class VodActivity : AppCompatActivity() {
     }
 
     private fun loadMovies(category: Category) {
+        if (selectedCategoryId == category.id) return
+        selectedCategoryId = category.id
+
         binding.txtVodCategoryTitle.text = category.name
         binding.progressVod.visibility = View.VISIBLE
-        lifecycleScope.launch {
+
+        loadJob?.cancel()
+        loadJob = lifecycleScope.launch {
             try {
                 val movies = client.getVodStreams(category.id)
                 binding.progressVod.visibility = View.GONE
@@ -128,6 +137,9 @@ class VodActivity : AppCompatActivity() {
         val intent = Intent(this, PlayerActivity::class.java).apply {
             putExtra("STREAM_URL", client.getVodStreamUrl(movie.streamId, movie.containerExtension ?: "mp4"))
             putExtra("STREAM_NAME", movie.name)
+            putExtra("POSTER_URL", movie.streamIcon)
+            putExtra("STREAM_ID", movie.streamId)
+            putExtra("STREAM_TYPE", "VOD")
         }
         startActivity(intent)
     }
@@ -136,6 +148,8 @@ class VodActivity : AppCompatActivity() {
         private val items: List<Category>,
         private val onSelect: (Category) -> Unit
     ) : RecyclerView.Adapter<VodCategoryAdapter.ViewHolder>() {
+
+        private var focusJob: Job? = null
 
         inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
             val txtName: TextView = view.findViewById(R.id.txtCategoryName)
@@ -149,9 +163,20 @@ class VodActivity : AppCompatActivity() {
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val cat = items[position]
             holder.txtName.text = cat.name
-            holder.itemView.setOnClickListener { onSelect(cat) }
+
+            holder.itemView.setOnClickListener {
+                onSelect(cat)
+            }
+
+            // Debounce: Nur wenn der Nutzer 350ms auf einer Kategorie stehen bleibt, wird geladen
             holder.itemView.setOnFocusChangeListener { _, hasFocus ->
-                if (hasFocus) onSelect(cat)
+                if (hasFocus) {
+                    focusJob?.cancel()
+                    focusJob = lifecycleScope.launch {
+                        delay(350)
+                        onSelect(cat)
+                    }
+                }
             }
         }
 

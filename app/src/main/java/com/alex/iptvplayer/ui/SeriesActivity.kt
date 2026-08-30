@@ -21,6 +21,8 @@ import com.alex.iptvplayer.data.XtreamClient
 import com.alex.iptvplayer.databinding.ActivitySeriesBinding
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class SeriesActivity : AppCompatActivity() {
@@ -29,6 +31,8 @@ class SeriesActivity : AppCompatActivity() {
     private lateinit var client: XtreamClient
     private var allCategories: List<Category> = emptyList()
     private var currentFilter = LangFilter.AUTO_DE_RU_ADULT
+    private var selectedCategoryId: String? = null
+    private var loadJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -40,13 +44,13 @@ class SeriesActivity : AppCompatActivity() {
         binding.recyclerSeriesCategories.apply {
             layoutManager = LinearLayoutManager(this@SeriesActivity)
             setHasFixedSize(true)
-            setItemViewCacheSize(25)
+            setItemViewCacheSize(30)
         }
 
         binding.recyclerSeriesGrid.apply {
             layoutManager = GridLayoutManager(this@SeriesActivity, 5)
             setHasFixedSize(true)
-            setItemViewCacheSize(30)
+            setItemViewCacheSize(40)
         }
 
         setupFilterButtons()
@@ -86,9 +90,14 @@ class SeriesActivity : AppCompatActivity() {
     }
 
     private fun loadSeries(category: Category) {
+        if (selectedCategoryId == category.id) return
+        selectedCategoryId = category.id
+
         binding.txtSeriesCategoryTitle.text = category.name
         binding.progressSeries.visibility = View.VISIBLE
-        lifecycleScope.launch {
+
+        loadJob?.cancel()
+        loadJob = lifecycleScope.launch {
             try {
                 val list = client.getSeries(category.id)
                 binding.progressSeries.visibility = View.GONE
@@ -136,6 +145,8 @@ class SeriesActivity : AppCompatActivity() {
         private val onSelect: (Category) -> Unit
     ) : RecyclerView.Adapter<SeriesCategoryAdapter.ViewHolder>() {
 
+        private var focusJob: Job? = null
+
         inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
             val txtName: TextView = view.findViewById(R.id.txtCategoryName)
         }
@@ -148,9 +159,20 @@ class SeriesActivity : AppCompatActivity() {
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val cat = items[position]
             holder.txtName.text = cat.name
-            holder.itemView.setOnClickListener { onSelect(cat) }
+
+            holder.itemView.setOnClickListener {
+                onSelect(cat)
+            }
+
+            // Debounce: Verhindert Fokus-Springen beim schnellen Scrollen
             holder.itemView.setOnFocusChangeListener { _, hasFocus ->
-                if (hasFocus) onSelect(cat)
+                if (hasFocus) {
+                    focusJob?.cancel()
+                    focusJob = lifecycleScope.launch {
+                        delay(350)
+                        onSelect(cat)
+                    }
+                }
             }
         }
 

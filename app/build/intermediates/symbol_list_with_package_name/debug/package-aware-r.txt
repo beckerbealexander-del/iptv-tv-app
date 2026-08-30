@@ -3849,7 +3849,6 @@ id btnLiveFilterAll
 id btnLiveFilterDe
 id btnLiveFilterRu
 id btnMainHeroPlay
-id btnPlayPause
 id btnSaveSettings
 id btnSearchClear
 id btnSeriesFilterAdult
