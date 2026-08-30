@@ -4,7 +4,15 @@ import android.content.Context
 import android.content.SharedPreferences
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.Serializable
+import java.util.concurrent.TimeUnit
 
 data class HistoryItem(
     val id: String,
@@ -23,11 +31,23 @@ data class HistoryItem(
         get() = if (durationMs > 0) ((positionMs * 100) / durationMs).toInt().coerceIn(0, 100) else 0
 }
 
+data class CloudSyncPayload(
+    val user: String,
+    val history: List<HistoryItem>,
+    val settings: Map<String, String>? = null
+)
+
 class HistoryManager(context: Context) {
 
     private val prefs: SharedPreferences =
         context.getSharedPreferences("alex_iptv_history", Context.MODE_PRIVATE)
     private val gson = Gson()
+    private val httpClient = OkHttpClient.Builder()
+        .connectTimeout(5, TimeUnit.SECONDS)
+        .readTimeout(5, TimeUnit.SECONDS)
+        .build()
+
+    private val cloudSyncUrl = "https://iptvproxy-x8rs.onrender.com/api/sync"
 
     fun saveProgress(
         id: String,
@@ -41,14 +61,14 @@ class HistoryManager(context: Context) {
         season: Int = 1,
         episodeNum: Int = 1
     ) {
-        if (positionMs < 5000 && type != "LIVE") return // Unter 5s nicht als Verlauf speichern
+        if (positionMs < 5000 && type != "LIVE") return
 
         val list = getHistory().toMutableList()
         list.removeAll { it.id == id || (it.streamUrl == streamUrl && streamUrl.isNotEmpty()) }
 
-        // Wenn fast zu Ende geschaut (>92%), aus Weiterschauen entfernen
         if (durationMs > 0 && (positionMs.toFloat() / durationMs.toFloat()) > 0.92f) {
             saveList(list)
+            uploadToCloud(list)
             return
         }
 
@@ -65,11 +85,31 @@ class HistoryManager(context: Context) {
             episodeNum = episodeNum,
             timestamp = System.currentTimeMillis()
         )
-        list.add(0, item) // Neuestes nach oben
+        list.add(0, item)
 
-        // Maximal 50 Einträge im Verlauf halten
         val trimmed = if (list.size > 50) list.take(50) else list
         saveList(trimmed)
+        uploadToCloud(trimmed)
+    }
+
+    // Speichert zuletzt gesehene Live TV Sender
+    fun saveLiveChannel(stream: LiveStream) {
+        val list = getRecentLiveChannels().toMutableList()
+        list.removeAll { it.streamId == stream.streamId }
+        list.add(0, stream)
+        val trimmed = if (list.size > 10) list.take(10) else list
+        val json = gson.toJson(trimmed)
+        prefs.edit().putString("recent_live_channels", json).apply()
+    }
+
+    fun getRecentLiveChannels(): List<LiveStream> {
+        val json = prefs.getString("recent_live_channels", null) ?: return emptyList()
+        return try {
+            val type = object : TypeToken<List<LiveStream>>() {}.type
+            gson.fromJson(json, type) ?: emptyList()
+        } catch (e: Exception) {
+            emptyList()
+        }
     }
 
     fun getHistory(): List<HistoryItem> {
@@ -87,12 +127,59 @@ class HistoryManager(context: Context) {
         return item?.positionMs ?: 0L
     }
 
-    fun clearHistory() {
-        prefs.edit().remove("history_items").apply()
-    }
-
     private fun saveList(list: List<HistoryItem>) {
         val json = gson.toJson(list)
         prefs.edit().putString("history_items", json).apply()
+    }
+
+    // Synchronisiert Weiterschauen & Verlauf automatisch mit der Cloud
+    fun syncWithCloud(user: String, onComplete: (() -> Unit)? = null) {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val req = Request.Builder()
+                    .url("$cloudSyncUrl/load?user=$user")
+                    .get()
+                    .build()
+                httpClient.newCall(req).execute().use { resp ->
+                    if (resp.isSuccessful) {
+                        val body = resp.body?.string()
+                        if (!body.isNullOrEmpty()) {
+                            val payload = gson.fromJson(body, CloudSyncPayload::class.java)
+                            if (!payload?.history.isNullOrEmpty()) {
+                                val local = getHistory().toMutableList()
+                                payload.history.forEach { cloudItem ->
+                                    if (local.none { it.id == cloudItem.id }) {
+                                        local.add(cloudItem)
+                                    }
+                                }
+                                local.sortByDescending { it.timestamp }
+                                saveList(local.take(50))
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                // Offline Fallback
+            } finally {
+                onComplete?.invoke()
+            }
+        }
+    }
+
+    private fun uploadToCloud(list: List<HistoryItem>) {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val payload = CloudSyncPayload(user = "fb5940d0a3a0", history = list)
+                val json = gson.toJson(payload)
+                val body = json.toRequestBody("application/json; charset=utf-8".toMediaType())
+                val req = Request.Builder()
+                    .url("$cloudSyncUrl/save")
+                    .post(body)
+                    .build()
+                httpClient.newCall(req).execute().close()
+            } catch (e: Exception) {
+                // Ignore silent network errors
+            }
+        }
     }
 }

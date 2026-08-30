@@ -43,6 +43,10 @@ class MainActivity : AppCompatActivity() {
 
         setupSidebar()
         setupCarousels()
+
+        historyManager.syncWithCloud(client.username) {
+            runOnUiThread { loadHistoryRow() }
+        }
     }
 
     override fun onResume() {
@@ -68,7 +72,7 @@ class MainActivity : AppCompatActivity() {
             activeHeroPlayAction?.invoke()
         }
 
-        binding.navHome.requestFocus()
+        binding.navLiveTv.requestFocus()
     }
 
     private fun setupCarousels() {
@@ -134,12 +138,17 @@ class MainActivity : AppCompatActivity() {
                     binding.recyclerMainSeries.adapter = SeriesRowAdapter(series)
                 }
 
-                // 3. Live Sender laden
-                val liveCats = client.getLiveCategories()
-                val deLiveCat = client.filterCategories(liveCats, LangFilter.DE).firstOrNull() ?: liveCats.firstOrNull()
-                if (deLiveCat != null) {
-                    val channels = client.getLiveStreams(deLiveCat.id)
-                    binding.recyclerMainLive.adapter = LiveRowAdapter(channels)
+                // 3. Zuletzt gesehene Sender (10 in Anzahl) oder Fallback zu Top Sendern
+                val recentChannels = historyManager.getRecentLiveChannels()
+                if (recentChannels.isNotEmpty()) {
+                    binding.recyclerMainLive.adapter = LiveRowAdapter(recentChannels.take(10))
+                } else {
+                    val liveCats = client.getLiveCategories()
+                    val deLiveCat = client.filterCategories(liveCats, LangFilter.DE).firstOrNull() ?: liveCats.firstOrNull()
+                    if (deLiveCat != null) {
+                        val channels = client.getLiveStreams(deLiveCat.id)
+                        binding.recyclerMainLive.adapter = LiveRowAdapter(channels.take(10))
+                    }
                 }
 
                 binding.progressMainHome.visibility = View.GONE
@@ -361,7 +370,7 @@ class MainActivity : AppCompatActivity() {
         override fun getItemCount() = list.size
     }
 
-    // --- Adapter 4: Live TV Reihe ---
+    // --- Adapter 4: Live TV Zuletzt geschaut (10 Sender) ---
     inner class LiveRowAdapter(private val list: List<LiveStream>) :
         RecyclerView.Adapter<LiveRowAdapter.ViewHolder>() {
 
@@ -392,7 +401,7 @@ class MainActivity : AppCompatActivity() {
                 if (hasFocus) {
                     updateHeroBanner(
                         title = s.name,
-                        subtitle = "🔴 Live TV Sender",
+                        subtitle = "🔴 Live TV",
                         posterUrl = s.streamIcon,
                         btnText = "▶ Live einschalten"
                     ) {
@@ -405,6 +414,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         private fun playLive(s: LiveStream, position: Int) {
+            historyManager.saveLiveChannel(s)
+
             val intent = Intent(this@MainActivity, PlayerActivity::class.java).apply {
                 putExtra("STREAM_URL", client.getLiveStreamUrl(s.streamId))
                 putExtra("STREAM_NAME", s.name)

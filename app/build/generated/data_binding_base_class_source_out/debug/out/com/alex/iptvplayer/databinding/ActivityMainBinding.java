@@ -45,9 +45,6 @@ public final class ActivityMainBinding implements ViewBinding {
   public final LinearLayout mainHeroBanner;
 
   @NonNull
-  public final LinearLayout navHome;
-
-  @NonNull
   public final LinearLayout navLiveTv;
 
   @NonNull
@@ -87,13 +84,12 @@ public final class ActivityMainBinding implements ViewBinding {
       @NonNull ImageView imgMainHero, @NonNull LinearLayout layoutSectionHistory,
       @NonNull LinearLayout layoutSectionLive, @NonNull LinearLayout layoutSectionMovies,
       @NonNull LinearLayout layoutSectionSeries, @NonNull LinearLayout mainHeroBanner,
-      @NonNull LinearLayout navHome, @NonNull LinearLayout navLiveTv,
-      @NonNull LinearLayout navMovies, @NonNull LinearLayout navSeries,
-      @NonNull LinearLayout navSettings, @NonNull ProgressBar progressMainHome,
-      @NonNull RecyclerView recyclerMainHistory, @NonNull RecyclerView recyclerMainLive,
-      @NonNull RecyclerView recyclerMainMovies, @NonNull RecyclerView recyclerMainSeries,
-      @NonNull LinearLayout sidebar, @NonNull TextView txtMainHeroSubtitle,
-      @NonNull TextView txtMainHeroTitle) {
+      @NonNull LinearLayout navLiveTv, @NonNull LinearLayout navMovies,
+      @NonNull LinearLayout navSeries, @NonNull LinearLayout navSettings,
+      @NonNull ProgressBar progressMainHome, @NonNull RecyclerView recyclerMainHistory,
+      @NonNull RecyclerView recyclerMainLive, @NonNull RecyclerView recyclerMainMovies,
+      @NonNull RecyclerView recyclerMainSeries, @NonNull LinearLayout sidebar,
+      @NonNull TextView txtMainHeroSubtitle, @NonNull TextView txtMainHeroTitle) {
     this.rootView = rootView;
     this.btnMainHeroPlay = btnMainHeroPlay;
     this.imgMainHero = imgMainHero;
@@ -102,7 +98,6 @@ public final class ActivityMainBinding implements ViewBinding {
     this.layoutSectionMovies = layoutSectionMovies;
     this.layoutSectionSeries = layoutSectionSeries;
     this.mainHeroBanner = mainHeroBanner;
-    this.navHome = navHome;
     this.navLiveTv = navLiveTv;
     this.navMovies = navMovies;
     this.navSeries = navSeries;
@@ -186,12 +181,6 @@ public final class ActivityMainBinding implements ViewBinding {
         break missingId;
       }
 
-      id = R.id.navHome;
-      LinearLayout navHome = ViewBindings.findChildViewById(rootView, id);
-      if (navHome == null) {
-        break missingId;
-      }
-
       id = R.id.navLiveTv;
       LinearLayout navLiveTv = ViewBindings.findChildViewById(rootView, id);
       if (navLiveTv == null) {
@@ -266,7 +255,7 @@ public final class ActivityMainBinding implements ViewBinding {
 
       return new ActivityMainBinding((LinearLayout) rootView, btnMainHeroPlay, imgMainHero,
           layoutSectionHistory, layoutSectionLive, layoutSectionMovies, layoutSectionSeries,
-          mainHeroBanner, navHome, navLiveTv, navMovies, navSeries, navSettings, progressMainHome,
+          mainHeroBanner, navLiveTv, navMovies, navSeries, navSettings, progressMainHome,
           recyclerMainHistory, recyclerMainLive, recyclerMainMovies, recyclerMainSeries, sidebar,
           txtMainHeroSubtitle, txtMainHeroTitle);
     }

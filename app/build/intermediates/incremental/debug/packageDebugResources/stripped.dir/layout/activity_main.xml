@@ -2,79 +2,50 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/bg_dark"
+    android:background="#000000"
     android:orientation="horizontal">
 
-    <!-- 1. Netflix Kompakte Sidebar links mit Beschriftung -->
+    <!-- 1. Netflix Symmetrische Sidebar links (Ohne Startseite-Button) -->
     <LinearLayout
         android:id="@+id/sidebar"
         android:layout_width="145dp"
         android:layout_height="match_parent"
-        android:background="#0F0F0F"
+        android:background="#0A0A0A"
         android:orientation="vertical"
         android:paddingHorizontal="10dp"
-        android:paddingVertical="18dp">
+        android:paddingVertical="20dp">
 
-        <!-- Netflix Style Logo -->
+        <!-- Netflix Style App Logo -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="ALEX TV"
             android:textColor="@color/netflix_red"
-            android:textSize="18sp"
+            android:textSize="20sp"
             android:textStyle="bold"
             android:letterSpacing="0.1"
             android:layout_gravity="center_horizontal"
-            android:layout_marginBottom="24dp" />
-
-        <!-- 🏠 Startseite -->
-        <LinearLayout
-            android:id="@+id/navHome"
-            android:layout_width="match_parent"
-            android:layout_height="40dp"
-            android:background="@drawable/card_focus_selector"
-            android:clickable="true"
-            android:focusable="true"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:paddingHorizontal="12dp"
-            android:layout_marginBottom="8dp">
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="🏠"
-                android:textSize="14sp"
-                android:layout_marginEnd="8dp" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Startseite"
-                android:textColor="@color/text_primary"
-                android:textSize="13sp"
-                android:textStyle="bold" />
-        </LinearLayout>
+            android:layout_marginBottom="28dp" />
 
         <!-- 📺 Live TV -->
         <LinearLayout
             android:id="@+id/navLiveTv"
             android:layout_width="match_parent"
-            android:layout_height="40dp"
+            android:layout_height="42dp"
             android:background="@drawable/card_focus_selector"
             android:clickable="true"
             android:focusable="true"
             android:gravity="center_vertical"
             android:orientation="horizontal"
             android:paddingHorizontal="12dp"
-            android:layout_marginBottom="8dp">
+            android:layout_marginBottom="12dp">
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="📺"
-                android:textSize="14sp"
-                android:layout_marginEnd="8dp" />
+                android:textSize="15sp"
+                android:layout_marginEnd="10dp" />
 
             <TextView
                 android:layout_width="wrap_content"
@@ -89,21 +60,21 @@
         <LinearLayout
             android:id="@+id/navMovies"
             android:layout_width="match_parent"
-            android:layout_height="40dp"
+            android:layout_height="42dp"
             android:background="@drawable/card_focus_selector"
             android:clickable="true"
             android:focusable="true"
             android:gravity="center_vertical"
             android:orientation="horizontal"
             android:paddingHorizontal="12dp"
-            android:layout_marginBottom="8dp">
+            android:layout_marginBottom="12dp">
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="🎬"
-                android:textSize="14sp"
-                android:layout_marginEnd="8dp" />
+                android:textSize="15sp"
+                android:layout_marginEnd="10dp" />
 
             <TextView
                 android:layout_width="wrap_content"
@@ -118,21 +89,21 @@
         <LinearLayout
             android:id="@+id/navSeries"
             android:layout_width="match_parent"
-            android:layout_height="40dp"
+            android:layout_height="42dp"
             android:background="@drawable/card_focus_selector"
             android:clickable="true"
             android:focusable="true"
             android:gravity="center_vertical"
             android:orientation="horizontal"
             android:paddingHorizontal="12dp"
-            android:layout_marginBottom="8dp">
+            android:layout_marginBottom="12dp">
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="🍿"
-                android:textSize="14sp"
-                android:layout_marginEnd="8dp" />
+                android:textSize="15sp"
+                android:layout_marginEnd="10dp" />
 
             <TextView
                 android:layout_width="wrap_content"
@@ -143,48 +114,46 @@
                 android:textStyle="bold" />
         </LinearLayout>
 
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1" />
-
-        <!-- ⚙️ Optionen -->
+        <!-- ⚙️ Optionen (Vollkommen symmetrisch) -->
         <LinearLayout
             android:id="@+id/navSettings"
             android:layout_width="match_parent"
-            android:layout_height="40dp"
+            android:layout_height="42dp"
             android:background="@drawable/card_focus_selector"
             android:clickable="true"
             android:focusable="true"
             android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:paddingHorizontal="12dp">
+            android:paddingHorizontal="12dp"
+            android:layout_marginBottom="12dp">
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="⚙️"
-                android:textSize="14sp"
-                android:layout_marginEnd="8dp" />
+                android:textSize="15sp"
+                android:layout_marginEnd="10dp" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Optionen"
-                android:textColor="@color/text_secondary"
-                android:textSize="13sp" />
+                android:textColor="@color/text_primary"
+                android:textSize="13sp"
+                android:textStyle="bold" />
         </LinearLayout>
 
     </LinearLayout>
 
-    <!-- 2. Netflix Hauptbereich (Kompakter Hero Header + Horizontale Reihen) -->
+    <!-- 2. Netflix Hauptbereich (Tiefschwarz & Kontrastreich) -->
     <ScrollView
         android:layout_width="0dp"
         android:layout_height="match_parent"
         android:layout_weight="1"
-        android:paddingHorizontal="20dp"
-        android:paddingTop="16dp"
-        android:paddingBottom="30dp">
+        android:background="#000000"
+        android:paddingHorizontal="22dp"
+        android:paddingTop="18dp"
+        android:paddingBottom="32dp">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -195,17 +164,17 @@
             <LinearLayout
                 android:id="@+id/mainHeroBanner"
                 android:layout_width="match_parent"
-                android:layout_height="140dp"
-                android:background="#1B1B1B"
+                android:layout_height="135dp"
+                android:background="#151515"
                 android:orientation="horizontal"
                 android:padding="14dp"
                 android:gravity="center_vertical"
-                android:layout_marginBottom="20dp">
+                android:layout_marginBottom="22dp">
 
                 <ImageView
                     android:id="@+id/imgMainHero"
                     android:layout_width="85dp"
-                    android:layout_height="115dp"
+                    android:layout_height="110dp"
                     android:scaleType="centerCrop"
                     android:src="@drawable/tv_banner"
                     android:layout_marginEnd="16dp" />
@@ -251,7 +220,6 @@
                 </LinearLayout>
             </LinearLayout>
 
-            <!-- Lade-Indikator -->
             <ProgressBar
                 android:id="@+id/progressMainHome"
                 android:layout_width="wrap_content"
@@ -259,13 +227,13 @@
                 android:layout_gravity="center"
                 android:visibility="gone" />
 
-            <!-- Row 1: 🕒 Weiterschauen & Verlauf -->
+            <!-- Row 1: 🕒 Weiterschauen & Verlauf (Cloud-Synchronisiert) -->
             <LinearLayout
                 android:id="@+id/layoutSectionHistory"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:layout_marginBottom="20dp"
+                android:layout_marginBottom="22dp"
                 android:visibility="gone">
 
                 <TextView
@@ -290,7 +258,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:layout_marginBottom="20dp">
+                android:layout_marginBottom="22dp">
 
                 <TextView
                     android:layout_width="match_parent"
@@ -314,7 +282,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:layout_marginBottom="20dp">
+                android:layout_marginBottom="22dp">
 
                 <TextView
                     android:layout_width="match_parent"
@@ -332,18 +300,18 @@
                     android:orientation="horizontal" />
             </LinearLayout>
 
-            <!-- Row 4: 📺 Live TV Hauptsender -->
+            <!-- Row 4: 📺 Zuletzt geschaut (Live TV) - 10 Sender -->
             <LinearLayout
                 android:id="@+id/layoutSectionLive"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:layout_marginBottom="20dp">
+                android:layout_marginBottom="22dp">
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="📺 Live TV Hauptsender"
+                    android:text="📺 Zuletzt geschaut (Live TV)"
                     android:textColor="@color/text_primary"
                     android:textSize="16sp"
                     android:textStyle="bold"

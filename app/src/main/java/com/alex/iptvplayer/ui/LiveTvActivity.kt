@@ -16,6 +16,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.alex.iptvplayer.R
 import com.alex.iptvplayer.data.Category
+import com.alex.iptvplayer.data.HistoryManager
 import com.alex.iptvplayer.data.LangFilter
 import com.alex.iptvplayer.data.LiveStream
 import com.alex.iptvplayer.data.XtreamClient
@@ -174,6 +175,7 @@ class LiveTvActivity : AppCompatActivity() {
     }
 
     private fun openFullscreenPlayer(stream: LiveStream, position: Int) {
+        HistoryManager(this).saveLiveChannel(stream)
         val intent = Intent(this, PlayerActivity::class.java).apply {
             putExtra("STREAM_URL", client.getLiveStreamUrl(stream.streamId))
             putExtra("STREAM_NAME", stream.name)
