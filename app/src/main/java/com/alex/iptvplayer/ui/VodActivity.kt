@@ -19,6 +19,7 @@ import com.alex.iptvplayer.data.VodStream
 import com.alex.iptvplayer.data.XtreamClient
 import com.alex.iptvplayer.databinding.ActivityVodBinding
 import com.bumptech.glide.Glide
+import com.bumptech.glide.load.engine.DiskCacheStrategy
 import kotlinx.coroutines.launch
 
 class VodActivity : AppCompatActivity() {
@@ -32,8 +33,19 @@ class VodActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         client = XtreamClient(this)
-        binding.recyclerVodCategories.layoutManager = LinearLayoutManager(this)
-        binding.recyclerVodGrid.layoutManager = GridLayoutManager(this, 5)
+
+        // Hardware-optimierte RecyclerViews gegen Lags
+        binding.recyclerVodCategories.apply {
+            layoutManager = LinearLayoutManager(this@VodActivity)
+            setHasFixedSize(true)
+            setItemViewCacheSize(25)
+        }
+
+        binding.recyclerVodGrid.apply {
+            layoutManager = GridLayoutManager(this@VodActivity, 5)
+            setHasFixedSize(true)
+            setItemViewCacheSize(30)
+        }
 
         loadCategories()
     }
@@ -66,7 +78,7 @@ class VodActivity : AppCompatActivity() {
                 }
             } catch (e: Exception) {
                 binding.progressVod.visibility = View.GONE
-                Toast.makeText(this@VodActivity, "Fehler beim Laden der Filme: ${e.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@VodActivity, "Fehler beim Laden: ${e.message}", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -96,6 +108,8 @@ class VodActivity : AppCompatActivity() {
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val cat = items[position]
             holder.txtName.text = cat.name
+
+            // Kategorie nur bei echtem Klick laden, verhindert Scroll-Lags
             holder.itemView.setOnClickListener { onSelect(cat) }
             holder.itemView.setOnFocusChangeListener { _, hasFocus ->
                 if (hasFocus) onSelect(cat)
@@ -124,8 +138,14 @@ class VodActivity : AppCompatActivity() {
             val movie = items[position]
             holder.txtTitle.text = movie.name
 
+            // Performance-optimiertes Laden mit kleinem Thumbnail & Cache
             if (!movie.streamIcon.isNullOrEmpty()) {
-                Glide.with(holder.itemView).load(movie.streamIcon).into(holder.imgPoster)
+                Glide.with(holder.itemView)
+                    .load(movie.streamIcon)
+                    .override(180, 260)
+                    .diskCacheStrategy(DiskCacheStrategy.ALL)
+                    .placeholder(R.drawable.tv_banner)
+                    .into(holder.imgPoster)
             } else {
                 holder.imgPoster.setImageResource(R.drawable.tv_banner)
             }

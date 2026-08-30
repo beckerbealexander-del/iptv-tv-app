@@ -3819,6 +3819,8 @@ id background
 id background_container
 id background_imagein
 id background_imageout
+id badgeAudio
+id badgeQuality
 id bar1
 id bar2
 id bar3
@@ -3841,7 +3843,10 @@ id browse_headers
 id browse_headers_dock
 id browse_headers_root
 id browse_title_group
+id btnAudioTracks
+id btnPlayPause
 id btnSaveSettings
+id btnSubtitles
 id button
 id buttonPanel
 id button_start
@@ -4090,6 +4095,7 @@ id jumpToStart
 id label
 id labeled
 id layout
+id layoutTimeline
 id lb_action_button
 id lb_control_closed_captioning
 id lb_control_fast_forward
@@ -4240,9 +4246,10 @@ id open_search_view_search_prefix
 id open_search_view_status_bar_spacer
 id open_search_view_toolbar
 id open_search_view_toolbar_container
+id osdBottom
+id osdTop
 id outline
 id outward
-id overlayChannelInfo
 id packed
 id page_container
 id page_indicator
@@ -4264,6 +4271,8 @@ id playback_fragment_background
 id playback_fragment_root
 id playback_progress
 id playerLoading
+id playerRoot
+id playerSeekBar
 id playerView
 id playing
 id pooling_container_listener_holder_tag
@@ -4422,11 +4431,13 @@ id txtEpgCurrentTime
 id txtEpgCurrentTitle
 id txtEpgNextTime
 id txtEpgNextTitle
-id txtPlayerChannelName
-id txtPlayerEpgTime
-id txtPlayerEpgTitle
+id txtHintControls
+id txtPlayerSubtitle
+id txtPlayerTitle
 id txtPosterTitle
 id txtSeriesCategoryTitle
+id txtTimeCurrent
+id txtTimeTotal
 id txtVodCategoryTitle
 id unchecked
 id uniform

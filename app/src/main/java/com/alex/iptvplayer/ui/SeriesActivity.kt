@@ -21,6 +21,7 @@ import com.alex.iptvplayer.data.SeriesItem
 import com.alex.iptvplayer.data.XtreamClient
 import com.alex.iptvplayer.databinding.ActivitySeriesBinding
 import com.bumptech.glide.Glide
+import com.bumptech.glide.load.engine.DiskCacheStrategy
 import kotlinx.coroutines.launch
 
 class SeriesActivity : AppCompatActivity() {
@@ -34,8 +35,18 @@ class SeriesActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         client = XtreamClient(this)
-        binding.recyclerSeriesCategories.layoutManager = LinearLayoutManager(this)
-        binding.recyclerSeriesGrid.layoutManager = GridLayoutManager(this, 5)
+
+        binding.recyclerSeriesCategories.apply {
+            layoutManager = LinearLayoutManager(this@SeriesActivity)
+            setHasFixedSize(true)
+            setItemViewCacheSize(25)
+        }
+
+        binding.recyclerSeriesGrid.apply {
+            layoutManager = GridLayoutManager(this@SeriesActivity, 5)
+            setHasFixedSize(true)
+            setItemViewCacheSize(30)
+        }
 
         loadCategories()
     }
@@ -68,7 +79,7 @@ class SeriesActivity : AppCompatActivity() {
                 }
             } catch (e: Exception) {
                 binding.progressSeries.visibility = View.GONE
-                Toast.makeText(this@SeriesActivity, "Fehler beim Laden der Serien: ${e.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@SeriesActivity, "Fehler beim Laden: ${e.message}", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -154,7 +165,12 @@ class SeriesActivity : AppCompatActivity() {
             holder.txtTitle.text = s.name
 
             if (!s.cover.isNullOrEmpty()) {
-                Glide.with(holder.itemView).load(s.cover).into(holder.imgPoster)
+                Glide.with(holder.itemView)
+                    .load(s.cover)
+                    .override(180, 260)
+                    .diskCacheStrategy(DiskCacheStrategy.ALL)
+                    .placeholder(R.drawable.tv_banner)
+                    .into(holder.imgPoster)
             } else {
                 holder.imgPoster.setImageResource(R.drawable.tv_banner)
             }

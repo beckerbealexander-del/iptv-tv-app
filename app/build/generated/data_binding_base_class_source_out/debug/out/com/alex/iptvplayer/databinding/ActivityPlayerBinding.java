@@ -4,9 +4,11 @@ package com.alex.iptvplayer.databinding;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
+import android.widget.SeekBar;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -23,34 +25,83 @@ public final class ActivityPlayerBinding implements ViewBinding {
   private final FrameLayout rootView;
 
   @NonNull
-  public final LinearLayout overlayChannelInfo;
+  public final TextView badgeAudio;
+
+  @NonNull
+  public final TextView badgeQuality;
+
+  @NonNull
+  public final Button btnAudioTracks;
+
+  @NonNull
+  public final Button btnPlayPause;
+
+  @NonNull
+  public final Button btnSubtitles;
+
+  @NonNull
+  public final LinearLayout layoutTimeline;
+
+  @NonNull
+  public final LinearLayout osdBottom;
+
+  @NonNull
+  public final LinearLayout osdTop;
 
   @NonNull
   public final ProgressBar playerLoading;
 
   @NonNull
+  public final FrameLayout playerRoot;
+
+  @NonNull
+  public final SeekBar playerSeekBar;
+
+  @NonNull
   public final PlayerView playerView;
 
   @NonNull
-  public final TextView txtPlayerChannelName;
+  public final TextView txtHintControls;
 
   @NonNull
-  public final TextView txtPlayerEpgTime;
+  public final TextView txtPlayerSubtitle;
 
   @NonNull
-  public final TextView txtPlayerEpgTitle;
+  public final TextView txtPlayerTitle;
 
-  private ActivityPlayerBinding(@NonNull FrameLayout rootView,
-      @NonNull LinearLayout overlayChannelInfo, @NonNull ProgressBar playerLoading,
-      @NonNull PlayerView playerView, @NonNull TextView txtPlayerChannelName,
-      @NonNull TextView txtPlayerEpgTime, @NonNull TextView txtPlayerEpgTitle) {
+  @NonNull
+  public final TextView txtTimeCurrent;
+
+  @NonNull
+  public final TextView txtTimeTotal;
+
+  private ActivityPlayerBinding(@NonNull FrameLayout rootView, @NonNull TextView badgeAudio,
+      @NonNull TextView badgeQuality, @NonNull Button btnAudioTracks, @NonNull Button btnPlayPause,
+      @NonNull Button btnSubtitles, @NonNull LinearLayout layoutTimeline,
+      @NonNull LinearLayout osdBottom, @NonNull LinearLayout osdTop,
+      @NonNull ProgressBar playerLoading, @NonNull FrameLayout playerRoot,
+      @NonNull SeekBar playerSeekBar, @NonNull PlayerView playerView,
+      @NonNull TextView txtHintControls, @NonNull TextView txtPlayerSubtitle,
+      @NonNull TextView txtPlayerTitle, @NonNull TextView txtTimeCurrent,
+      @NonNull TextView txtTimeTotal) {
     this.rootView = rootView;
-    this.overlayChannelInfo = overlayChannelInfo;
+    this.badgeAudio = badgeAudio;
+    this.badgeQuality = badgeQuality;
+    this.btnAudioTracks = btnAudioTracks;
+    this.btnPlayPause = btnPlayPause;
+    this.btnSubtitles = btnSubtitles;
+    this.layoutTimeline = layoutTimeline;
+    this.osdBottom = osdBottom;
+    this.osdTop = osdTop;
     this.playerLoading = playerLoading;
+    this.playerRoot = playerRoot;
+    this.playerSeekBar = playerSeekBar;
     this.playerView = playerView;
-    this.txtPlayerChannelName = txtPlayerChannelName;
-    this.txtPlayerEpgTime = txtPlayerEpgTime;
-    this.txtPlayerEpgTitle = txtPlayerEpgTitle;
+    this.txtHintControls = txtHintControls;
+    this.txtPlayerSubtitle = txtPlayerSubtitle;
+    this.txtPlayerTitle = txtPlayerTitle;
+    this.txtTimeCurrent = txtTimeCurrent;
+    this.txtTimeTotal = txtTimeTotal;
   }
 
   @Override
@@ -80,9 +131,51 @@ public final class ActivityPlayerBinding implements ViewBinding {
     // This is done to optimize the compiled bytecode for size and performance.
     int id;
     missingId: {
-      id = R.id.overlayChannelInfo;
-      LinearLayout overlayChannelInfo = ViewBindings.findChildViewById(rootView, id);
-      if (overlayChannelInfo == null) {
+      id = R.id.badgeAudio;
+      TextView badgeAudio = ViewBindings.findChildViewById(rootView, id);
+      if (badgeAudio == null) {
+        break missingId;
+      }
+
+      id = R.id.badgeQuality;
+      TextView badgeQuality = ViewBindings.findChildViewById(rootView, id);
+      if (badgeQuality == null) {
+        break missingId;
+      }
+
+      id = R.id.btnAudioTracks;
+      Button btnAudioTracks = ViewBindings.findChildViewById(rootView, id);
+      if (btnAudioTracks == null) {
+        break missingId;
+      }
+
+      id = R.id.btnPlayPause;
+      Button btnPlayPause = ViewBindings.findChildViewById(rootView, id);
+      if (btnPlayPause == null) {
+        break missingId;
+      }
+
+      id = R.id.btnSubtitles;
+      Button btnSubtitles = ViewBindings.findChildViewById(rootView, id);
+      if (btnSubtitles == null) {
+        break missingId;
+      }
+
+      id = R.id.layoutTimeline;
+      LinearLayout layoutTimeline = ViewBindings.findChildViewById(rootView, id);
+      if (layoutTimeline == null) {
+        break missingId;
+      }
+
+      id = R.id.osdBottom;
+      LinearLayout osdBottom = ViewBindings.findChildViewById(rootView, id);
+      if (osdBottom == null) {
+        break missingId;
+      }
+
+      id = R.id.osdTop;
+      LinearLayout osdTop = ViewBindings.findChildViewById(rootView, id);
+      if (osdTop == null) {
         break missingId;
       }
 
@@ -92,32 +185,54 @@ public final class ActivityPlayerBinding implements ViewBinding {
         break missingId;
       }
 
+      FrameLayout playerRoot = (FrameLayout) rootView;
+
+      id = R.id.playerSeekBar;
+      SeekBar playerSeekBar = ViewBindings.findChildViewById(rootView, id);
+      if (playerSeekBar == null) {
+        break missingId;
+      }
+
       id = R.id.playerView;
       PlayerView playerView = ViewBindings.findChildViewById(rootView, id);
       if (playerView == null) {
         break missingId;
       }
 
-      id = R.id.txtPlayerChannelName;
-      TextView txtPlayerChannelName = ViewBindings.findChildViewById(rootView, id);
-      if (txtPlayerChannelName == null) {
+      id = R.id.txtHintControls;
+      TextView txtHintControls = ViewBindings.findChildViewById(rootView, id);
+      if (txtHintControls == null) {
         break missingId;
       }
 
-      id = R.id.txtPlayerEpgTime;
-      TextView txtPlayerEpgTime = ViewBindings.findChildViewById(rootView, id);
-      if (txtPlayerEpgTime == null) {
+      id = R.id.txtPlayerSubtitle;
+      TextView txtPlayerSubtitle = ViewBindings.findChildViewById(rootView, id);
+      if (txtPlayerSubtitle == null) {
         break missingId;
       }
 
-      id = R.id.txtPlayerEpgTitle;
-      TextView txtPlayerEpgTitle = ViewBindings.findChildViewById(rootView, id);
-      if (txtPlayerEpgTitle == null) {
+      id = R.id.txtPlayerTitle;
+      TextView txtPlayerTitle = ViewBindings.findChildViewById(rootView, id);
+      if (txtPlayerTitle == null) {
         break missingId;
       }
 
-      return new ActivityPlayerBinding((FrameLayout) rootView, overlayChannelInfo, playerLoading,
-          playerView, txtPlayerChannelName, txtPlayerEpgTime, txtPlayerEpgTitle);
+      id = R.id.txtTimeCurrent;
+      TextView txtTimeCurrent = ViewBindings.findChildViewById(rootView, id);
+      if (txtTimeCurrent == null) {
+        break missingId;
+      }
+
+      id = R.id.txtTimeTotal;
+      TextView txtTimeTotal = ViewBindings.findChildViewById(rootView, id);
+      if (txtTimeTotal == null) {
+        break missingId;
+      }
+
+      return new ActivityPlayerBinding((FrameLayout) rootView, badgeAudio, badgeQuality,
+          btnAudioTracks, btnPlayPause, btnSubtitles, layoutTimeline, osdBottom, osdTop,
+          playerLoading, playerRoot, playerSeekBar, playerView, txtHintControls, txtPlayerSubtitle,
+          txtPlayerTitle, txtTimeCurrent, txtTimeTotal);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));
