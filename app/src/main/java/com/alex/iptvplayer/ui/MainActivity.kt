@@ -31,6 +31,7 @@ class MainActivity : AppCompatActivity() {
 
     private val posterLookupMap = HashMap<Int, String>()
     private var allSeriesList: List<SeriesItem> = emptyList()
+    private val episodePattern = Regex(" - S\\d+E\\d+", RegexOption.IGNORE_CASE)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -103,6 +104,22 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun isSeriesHistoryItem(item: HistoryItem): Boolean {
+        if (item.streamUrl.contains("/series/")) return true
+        if (item.streamUrl.contains("/movie/")) return false
+        if (episodePattern.containsMatchIn(item.title)) return true
+        if (item.type == "SERIES") return true
+        return false
+    }
+
+    private fun isMovieHistoryItem(item: HistoryItem): Boolean {
+        if (item.streamUrl.contains("/movie/")) return true
+        if (item.streamUrl.contains("/series/")) return false
+        if (episodePattern.containsMatchIn(item.title)) return false
+        if (item.type == "VOD") return true
+        return false
+    }
+
     private fun loadAllHistoryRows() {
         val allHistory = historyManager.getHistory()
 
@@ -120,14 +137,14 @@ class MainActivity : AppCompatActivity() {
         }
 
         // 2. Serien-Verlauf (Eindeutige Serien: Nur der aktuellste Stand pro Serie!)
-        val rawSeriesHistory = allHistory.filter { 
-            it.type == "SERIES" || 
-            it.streamUrl.contains("/series/") || 
-            it.title.contains(" - S") 
-        }
+        val rawSeriesHistory = allHistory.filter { isSeriesHistoryItem(it) }
         val distinctSeriesMap = LinkedHashMap<String, HistoryItem>()
         for (item in rawSeriesHistory) {
-            val seriesTitle = item.title.substringBefore(" - S").trim().lowercase()
+            val seriesTitle = if (episodePattern.containsMatchIn(item.title)) {
+                item.title.substringBefore(" - S").trim().lowercase()
+            } else {
+                item.title.trim().lowercase()
+            }
             if (!distinctSeriesMap.containsKey(seriesTitle)) {
                 distinctSeriesMap[seriesTitle] = item
             }
@@ -146,11 +163,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         // 3. Film-Verlauf (Eindeutige Filme)
-        val rawMoviesHistory = allHistory.filter { 
-            (it.type == "VOD" || it.streamUrl.contains("/movie/")) && 
-            !it.streamUrl.contains("/series/") && 
-            !it.title.contains(" - S") 
-        }
+        val rawMoviesHistory = allHistory.filter { isMovieHistoryItem(it) }
         val distinctMoviesMap = LinkedHashMap<String, HistoryItem>()
         for (item in rawMoviesHistory) {
             val movieKey = if (item.streamId > 0) item.streamId.toString() else item.title.trim().lowercase()
