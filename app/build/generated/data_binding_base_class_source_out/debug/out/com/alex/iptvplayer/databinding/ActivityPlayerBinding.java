@@ -32,21 +32,25 @@ public final class ActivityPlayerBinding implements ViewBinding {
   public final PlayerView playerView;
 
   @NonNull
-  public final TextView txtPlayerChannelCategory;
+  public final TextView txtPlayerChannelName;
 
   @NonNull
-  public final TextView txtPlayerChannelName;
+  public final TextView txtPlayerEpgTime;
+
+  @NonNull
+  public final TextView txtPlayerEpgTitle;
 
   private ActivityPlayerBinding(@NonNull FrameLayout rootView,
       @NonNull LinearLayout overlayChannelInfo, @NonNull ProgressBar playerLoading,
-      @NonNull PlayerView playerView, @NonNull TextView txtPlayerChannelCategory,
-      @NonNull TextView txtPlayerChannelName) {
+      @NonNull PlayerView playerView, @NonNull TextView txtPlayerChannelName,
+      @NonNull TextView txtPlayerEpgTime, @NonNull TextView txtPlayerEpgTitle) {
     this.rootView = rootView;
     this.overlayChannelInfo = overlayChannelInfo;
     this.playerLoading = playerLoading;
     this.playerView = playerView;
-    this.txtPlayerChannelCategory = txtPlayerChannelCategory;
     this.txtPlayerChannelName = txtPlayerChannelName;
+    this.txtPlayerEpgTime = txtPlayerEpgTime;
+    this.txtPlayerEpgTitle = txtPlayerEpgTitle;
   }
 
   @Override
@@ -94,20 +98,26 @@ public final class ActivityPlayerBinding implements ViewBinding {
         break missingId;
       }
 
-      id = R.id.txtPlayerChannelCategory;
-      TextView txtPlayerChannelCategory = ViewBindings.findChildViewById(rootView, id);
-      if (txtPlayerChannelCategory == null) {
-        break missingId;
-      }
-
       id = R.id.txtPlayerChannelName;
       TextView txtPlayerChannelName = ViewBindings.findChildViewById(rootView, id);
       if (txtPlayerChannelName == null) {
         break missingId;
       }
 
+      id = R.id.txtPlayerEpgTime;
+      TextView txtPlayerEpgTime = ViewBindings.findChildViewById(rootView, id);
+      if (txtPlayerEpgTime == null) {
+        break missingId;
+      }
+
+      id = R.id.txtPlayerEpgTitle;
+      TextView txtPlayerEpgTitle = ViewBindings.findChildViewById(rootView, id);
+      if (txtPlayerEpgTitle == null) {
+        break missingId;
+      }
+
       return new ActivityPlayerBinding((FrameLayout) rootView, overlayChannelInfo, playerLoading,
-          playerView, txtPlayerChannelCategory, txtPlayerChannelName);
+          playerView, txtPlayerChannelName, txtPlayerEpgTime, txtPlayerEpgTitle);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));

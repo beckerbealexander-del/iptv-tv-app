@@ -7,7 +7,7 @@
 
     <!-- Linke Spalte: Kategorien -->
     <LinearLayout
-        android:layout_width="280dp"
+        android:layout_width="260dp"
         android:layout_height="match_parent"
         android:background="#12161D"
         android:orientation="vertical"
@@ -66,43 +66,136 @@
             android:layout_height="match_parent" />
     </LinearLayout>
 
-    <!-- Rechte Spalte: Live Vorschau & Detail -->
-    <FrameLayout
+    <!-- Rechte Spalte: Detail & EPG Programm-Vorschau -->
+    <ScrollView
         android:layout_width="0dp"
         android:layout_height="match_parent"
         android:layout_weight="1"
-        android:padding="24dp">
+        android:padding="28dp">
 
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:gravity="center"
+            android:layout_height="wrap_content"
             android:orientation="vertical">
 
-            <androidx.media3.ui.PlayerView
-                android:id="@+id/miniPlayerView"
+            <!-- Logo & Sendername -->
+            <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="240dp"
-                android:background="#000000" />
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:layout_marginBottom="20dp">
+
+                <ImageView
+                    android:id="@+id/imgDetailLogo"
+                    android:layout_width="64dp"
+                    android:layout_height="64dp"
+                    android:layout_marginEnd="16dp"
+                    android:src="@drawable/tv_banner" />
+
+                <TextView
+                    android:id="@+id/txtDetailName"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Sender wählen"
+                    android:textColor="@color/text_primary"
+                    android:textSize="24sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
 
             <TextView
-                android:id="@+id/txtSelectedChannelName"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
-                android:text="Wähle einen Sender"
-                android:textColor="@color/text_primary"
-                android:textSize="22sp"
-                android:textStyle="bold" />
+                android:text="▶ Drücke OK auf der Fernbedienung zum Abspielen"
+                android:textColor="@color/accent_blue"
+                android:textSize="15sp"
+                android:layout_marginBottom="24dp" />
 
-            <TextView
-                android:layout_width="wrap_content"
+            <!-- EPG Box: Aktuelle Sendung -->
+            <LinearLayout
+                android:id="@+id/boxCurrentProgram"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:text="Drücke OK für Vollbild-Wiedergabe"
-                android:textColor="@color/text_secondary"
-                android:textSize="14sp" />
+                android:background="@drawable/card_focus_selector"
+                android:orientation="vertical"
+                android:padding="16dp"
+                android:layout_marginBottom="16dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="🔴 JETZT IM TV (EPG)"
+                    android:textColor="@color/accent_gold"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/txtEpgCurrentTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="Keine EPG-Informationen verfügbar"
+                    android:textColor="@color/text_primary"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/txtEpgCurrentTime"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text=""
+                    android:textColor="@color/accent_blue"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:id="@+id/txtEpgCurrentDesc"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text=""
+                    android:textColor="@color/text_secondary"
+                    android:textSize="13sp" />
+            </LinearLayout>
+
+            <!-- EPG Box: Nächste Sendung -->
+            <LinearLayout
+                android:id="@+id/boxNextProgram"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/card_focus_selector"
+                android:orientation="vertical"
+                android:padding="16dp"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="🕒 DANACH"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/txtEpgNextTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text=""
+                    android:textColor="@color/text_primary"
+                    android:textSize="16sp" />
+
+                <TextView
+                    android:id="@+id/txtEpgNextTime"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text=""
+                    android:textColor="@color/accent_blue"
+                    android:textSize="13sp" />
+            </LinearLayout>
+
         </LinearLayout>
-    </FrameLayout>
+    </ScrollView>
 
 </LinearLayout>

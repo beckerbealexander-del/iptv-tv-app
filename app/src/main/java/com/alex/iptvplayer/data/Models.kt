@@ -19,6 +19,27 @@ data class LiveStream(
     @SerializedName("category_id") val categoryId: String? = null
 ) : Serializable
 
+data class EpgResponse(
+    @SerializedName("epg_listings") val listings: List<RawEpgItem>? = null
+) : Serializable
+
+data class RawEpgItem(
+    @SerializedName("id") val id: String? = null,
+    @SerializedName("title") val title: String? = null,
+    @SerializedName("description") val description: String? = null,
+    @SerializedName("start") val start: String? = null,
+    @SerializedName("end") val end: String? = null,
+    @SerializedName("now_playing") val nowPlaying: Int? = 0
+) : Serializable
+
+data class EpgProgram(
+    val title: String,
+    val description: String,
+    val start: String,
+    val end: String,
+    val isNowPlaying: Boolean
+) : Serializable
+
 data class VodStream(
     @SerializedName("num") val num: Int? = null,
     @SerializedName("name") val name: String,

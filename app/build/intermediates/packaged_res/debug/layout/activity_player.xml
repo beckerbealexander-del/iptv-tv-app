@@ -11,7 +11,7 @@
         android:id="@+id/playerView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        app:use_controller="true"
+        app:use_controller="false"
         app:resize_mode="fit" />
 
     <!-- Lade-Spinner -->
@@ -22,13 +22,13 @@
         android:layout_gravity="center"
         android:visibility="gone" />
 
-    <!-- Kanal-Info OSD Overlay -->
+    <!-- Kanal-Info & EPG OSD Overlay -->
     <LinearLayout
         android:id="@+id/overlayChannelInfo"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
-        android:background="#CC0D1117"
+        android:background="#DD0D1117"
         android:orientation="vertical"
         android:padding="24dp"
         android:visibility="gone">
@@ -43,13 +43,22 @@
             android:textStyle="bold" />
 
         <TextView
-            android:id="@+id/txtPlayerChannelCategory"
+            android:id="@+id/txtPlayerEpgTitle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
-            android:text="Kategorie"
+            android:text="Lade Programm..."
             android:textColor="@color/accent_gold"
-            android:textSize="16sp" />
+            android:textSize="18sp" />
+
+        <TextView
+            android:id="@+id/txtPlayerEpgTime"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text=""
+            android:textColor="@color/accent_blue"
+            android:textSize="14sp" />
     </LinearLayout>
 
 </FrameLayout>

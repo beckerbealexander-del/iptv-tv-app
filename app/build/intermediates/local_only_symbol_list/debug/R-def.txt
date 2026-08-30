@@ -10,6 +10,8 @@ color text_primary
 color text_secondary
 drawable card_focus_selector
 drawable tv_banner
+id boxCurrentProgram
+id boxNextProgram
 id btnSaveSettings
 id cardLiveTv
 id cardMovies
@@ -19,8 +21,8 @@ id editPassword
 id editServerUrl
 id editUsername
 id imgChannelLogo
+id imgDetailLogo
 id imgPoster
-id miniPlayerView
 id overlayChannelInfo
 id playerLoading
 id playerView
@@ -37,10 +39,16 @@ id recyclerVodGrid
 id txtCategoryName
 id txtCategoryTitle
 id txtChannelName
-id txtPlayerChannelCategory
+id txtDetailName
+id txtEpgCurrentDesc
+id txtEpgCurrentTime
+id txtEpgCurrentTitle
+id txtEpgNextTime
+id txtEpgNextTitle
 id txtPlayerChannelName
+id txtPlayerEpgTime
+id txtPlayerEpgTitle
 id txtPosterTitle
-id txtSelectedChannelName
 id txtSeriesCategoryTitle
 id txtVodCategoryTitle
 layout activity_live_tv

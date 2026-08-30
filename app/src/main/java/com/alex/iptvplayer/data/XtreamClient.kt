@@ -2,6 +2,7 @@ package com.alex.iptvplayer.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.util.Base64
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.Dispatchers
@@ -66,6 +67,39 @@ class XtreamClient(context: Context) {
         val json = executeGet(url)
         val type = object : TypeToken<List<LiveStream>>() {}.type
         gson.fromJson(json, type) ?: emptyList()
+    }
+
+    // EPG Programmführer abrufen & Base64 dekodieren
+    suspend fun getEpg(streamId: Int): List<EpgProgram> = withContext(Dispatchers.IO) {
+        try {
+            val url = buildApiUrl("get_simple_data_table", "&stream_id=$streamId")
+            val json = executeGet(url)
+            val resp = gson.fromJson(json, EpgResponse::class.java)
+            val list = mutableListOf<EpgProgram>()
+            resp?.listings?.forEach { raw ->
+                val title = decodeBase64(raw.title)
+                val desc = decodeBase64(raw.description)
+                val start = raw.start?.substringAfter(" ")?.take(5) ?: ""
+                val end = raw.end?.substringAfter(" ")?.take(5) ?: ""
+                val isNow = raw.nowPlaying == 1
+                if (title.isNotEmpty()) {
+                    list.add(EpgProgram(title, desc, start, end, isNow))
+                }
+            }
+            list
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun decodeBase64(str: String?): String {
+        if (str.isNullOrEmpty()) return ""
+        return try {
+            val decodedBytes = Base64.decode(str.trim(), Base64.DEFAULT)
+            String(decodedBytes, Charsets.UTF_8).trim()
+        } catch (e: Exception) {
+            str
+        }
     }
 
     // 2. VOD Filme

@@ -7,6 +7,7 @@ import android.view.KeyEvent
 import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -15,6 +16,8 @@ import com.alex.iptvplayer.data.LiveStream
 import com.alex.iptvplayer.data.XtreamClient
 import com.alex.iptvplayer.databinding.ActivityPlayerBinding
 import com.alex.iptvplayer.util.PlayerUtils
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 
 class PlayerActivity : AppCompatActivity() {
 
@@ -24,7 +27,9 @@ class PlayerActivity : AppCompatActivity() {
 
     private var streamList: List<LiveStream> = emptyList()
     private var currentIndex: Int = -1
+    private var currentStreamId: Int = -1
     private val hideHandler = Handler(Looper.getMainLooper())
+    private var epgJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -35,16 +40,17 @@ class PlayerActivity : AppCompatActivity() {
 
         val streamUrl = intent.getStringExtra("STREAM_URL") ?: ""
         val streamName = intent.getStringExtra("STREAM_NAME") ?: "Stream"
+        currentStreamId = intent.getIntExtra("STREAM_ID", -1)
         currentIndex = intent.getIntExtra("CURRENT_INDEX", -1)
 
         @Suppress("UNCHECKED_CAST")
         streamList = (intent.getSerializableExtra("STREAM_LIST") as? ArrayList<LiveStream>) ?: emptyList()
 
-        setupPlayer(streamUrl, streamName)
+        setupPlayer(streamUrl, streamName, currentStreamId)
     }
 
-    private fun setupPlayer(url: String, name: String) {
-        showChannelInfo(name)
+    private fun setupPlayer(url: String, name: String, streamId: Int) {
+        showChannelInfo(name, streamId)
 
         exoPlayer = PlayerUtils.createExoPlayer(this).apply {
             binding.playerView.player = this
@@ -67,14 +73,32 @@ class PlayerActivity : AppCompatActivity() {
         }
     }
 
-    private fun showChannelInfo(name: String) {
+    private fun showChannelInfo(name: String, streamId: Int) {
         binding.txtPlayerChannelName.text = name
+        binding.txtPlayerEpgTitle.text = "Lade Programm..."
+        binding.txtPlayerEpgTime.text = ""
         binding.overlayChannelInfo.visibility = View.VISIBLE
+
+        if (streamId > 0) {
+            epgJob?.cancel()
+            epgJob = lifecycleScope.launch {
+                val list = client.getEpg(streamId)
+                if (list.isNotEmpty()) {
+                    val cur = list.firstOrNull { it.isNowPlaying } ?: list[0]
+                    binding.txtPlayerEpgTitle.text = cur.title
+                    binding.txtPlayerEpgTime.text = "${cur.start} - ${cur.end}"
+                } else {
+                    binding.txtPlayerEpgTitle.text = "Kein EPG verfügbar"
+                }
+            }
+        } else {
+            binding.txtPlayerEpgTitle.text = ""
+        }
 
         hideHandler.removeCallbacksAndMessages(null)
         hideHandler.postDelayed({
             binding.overlayChannelInfo.visibility = View.GONE
-        }, 4000)
+        }, 4500)
     }
 
     // --- D-Pad Steuerung: Zapping (Hoch/Runter) und Pause/Play (OK) ---
@@ -92,7 +116,7 @@ class PlayerActivity : AppCompatActivity() {
                 if (binding.overlayChannelInfo.visibility == View.VISIBLE) {
                     binding.overlayChannelInfo.visibility = View.GONE
                 } else {
-                    showChannelInfo(binding.txtPlayerChannelName.text.toString())
+                    showChannelInfo(binding.txtPlayerChannelName.text.toString(), currentStreamId)
                 }
                 return true
             }
@@ -117,7 +141,8 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     private fun switchStream(stream: LiveStream) {
-        showChannelInfo(stream.name)
+        currentStreamId = stream.streamId
+        showChannelInfo(stream.name, stream.streamId)
         val url = client.getLiveStreamUrl(stream.streamId)
         val mediaItem = MediaItem.fromUri(url)
         exoPlayer?.setMediaItem(mediaItem)

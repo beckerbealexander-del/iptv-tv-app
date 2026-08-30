@@ -4,12 +4,12 @@ package com.alex.iptvplayer.databinding;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.media3.ui.PlayerView;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewbinding.ViewBinding;
 import androidx.viewbinding.ViewBindings;
@@ -23,7 +23,13 @@ public final class ActivityLiveTvBinding implements ViewBinding {
   private final LinearLayout rootView;
 
   @NonNull
-  public final PlayerView miniPlayerView;
+  public final LinearLayout boxCurrentProgram;
+
+  @NonNull
+  public final LinearLayout boxNextProgram;
+
+  @NonNull
+  public final ImageView imgDetailLogo;
 
   @NonNull
   public final ProgressBar progressCategories;
@@ -41,20 +47,46 @@ public final class ActivityLiveTvBinding implements ViewBinding {
   public final TextView txtCategoryTitle;
 
   @NonNull
-  public final TextView txtSelectedChannelName;
+  public final TextView txtDetailName;
 
-  private ActivityLiveTvBinding(@NonNull LinearLayout rootView, @NonNull PlayerView miniPlayerView,
-      @NonNull ProgressBar progressCategories, @NonNull ProgressBar progressChannels,
-      @NonNull RecyclerView recyclerCategories, @NonNull RecyclerView recyclerChannels,
-      @NonNull TextView txtCategoryTitle, @NonNull TextView txtSelectedChannelName) {
+  @NonNull
+  public final TextView txtEpgCurrentDesc;
+
+  @NonNull
+  public final TextView txtEpgCurrentTime;
+
+  @NonNull
+  public final TextView txtEpgCurrentTitle;
+
+  @NonNull
+  public final TextView txtEpgNextTime;
+
+  @NonNull
+  public final TextView txtEpgNextTitle;
+
+  private ActivityLiveTvBinding(@NonNull LinearLayout rootView,
+      @NonNull LinearLayout boxCurrentProgram, @NonNull LinearLayout boxNextProgram,
+      @NonNull ImageView imgDetailLogo, @NonNull ProgressBar progressCategories,
+      @NonNull ProgressBar progressChannels, @NonNull RecyclerView recyclerCategories,
+      @NonNull RecyclerView recyclerChannels, @NonNull TextView txtCategoryTitle,
+      @NonNull TextView txtDetailName, @NonNull TextView txtEpgCurrentDesc,
+      @NonNull TextView txtEpgCurrentTime, @NonNull TextView txtEpgCurrentTitle,
+      @NonNull TextView txtEpgNextTime, @NonNull TextView txtEpgNextTitle) {
     this.rootView = rootView;
-    this.miniPlayerView = miniPlayerView;
+    this.boxCurrentProgram = boxCurrentProgram;
+    this.boxNextProgram = boxNextProgram;
+    this.imgDetailLogo = imgDetailLogo;
     this.progressCategories = progressCategories;
     this.progressChannels = progressChannels;
     this.recyclerCategories = recyclerCategories;
     this.recyclerChannels = recyclerChannels;
     this.txtCategoryTitle = txtCategoryTitle;
-    this.txtSelectedChannelName = txtSelectedChannelName;
+    this.txtDetailName = txtDetailName;
+    this.txtEpgCurrentDesc = txtEpgCurrentDesc;
+    this.txtEpgCurrentTime = txtEpgCurrentTime;
+    this.txtEpgCurrentTitle = txtEpgCurrentTitle;
+    this.txtEpgNextTime = txtEpgNextTime;
+    this.txtEpgNextTitle = txtEpgNextTitle;
   }
 
   @Override
@@ -84,9 +116,21 @@ public final class ActivityLiveTvBinding implements ViewBinding {
     // This is done to optimize the compiled bytecode for size and performance.
     int id;
     missingId: {
-      id = R.id.miniPlayerView;
-      PlayerView miniPlayerView = ViewBindings.findChildViewById(rootView, id);
-      if (miniPlayerView == null) {
+      id = R.id.boxCurrentProgram;
+      LinearLayout boxCurrentProgram = ViewBindings.findChildViewById(rootView, id);
+      if (boxCurrentProgram == null) {
+        break missingId;
+      }
+
+      id = R.id.boxNextProgram;
+      LinearLayout boxNextProgram = ViewBindings.findChildViewById(rootView, id);
+      if (boxNextProgram == null) {
+        break missingId;
+      }
+
+      id = R.id.imgDetailLogo;
+      ImageView imgDetailLogo = ViewBindings.findChildViewById(rootView, id);
+      if (imgDetailLogo == null) {
         break missingId;
       }
 
@@ -120,15 +164,46 @@ public final class ActivityLiveTvBinding implements ViewBinding {
         break missingId;
       }
 
-      id = R.id.txtSelectedChannelName;
-      TextView txtSelectedChannelName = ViewBindings.findChildViewById(rootView, id);
-      if (txtSelectedChannelName == null) {
+      id = R.id.txtDetailName;
+      TextView txtDetailName = ViewBindings.findChildViewById(rootView, id);
+      if (txtDetailName == null) {
         break missingId;
       }
 
-      return new ActivityLiveTvBinding((LinearLayout) rootView, miniPlayerView, progressCategories,
-          progressChannels, recyclerCategories, recyclerChannels, txtCategoryTitle,
-          txtSelectedChannelName);
+      id = R.id.txtEpgCurrentDesc;
+      TextView txtEpgCurrentDesc = ViewBindings.findChildViewById(rootView, id);
+      if (txtEpgCurrentDesc == null) {
+        break missingId;
+      }
+
+      id = R.id.txtEpgCurrentTime;
+      TextView txtEpgCurrentTime = ViewBindings.findChildViewById(rootView, id);
+      if (txtEpgCurrentTime == null) {
+        break missingId;
+      }
+
+      id = R.id.txtEpgCurrentTitle;
+      TextView txtEpgCurrentTitle = ViewBindings.findChildViewById(rootView, id);
+      if (txtEpgCurrentTitle == null) {
+        break missingId;
+      }
+
+      id = R.id.txtEpgNextTime;
+      TextView txtEpgNextTime = ViewBindings.findChildViewById(rootView, id);
+      if (txtEpgNextTime == null) {
+        break missingId;
+      }
+
+      id = R.id.txtEpgNextTitle;
+      TextView txtEpgNextTitle = ViewBindings.findChildViewById(rootView, id);
+      if (txtEpgNextTitle == null) {
+        break missingId;
+      }
+
+      return new ActivityLiveTvBinding((LinearLayout) rootView, boxCurrentProgram, boxNextProgram,
+          imgDetailLogo, progressCategories, progressChannels, recyclerCategories, recyclerChannels,
+          txtCategoryTitle, txtDetailName, txtEpgCurrentDesc, txtEpgCurrentTime, txtEpgCurrentTitle,
+          txtEpgNextTime, txtEpgNextTitle);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));
