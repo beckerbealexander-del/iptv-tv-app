@@ -87,7 +87,13 @@ class LiveTvActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        activePipStream?.let { playPipStream(it) }
+        // Zuletzt gesehenen Sender aus der Historie ermitteln und im PIP weiterspielen
+        val lastWatched = historyManager.getRecentLiveChannels().firstOrNull()
+        if (lastWatched != null) {
+            playPipStream(lastWatched)
+        } else if (activePipStream != null) {
+            playPipStream(activePipStream!!)
+        }
     }
 
     override fun onPause() {
@@ -102,6 +108,7 @@ class LiveTvActivity : AppCompatActivity() {
     }
 
     private fun playPipStream(stream: LiveStream) {
+        if (activePipStream?.streamId == stream.streamId && pipPlayer?.isPlaying == true) return
         activePipStream = stream
         val url = client.getLiveStreamUrl(stream.streamId)
         val mediaItem = MediaItem.fromUri(url)
@@ -140,6 +147,17 @@ class LiveTvActivity : AppCompatActivity() {
         binding.recyclerCategories.adapter = CategoryAdapter(filtered) { category ->
             loadChannels(category)
         }
+
+        // Vorauswahl: Zuletzt gesehener Sender
+        val lastWatched = historyManager.getRecentLiveChannels().firstOrNull()
+        if (lastWatched != null && !lastWatched.categoryId.isNullOrEmpty()) {
+            val matchingCat = filtered.firstOrNull { it.id == lastWatched.categoryId }
+            if (matchingCat != null) {
+                loadChannels(matchingCat, preselectedStreamId = lastWatched.streamId)
+                return
+            }
+        }
+
         if (filtered.isNotEmpty()) {
             loadChannels(filtered[0])
         }
@@ -159,8 +177,8 @@ class LiveTvActivity : AppCompatActivity() {
         }
     }
 
-    private fun loadChannels(category: Category) {
-        if (selectedCategoryId == category.id) return
+    private fun loadChannels(category: Category, preselectedStreamId: Int? = null) {
+        if (selectedCategoryId == category.id && preselectedStreamId == null) return
         selectedCategoryId = category.id
 
         binding.progressChannels.visibility = View.VISIBLE
@@ -170,9 +188,24 @@ class LiveTvActivity : AppCompatActivity() {
                 binding.progressChannels.visibility = View.GONE
                 binding.recyclerChannels.adapter = ChannelAdapter(currentStreams)
 
-                if (currentStreams.isNotEmpty()) {
-                    showChannelPreview(currentStreams[0], null)
-                    playPipStream(currentStreams[0])
+                val targetStream = if (preselectedStreamId != null) {
+                    currentStreams.firstOrNull { it.streamId == preselectedStreamId } ?: currentStreams.firstOrNull()
+                } else {
+                    currentStreams.firstOrNull()
+                }
+
+                if (targetStream != null) {
+                    showChannelPreview(targetStream, null)
+                    playPipStream(targetStream)
+
+                    val targetPos = currentStreams.indexOf(targetStream).coerceAtLeast(0)
+                    if (targetPos > 0) {
+                        binding.recyclerChannels.scrollToPosition(targetPos)
+                        binding.recyclerChannels.post {
+                            val holder = binding.recyclerChannels.findViewHolderForAdapterPosition(targetPos) as? ChannelAdapter.ViewHolder
+                            holder?.header?.requestFocus()
+                        }
+                    }
                 }
             } catch (e: Exception) {
                 binding.progressChannels.visibility = View.GONE
@@ -366,10 +399,10 @@ class LiveTvActivity : AppCompatActivity() {
                 openFullscreenPlayer(s, position)
             }
 
+            // Beim Scrollen / Hovern: Nur EPG-Vorschau aktualisieren, PIP-Stream NICHT unterbrechen!
             holder.header.setOnFocusChangeListener { _, hasFocus ->
                 if (hasFocus) {
                     showChannelPreview(s, null)
-                    playPipStream(s)
                 }
             }
 

@@ -1,17 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="125dp"
-    android:layout_height="200dp"
-    android:layout_marginEnd="12dp"
+    android:layout_width="130dp"
+    android:layout_height="160dp"
+    android:layout_marginEnd="10dp"
     android:background="@drawable/card_focus_selector"
     android:clickable="true"
     android:focusable="true"
     android:orientation="vertical"
-    android:padding="6dp">
+    android:padding="5dp">
 
     <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="145dp">
+        android:layout_height="115dp"
+        android:background="#151515">
 
         <ImageView
             android:id="@+id/imgHistoryPoster"
@@ -35,12 +36,12 @@
         android:id="@+id/txtHistoryTitle"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="5dp"
+        android:layout_marginTop="4dp"
         android:ellipsize="end"
         android:maxLines="1"
         android:text="Titel"
         android:textColor="@color/text_primary"
-        android:textSize="12sp"
+        android:textSize="11sp"
         android:textStyle="bold" />
 
     <TextView
@@ -52,6 +53,6 @@
         android:maxLines="1"
         android:text="00:35:10"
         android:textColor="@color/text_secondary"
-        android:textSize="10sp" />
+        android:textSize="9.5sp" />
 
 </LinearLayout>
