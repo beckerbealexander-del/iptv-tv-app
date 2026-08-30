@@ -40,6 +40,7 @@ class LiveTvActivity : AppCompatActivity() {
     private var currentFilter = LangFilter.AUTO_DE_RU_ADULT
     private var currentStreams: List<LiveStream> = emptyList()
     private var selectedCategoryId: String? = null
+    private val epgCache = HashMap<Int, List<EpgProgram>>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -54,13 +55,13 @@ class LiveTvActivity : AppCompatActivity() {
         binding.recyclerCategories.apply {
             layoutManager = LinearLayoutManager(this@LiveTvActivity)
             setHasFixedSize(true)
-            setItemViewCacheSize(30)
+            setItemViewCacheSize(40)
         }
 
         binding.recyclerChannels.apply {
             layoutManager = LinearLayoutManager(this@LiveTvActivity)
             setHasFixedSize(true)
-            setItemViewCacheSize(40)
+            setItemViewCacheSize(50)
         }
 
         setupFilterButtons()
@@ -144,9 +145,16 @@ class LiveTvActivity : AppCompatActivity() {
             binding.txtPreviewTime.text = "${program.start} - ${program.end}"
             binding.txtPreviewDesc.text = if (program.description.isNotEmpty()) program.description else "Keine Programmbeschreibung vorhanden."
         } else {
-            binding.txtPreviewTitle.text = stream.name
-            binding.txtPreviewTime.text = "🔴 LIVE"
-            binding.txtPreviewDesc.text = "Drücke OK auf der Fernbedienung, um den Sender direkt zu starten."
+            val cached = epgCache[stream.streamId]?.firstOrNull { it.isNowPlaying } ?: epgCache[stream.streamId]?.firstOrNull()
+            if (cached != null) {
+                binding.txtPreviewTitle.text = "${stream.name} – ${cached.title}"
+                binding.txtPreviewTime.text = "${cached.start} - ${cached.end}"
+                binding.txtPreviewDesc.text = if (cached.description.isNotEmpty()) cached.description else "Keine Programmbeschreibung vorhanden."
+            } else {
+                binding.txtPreviewTitle.text = stream.name
+                binding.txtPreviewTime.text = "🔴 LIVE"
+                binding.txtPreviewDesc.text = "Drücke OK auf der Fernbedienung, um den Sender direkt zu starten."
+            }
         }
     }
 
@@ -233,7 +241,9 @@ class LiveTvActivity : AppCompatActivity() {
             }
 
             holder.header.setOnFocusChangeListener { _, hasFocus ->
-                if (hasFocus) showChannelPreview(s, null)
+                if (hasFocus) {
+                    showChannelPreview(s, null)
+                }
             }
 
             holder.recyclerPrograms.apply {
@@ -241,14 +251,20 @@ class LiveTvActivity : AppCompatActivity() {
                 setHasFixedSize(true)
             }
 
-            // EPG-Zeitstrahl für diesen Sender laden (Vergangenheit bis Zukunft)
-            lifecycleScope.launch {
-                val epgList = client.getEpg(s.streamId)
-                if (epgList.isNotEmpty()) {
-                    holder.recyclerPrograms.adapter = ProgramTimelineAdapter(s, position, epgList)
-                } else {
-                    val fallback = listOf(EpgProgram("Keine Information", "", "16:00", "23:59", true))
-                    holder.recyclerPrograms.adapter = ProgramTimelineAdapter(s, position, fallback)
+            // Gecachte EPG-Daten sofort anzeigen
+            val cached = epgCache[s.streamId]
+            if (cached != null) {
+                holder.recyclerPrograms.adapter = ProgramTimelineAdapter(s, position, cached)
+            } else {
+                val fallback = listOf(EpgProgram("Lade EPG...", "", "16:00", "23:59", true))
+                holder.recyclerPrograms.adapter = ProgramTimelineAdapter(s, position, fallback)
+
+                lifecycleScope.launch {
+                    val epgList = client.getEpg(s.streamId)
+                    if (epgList.isNotEmpty()) {
+                        epgCache[s.streamId] = epgList
+                        holder.recyclerPrograms.adapter = ProgramTimelineAdapter(s, position, epgList)
+                    }
                 }
             }
         }

@@ -35,6 +35,7 @@
                 android:layout_height="30dp"
                 android:layout_weight="1"
                 android:background="@drawable/card_focus_selector"
+                android:nextFocusDown="@+id/recyclerCategories"
                 android:text="🇩🇪 DE"
                 android:textColor="@color/text_primary"
                 android:textSize="10sp"
@@ -46,6 +47,7 @@
                 android:layout_height="30dp"
                 android:layout_weight="1"
                 android:background="@drawable/card_focus_selector"
+                android:nextFocusDown="@+id/recyclerCategories"
                 android:text="🇷🇺 RU"
                 android:textColor="@color/text_primary"
                 android:textSize="10sp"
@@ -57,6 +59,7 @@
                 android:layout_height="30dp"
                 android:layout_weight="1"
                 android:background="@drawable/card_focus_selector"
+                android:nextFocusDown="@+id/recyclerCategories"
                 android:text="🔞 XXX"
                 android:textColor="@color/text_primary"
                 android:textSize="10sp"
@@ -68,6 +71,7 @@
                 android:layout_height="30dp"
                 android:layout_weight="1"
                 android:background="@drawable/card_focus_selector"
+                android:nextFocusDown="@+id/recyclerCategories"
                 android:text="🌍 Alle"
                 android:textColor="@color/text_primary"
                 android:textSize="10sp" />
@@ -83,7 +87,10 @@
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/recyclerCategories"
             android:layout_width="match_parent"
-            android:layout_height="match_parent" />
+            android:layout_height="match_parent"
+            android:descendantFocusability="afterDescendants"
+            android:nextFocusRight="@+id/recyclerChannels"
+            android:nextFocusUp="@+id/btnLiveFilterDe" />
     </LinearLayout>
 
     <!-- Rechte Spalte: TiviMate Style EPG Timeline Grid -->
@@ -155,6 +162,8 @@
                 android:layout_height="36dp"
                 android:background="@drawable/card_focus_selector"
                 android:hint="🔍 Sender suchen..."
+                android:nextFocusDown="@+id/recyclerChannels"
+                android:nextFocusLeft="@+id/recyclerCategories"
                 android:textColor="@color/text_primary"
                 android:textColorHint="@color/text_secondary"
                 android:textSize="12sp"
@@ -176,7 +185,7 @@
 
             <TextView
                 android:id="@+id/txtCurrentLiveTime"
-                android:layout_width="200dp"
+                android:layout_width="210dp"
                 android:layout_height="wrap_content"
                 android:text="🔴 LIVE TV GUIDE"
                 android:textColor="@color/netflix_red"
@@ -221,7 +230,10 @@
             android:id="@+id/recyclerChannels"
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_weight="1" />
+            android:layout_weight="1"
+            android:descendantFocusability="afterDescendants"
+            android:nextFocusLeft="@+id/recyclerCategories"
+            android:nextFocusUp="@+id/editLiveSearch" />
     </LinearLayout>
 
 </LinearLayout>
