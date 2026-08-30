@@ -15,6 +15,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.alex.iptvplayer.R
 import com.alex.iptvplayer.data.Category
+import com.alex.iptvplayer.data.LangFilter
 import com.alex.iptvplayer.data.VodStream
 import com.alex.iptvplayer.data.XtreamClient
 import com.alex.iptvplayer.databinding.ActivityVodBinding
@@ -26,6 +27,8 @@ class VodActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityVodBinding
     private lateinit var client: XtreamClient
+    private var allCategories: List<Category> = emptyList()
+    private var currentFilter = LangFilter.AUTO_DE_RU_ADULT
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -34,7 +37,6 @@ class VodActivity : AppCompatActivity() {
 
         client = XtreamClient(this)
 
-        // Hardware-optimierte RecyclerViews gegen Lags
         binding.recyclerVodCategories.apply {
             layoutManager = LinearLayoutManager(this@VodActivity)
             setHasFixedSize(true)
@@ -47,20 +49,37 @@ class VodActivity : AppCompatActivity() {
             setItemViewCacheSize(30)
         }
 
+        setupFilterButtons()
         loadCategories()
     }
 
+    private fun setupFilterButtons() {
+        binding.btnVodFilterDe.setOnClickListener { applyFilter(LangFilter.DE) }
+        binding.btnVodFilterRu.setOnClickListener { applyFilter(LangFilter.RU) }
+        binding.btnVodFilterAdult.setOnClickListener { applyFilter(LangFilter.ADULT) }
+        binding.btnVodFilterAll.setOnClickListener { applyFilter(LangFilter.ALL) }
+    }
+
+    private fun applyFilter(filter: LangFilter) {
+        currentFilter = filter
+        val filtered = client.filterCategories(allCategories, filter)
+        binding.recyclerVodCategories.adapter = VodCategoryAdapter(filtered) { cat ->
+            loadMovies(cat)
+        }
+        if (filtered.isNotEmpty()) {
+            loadMovies(filtered[0])
+        }
+    }
+
     private fun loadCategories() {
+        binding.progressVodCats.visibility = View.VISIBLE
         lifecycleScope.launch {
             try {
-                val cats = client.getVodCategories()
-                binding.recyclerVodCategories.adapter = VodCategoryAdapter(cats) { category ->
-                    loadMovies(category)
-                }
-                if (cats.isNotEmpty()) {
-                    loadMovies(cats[0])
-                }
+                allCategories = client.getVodCategories()
+                binding.progressVodCats.visibility = View.GONE
+                applyFilter(currentFilter)
             } catch (e: Exception) {
+                binding.progressVodCats.visibility = View.GONE
                 Toast.makeText(this@VodActivity, "Fehler: ${e.message}", Toast.LENGTH_SHORT).show()
             }
         }
@@ -73,13 +92,35 @@ class VodActivity : AppCompatActivity() {
             try {
                 val movies = client.getVodStreams(category.id)
                 binding.progressVod.visibility = View.GONE
-                binding.recyclerVodGrid.adapter = MovieAdapter(movies) { movie ->
+                binding.recyclerVodGrid.adapter = MovieAdapter(movies, { movie ->
+                    updateHeroBanner(movie)
+                }, { movie ->
                     playMovie(movie)
+                })
+
+                if (movies.isNotEmpty()) {
+                    updateHeroBanner(movies[0])
                 }
             } catch (e: Exception) {
                 binding.progressVod.visibility = View.GONE
                 Toast.makeText(this@VodActivity, "Fehler beim Laden: ${e.message}", Toast.LENGTH_SHORT).show()
             }
+        }
+    }
+
+    private fun updateHeroBanner(movie: VodStream) {
+        binding.txtHeroTitle.text = movie.name
+        binding.txtHeroRating.text = if (!movie.rating.isNullOrEmpty()) "⭐ ${movie.rating} | VOD" else "⭐ 8.0 | VOD"
+
+        if (!movie.streamIcon.isNullOrEmpty()) {
+            Glide.with(this)
+                .load(movie.streamIcon)
+                .override(180, 260)
+                .diskCacheStrategy(DiskCacheStrategy.ALL)
+                .placeholder(R.drawable.tv_banner)
+                .into(binding.imgHeroPoster)
+        } else {
+            binding.imgHeroPoster.setImageResource(R.drawable.tv_banner)
         }
     }
 
@@ -108,8 +149,6 @@ class VodActivity : AppCompatActivity() {
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val cat = items[position]
             holder.txtName.text = cat.name
-
-            // Kategorie nur bei echtem Klick laden, verhindert Scroll-Lags
             holder.itemView.setOnClickListener { onSelect(cat) }
             holder.itemView.setOnFocusChangeListener { _, hasFocus ->
                 if (hasFocus) onSelect(cat)
@@ -121,6 +160,7 @@ class VodActivity : AppCompatActivity() {
 
     inner class MovieAdapter(
         private val items: List<VodStream>,
+        private val onFocus: (VodStream) -> Unit,
         private val onClick: (VodStream) -> Unit
     ) : RecyclerView.Adapter<MovieAdapter.ViewHolder>() {
 
@@ -138,7 +178,6 @@ class VodActivity : AppCompatActivity() {
             val movie = items[position]
             holder.txtTitle.text = movie.name
 
-            // Performance-optimiertes Laden mit kleinem Thumbnail & Cache
             if (!movie.streamIcon.isNullOrEmpty()) {
                 Glide.with(holder.itemView)
                     .load(movie.streamIcon)
@@ -148,6 +187,10 @@ class VodActivity : AppCompatActivity() {
                     .into(holder.imgPoster)
             } else {
                 holder.imgPoster.setImageResource(R.drawable.tv_banner)
+            }
+
+            holder.itemView.setOnFocusChangeListener { _, hasFocus ->
+                if (hasFocus) onFocus(movie)
             }
 
             holder.itemView.setOnClickListener { onClick(movie) }

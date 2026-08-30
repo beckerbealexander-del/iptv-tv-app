@@ -15,6 +15,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.alex.iptvplayer.R
 import com.alex.iptvplayer.data.Category
+import com.alex.iptvplayer.data.LangFilter
 import com.alex.iptvplayer.data.SeriesItem
 import com.alex.iptvplayer.data.XtreamClient
 import com.alex.iptvplayer.databinding.ActivitySeriesBinding
@@ -26,6 +27,8 @@ class SeriesActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivitySeriesBinding
     private lateinit var client: XtreamClient
+    private var allCategories: List<Category> = emptyList()
+    private var currentFilter = LangFilter.AUTO_DE_RU_ADULT
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -46,20 +49,37 @@ class SeriesActivity : AppCompatActivity() {
             setItemViewCacheSize(30)
         }
 
+        setupFilterButtons()
         loadCategories()
     }
 
+    private fun setupFilterButtons() {
+        binding.btnSeriesFilterDe.setOnClickListener { applyFilter(LangFilter.DE) }
+        binding.btnSeriesFilterRu.setOnClickListener { applyFilter(LangFilter.RU) }
+        binding.btnSeriesFilterAdult.setOnClickListener { applyFilter(LangFilter.ADULT) }
+        binding.btnSeriesFilterAll.setOnClickListener { applyFilter(LangFilter.ALL) }
+    }
+
+    private fun applyFilter(filter: LangFilter) {
+        currentFilter = filter
+        val filtered = client.filterCategories(allCategories, filter)
+        binding.recyclerSeriesCategories.adapter = SeriesCategoryAdapter(filtered) { cat ->
+            loadSeries(cat)
+        }
+        if (filtered.isNotEmpty()) {
+            loadSeries(filtered[0])
+        }
+    }
+
     private fun loadCategories() {
+        binding.progressSeriesCats.visibility = View.VISIBLE
         lifecycleScope.launch {
             try {
-                val cats = client.getSeriesCategories()
-                binding.recyclerSeriesCategories.adapter = SeriesCategoryAdapter(cats) { category ->
-                    loadSeries(category)
-                }
-                if (cats.isNotEmpty()) {
-                    loadSeries(cats[0])
-                }
+                allCategories = client.getSeriesCategories()
+                binding.progressSeriesCats.visibility = View.GONE
+                applyFilter(currentFilter)
             } catch (e: Exception) {
+                binding.progressSeriesCats.visibility = View.GONE
                 Toast.makeText(this@SeriesActivity, "Fehler: ${e.message}", Toast.LENGTH_SHORT).show()
             }
         }
@@ -72,13 +92,35 @@ class SeriesActivity : AppCompatActivity() {
             try {
                 val list = client.getSeries(category.id)
                 binding.progressSeries.visibility = View.GONE
-                binding.recyclerSeriesGrid.adapter = SeriesAdapter(list) { series ->
+                binding.recyclerSeriesGrid.adapter = SeriesAdapter(list, { series ->
+                    updateHeroBanner(series)
+                }, { series ->
                     openSeriesDetail(series)
+                })
+
+                if (list.isNotEmpty()) {
+                    updateHeroBanner(list[0])
                 }
             } catch (e: Exception) {
                 binding.progressSeries.visibility = View.GONE
                 Toast.makeText(this@SeriesActivity, "Fehler beim Laden: ${e.message}", Toast.LENGTH_SHORT).show()
             }
+        }
+    }
+
+    private fun updateHeroBanner(series: SeriesItem) {
+        binding.txtHeroSeriesTitle.text = series.name
+        binding.txtHeroSeriesRating.text = if (!series.rating.isNullOrEmpty()) "⭐ ${series.rating} | Staffeln & Folgen" else "⭐ 8.5 | Staffeln & Folgen"
+
+        if (!series.cover.isNullOrEmpty()) {
+            Glide.with(this)
+                .load(series.cover)
+                .override(180, 260)
+                .diskCacheStrategy(DiskCacheStrategy.ALL)
+                .placeholder(R.drawable.tv_banner)
+                .into(binding.imgHeroSeriesCover)
+        } else {
+            binding.imgHeroSeriesCover.setImageResource(R.drawable.tv_banner)
         }
     }
 
@@ -117,6 +159,7 @@ class SeriesActivity : AppCompatActivity() {
 
     inner class SeriesAdapter(
         private val items: List<SeriesItem>,
+        private val onFocus: (SeriesItem) -> Unit,
         private val onClick: (SeriesItem) -> Unit
     ) : RecyclerView.Adapter<SeriesAdapter.ViewHolder>() {
 
@@ -143,6 +186,10 @@ class SeriesActivity : AppCompatActivity() {
                     .into(holder.imgPoster)
             } else {
                 holder.imgPoster.setImageResource(R.drawable.tv_banner)
+            }
+
+            holder.itemView.setOnFocusChangeListener { _, hasFocus ->
+                if (hasFocus) onFocus(s)
             }
 
             holder.itemView.setOnClickListener { onClick(s) }

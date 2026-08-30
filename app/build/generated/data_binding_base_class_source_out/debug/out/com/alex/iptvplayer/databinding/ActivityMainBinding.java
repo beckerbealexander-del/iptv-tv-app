@@ -26,17 +26,21 @@ public final class ActivityMainBinding implements ViewBinding {
   public final FrameLayout cardMovies;
 
   @NonNull
+  public final FrameLayout cardSearch;
+
+  @NonNull
   public final FrameLayout cardSeries;
 
   @NonNull
   public final FrameLayout cardSettings;
 
   private ActivityMainBinding(@NonNull LinearLayout rootView, @NonNull FrameLayout cardLiveTv,
-      @NonNull FrameLayout cardMovies, @NonNull FrameLayout cardSeries,
-      @NonNull FrameLayout cardSettings) {
+      @NonNull FrameLayout cardMovies, @NonNull FrameLayout cardSearch,
+      @NonNull FrameLayout cardSeries, @NonNull FrameLayout cardSettings) {
     this.rootView = rootView;
     this.cardLiveTv = cardLiveTv;
     this.cardMovies = cardMovies;
+    this.cardSearch = cardSearch;
     this.cardSeries = cardSeries;
     this.cardSettings = cardSettings;
   }
@@ -80,6 +84,12 @@ public final class ActivityMainBinding implements ViewBinding {
         break missingId;
       }
 
+      id = R.id.cardSearch;
+      FrameLayout cardSearch = ViewBindings.findChildViewById(rootView, id);
+      if (cardSearch == null) {
+        break missingId;
+      }
+
       id = R.id.cardSeries;
       FrameLayout cardSeries = ViewBindings.findChildViewById(rootView, id);
       if (cardSeries == null) {
@@ -92,8 +102,8 @@ public final class ActivityMainBinding implements ViewBinding {
         break missingId;
       }
 
-      return new ActivityMainBinding((LinearLayout) rootView, cardLiveTv, cardMovies, cardSeries,
-          cardSettings);
+      return new ActivityMainBinding((LinearLayout) rootView, cardLiveTv, cardMovies, cardSearch,
+          cardSeries, cardSettings);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));

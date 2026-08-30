@@ -14,6 +14,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.alex.iptvplayer.R
 import com.alex.iptvplayer.data.Category
+import com.alex.iptvplayer.data.LangFilter
 import com.alex.iptvplayer.data.LiveStream
 import com.alex.iptvplayer.data.XtreamClient
 import com.alex.iptvplayer.databinding.ActivityLiveTvBinding
@@ -26,6 +27,8 @@ class LiveTvActivity : AppCompatActivity() {
     private lateinit var binding: ActivityLiveTvBinding
     private lateinit var client: XtreamClient
 
+    private var allCategories: List<Category> = emptyList()
+    private var currentFilter = LangFilter.AUTO_DE_RU_ADULT
     private var currentStreams: List<LiveStream> = emptyList()
     private var epgJob: Job? = null
 
@@ -36,24 +39,47 @@ class LiveTvActivity : AppCompatActivity() {
 
         client = XtreamClient(this)
 
-        binding.recyclerCategories.layoutManager = LinearLayoutManager(this)
-        binding.recyclerChannels.layoutManager = LinearLayoutManager(this)
+        binding.recyclerCategories.apply {
+            layoutManager = LinearLayoutManager(this@LiveTvActivity)
+            setHasFixedSize(true)
+            setItemViewCacheSize(25)
+        }
 
+        binding.recyclerChannels.apply {
+            layoutManager = LinearLayoutManager(this@LiveTvActivity)
+            setHasFixedSize(true)
+            setItemViewCacheSize(35)
+        }
+
+        setupFilterButtons()
         loadCategories()
+    }
+
+    private fun setupFilterButtons() {
+        binding.btnLiveFilterDe.setOnClickListener { applyFilter(LangFilter.DE) }
+        binding.btnLiveFilterRu.setOnClickListener { applyFilter(LangFilter.RU) }
+        binding.btnLiveFilterAdult.setOnClickListener { applyFilter(LangFilter.ADULT) }
+        binding.btnLiveFilterAll.setOnClickListener { applyFilter(LangFilter.ALL) }
+    }
+
+    private fun applyFilter(filter: LangFilter) {
+        currentFilter = filter
+        val filtered = client.filterCategories(allCategories, filter)
+        binding.recyclerCategories.adapter = CategoryAdapter(filtered) { category ->
+            loadChannels(category)
+        }
+        if (filtered.isNotEmpty()) {
+            loadChannels(filtered[0])
+        }
     }
 
     private fun loadCategories() {
         binding.progressCategories.visibility = View.VISIBLE
         lifecycleScope.launch {
             try {
-                val cats = client.getLiveCategories()
+                allCategories = client.getLiveCategories()
                 binding.progressCategories.visibility = View.GONE
-                binding.recyclerCategories.adapter = CategoryAdapter(cats) { category ->
-                    loadChannels(category)
-                }
-                if (cats.isNotEmpty()) {
-                    loadChannels(cats[0])
-                }
+                applyFilter(currentFilter)
             } catch (e: Exception) {
                 binding.progressCategories.visibility = View.GONE
                 Toast.makeText(this@LiveTvActivity, "Fehler beim Laden: ${e.message}", Toast.LENGTH_LONG).show()
@@ -73,6 +99,10 @@ class LiveTvActivity : AppCompatActivity() {
                 }, { stream, position ->
                     openFullscreenPlayer(stream, position)
                 })
+
+                if (currentStreams.isNotEmpty()) {
+                    showChannelDetailAndEpg(currentStreams[0])
+                }
             } catch (e: Exception) {
                 binding.progressChannels.visibility = View.GONE
                 Toast.makeText(this@LiveTvActivity, "Fehler beim Laden der Sender: ${e.message}", Toast.LENGTH_SHORT).show()
@@ -84,7 +114,7 @@ class LiveTvActivity : AppCompatActivity() {
         binding.txtDetailName.text = stream.name
 
         if (!stream.streamIcon.isNullOrEmpty()) {
-            Glide.with(this).load(stream.streamIcon).into(binding.imgDetailLogo)
+            Glide.with(this).load(stream.streamIcon).override(100, 100).into(binding.imgDetailLogo)
         } else {
             binding.imgDetailLogo.setImageResource(R.drawable.tv_banner)
         }
@@ -131,7 +161,6 @@ class LiveTvActivity : AppCompatActivity() {
         startActivity(intent)
     }
 
-    // --- Adapter für Kategorien ---
     inner class CategoryAdapter(
         private val items: List<Category>,
         private val onSelect: (Category) -> Unit
@@ -149,8 +178,6 @@ class LiveTvActivity : AppCompatActivity() {
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val cat = items[position]
             holder.txtName.text = cat.name
-
-            // Wechseln der Kategorie per Klick oder Tastendruck
             holder.itemView.setOnClickListener { onSelect(cat) }
             holder.itemView.setOnFocusChangeListener { _, hasFocus ->
                 if (hasFocus) onSelect(cat)
@@ -160,7 +187,6 @@ class LiveTvActivity : AppCompatActivity() {
         override fun getItemCount() = items.size
     }
 
-    // --- Adapter für Sender ---
     inner class ChannelAdapter(
         private val items: List<LiveStream>,
         private val onFocus: (LiveStream) -> Unit,
@@ -182,17 +208,15 @@ class LiveTvActivity : AppCompatActivity() {
             holder.txtName.text = s.name
 
             if (!s.streamIcon.isNullOrEmpty()) {
-                Glide.with(holder.itemView).load(s.streamIcon).into(holder.imgLogo)
+                Glide.with(holder.itemView).load(s.streamIcon).override(80, 80).into(holder.imgLogo)
             } else {
                 holder.imgLogo.setImageResource(R.drawable.tv_banner)
             }
 
-            // Beim Scrollen / Fokus: Nur Details & EPG rechts aktualisieren, KEINE Wiedergabe
             holder.itemView.setOnFocusChangeListener { _, hasFocus ->
                 if (hasFocus) onFocus(s)
             }
 
-            // Erst beim echten Klick / OK-Druck startet der Stream im Vollbild!
             holder.itemView.setOnClickListener { onClick(s, position) }
         }
 

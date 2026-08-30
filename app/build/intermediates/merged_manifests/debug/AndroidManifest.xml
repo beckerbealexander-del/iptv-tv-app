@@ -51,6 +51,10 @@
             </intent-filter>
         </activity>
         <activity
+            android:name="com.alex.iptvplayer.ui.SearchActivity"
+            android:exported="false"
+            android:screenOrientation="landscape" />
+        <activity
             android:name="com.alex.iptvplayer.ui.LiveTvActivity"
             android:exported="false"
             android:screenOrientation="landscape" />

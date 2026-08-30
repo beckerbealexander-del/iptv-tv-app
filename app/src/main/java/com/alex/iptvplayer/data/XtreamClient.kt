@@ -11,6 +11,14 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.TimeUnit
 
+enum class LangFilter {
+    AUTO_DE_RU_ADULT, // Standard: Nur Deutsch, Russisch & Adult (XXX)
+    DE,               // Nur Deutsch
+    RU,               // Nur Russisch
+    ADULT,            // Nur Adult (XXX)
+    ALL               // Alle Kategorien weltweit
+}
+
 class XtreamClient(context: Context) {
 
     private val prefs: SharedPreferences =
@@ -40,7 +48,7 @@ class XtreamClient(context: Context) {
         return "$serverUrl/player_api.php?username=$username&password=$password&action=$action$extraParams"
     }
 
-    // Stream URLs für den ExoPlayer (direkt vom Anbieter)
+    // Stream URLs für den ExoPlayer
     fun getLiveStreamUrl(streamId: Int): String {
         return "$serverUrl/live/$username/$password/$streamId.ts"
     }
@@ -53,7 +61,41 @@ class XtreamClient(context: Context) {
         return "$serverUrl/series/$username/$password/$streamId.$extension"
     }
 
-    // 1. Live TV (Original-Kategorien in Original-Reihenfolge)
+    // Filter-Logik für Kategorien
+    fun filterCategories(categories: List<Category>, filter: LangFilter): List<Category> {
+        return when (filter) {
+            LangFilter.DE -> categories.filter { isGerman(it.name) }
+            LangFilter.RU -> categories.filter { isRussian(it.name) }
+            LangFilter.ADULT -> categories.filter { isAdult(it.name) }
+            LangFilter.AUTO_DE_RU_ADULT -> categories.filter { isGerman(it.name) || isRussian(it.name) || isAdult(it.name) }
+            LangFilter.ALL -> categories
+        }
+    }
+
+    private fun isGerman(name: String): Boolean {
+        val u = name.uppercase()
+        if (u.contains("SUBS") || u.contains("OMU") || u.contains("SUB ENG")) return false
+        return u.startsWith("DE|") || u.startsWith("DE:") || u.startsWith("DE -") || u.startsWith("DE ") ||
+                u.startsWith("AT|") || u.startsWith("AT:") || u.startsWith("AT -") ||
+                u.contains("GERMANY") || u.contains("AUSTRIA") || u.contains("DEUTSCH") ||
+                u.contains("SKY ") || u.contains("DAZN") || u.contains("MAGENTA") ||
+                u.contains("JOYN") || u.contains("RTL+") || u.contains("WOW ")
+    }
+
+    private fun isRussian(name: String): Boolean {
+        val u = name.uppercase()
+        return u.startsWith("RU|") || u.startsWith("RU:") || u.startsWith("RU -") || u.startsWith("RU ") ||
+                u.contains("RUSSIAN") || u.contains("RUSSAIN") || u.contains("RUSSIA")
+    }
+
+    private fun isAdult(name: String): Boolean {
+        val u = name.uppercase()
+        if (u.contains("ADULT SWIM") || u.contains("ADULT_SWIM")) return false
+        return u.contains("FOR ADULTS") || u.contains("ADULT") || u.contains("XXX") ||
+                u.contains("18+") || u.contains("PORN") || u.contains("EROTIC")
+    }
+
+    // 1. Live TV
     suspend fun getLiveCategories(): List<Category> = withContext(Dispatchers.IO) {
         val url = buildApiUrl("get_live_categories")
         val json = executeGet(url)
@@ -102,7 +144,7 @@ class XtreamClient(context: Context) {
         }
     }
 
-    // 2. VOD Filme (Original-Kategorien)
+    // 2. VOD Filme
     suspend fun getVodCategories(): List<Category> = withContext(Dispatchers.IO) {
         val url = buildApiUrl("get_vod_categories")
         val json = executeGet(url)
@@ -118,7 +160,7 @@ class XtreamClient(context: Context) {
         gson.fromJson(json, type) ?: emptyList()
     }
 
-    // 3. Serien (Original-Kategorien)
+    // 3. Serien
     suspend fun getSeriesCategories(): List<Category> = withContext(Dispatchers.IO) {
         val url = buildApiUrl("get_series_categories")
         val json = executeGet(url)

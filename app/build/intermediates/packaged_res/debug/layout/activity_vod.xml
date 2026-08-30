@@ -5,7 +5,7 @@
     android:background="@color/bg_dark"
     android:orientation="horizontal">
 
-    <!-- Kategorien links -->
+    <!-- Linke Spalte: Filter & Kategorien -->
     <LinearLayout
         android:layout_width="280dp"
         android:layout_height="match_parent"
@@ -22,13 +22,71 @@
             android:textStyle="bold"
             android:layout_marginBottom="12dp" />
 
+        <!-- Schnellauswahl Filter-Buttons -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="12dp">
+
+            <Button
+                android:id="@+id/btnVodFilterDe"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:background="@drawable/card_focus_selector"
+                android:text="🇩🇪 DE"
+                android:textColor="@color/text_primary"
+                android:textSize="11sp"
+                android:layout_marginEnd="4dp" />
+
+            <Button
+                android:id="@+id/btnVodFilterRu"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:background="@drawable/card_focus_selector"
+                android:text="🇷🇺 RU"
+                android:textColor="@color/text_primary"
+                android:textSize="11sp"
+                android:layout_marginEnd="4dp" />
+
+            <Button
+                android:id="@+id/btnVodFilterAdult"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:background="@drawable/card_focus_selector"
+                android:text="🔞 XXX"
+                android:textColor="@color/text_primary"
+                android:textSize="11sp"
+                android:layout_marginEnd="4dp" />
+
+            <Button
+                android:id="@+id/btnVodFilterAll"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:background="@drawable/card_focus_selector"
+                android:text="🌍 Alle"
+                android:textColor="@color/text_primary"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <ProgressBar
+            android:id="@+id/progressVodCats"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:visibility="gone" />
+
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/recyclerVodCategories"
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
     </LinearLayout>
 
-    <!-- Filme Grid rechts -->
+    <!-- Rechte Spalte: Netflix Hero Banner & Movie Grid -->
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="match_parent"
@@ -36,15 +94,72 @@
         android:orientation="vertical"
         android:padding="20dp">
 
+        <!-- Hero Banner des fokussierten Films -->
+        <LinearLayout
+            android:id="@+id/vodHeroBanner"
+            android:layout_width="match_parent"
+            android:layout_height="140dp"
+            android:background="#161B22"
+            android:orientation="horizontal"
+            android:padding="16dp"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="16dp">
+
+            <ImageView
+                android:id="@+id/imgHeroPoster"
+                android:layout_width="85dp"
+                android:layout_height="120dp"
+                android:scaleType="centerCrop"
+                android:src="@drawable/tv_banner"
+                android:layout_marginEnd="16dp" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/txtHeroTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text="Filmtitel"
+                    android:textColor="@color/text_primary"
+                    android:textSize="22sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/txtHeroRating"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="⭐ 8.2 | VOD"
+                    android:textColor="@color/accent_gold"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/txtHeroHint"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="▶ Drücke OK zum Abspielen"
+                    android:textColor="@color/accent_blue"
+                    android:textSize="13sp" />
+            </LinearLayout>
+        </LinearLayout>
+
         <TextView
             android:id="@+id/txtVodCategoryTitle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Filme"
             android:textColor="@color/text_primary"
-            android:textSize="24sp"
+            android:textSize="20sp"
             android:textStyle="bold"
-            android:layout_marginBottom="16dp" />
+            android:layout_marginBottom="12dp" />
 
         <ProgressBar
             android:id="@+id/progressVod"

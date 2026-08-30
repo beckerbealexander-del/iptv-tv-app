@@ -14,6 +14,11 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // 0. Globale Suche
+        binding.cardSearch.setOnClickListener {
+            startActivity(Intent(this, SearchActivity::class.java))
+        }
+
         // 1. Live TV
         binding.cardLiveTv.setOnClickListener {
             startActivity(Intent(this, LiveTvActivity::class.java))
