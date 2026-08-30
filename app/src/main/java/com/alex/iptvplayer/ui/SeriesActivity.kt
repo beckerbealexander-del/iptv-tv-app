@@ -62,7 +62,7 @@ class SeriesActivity : AppCompatActivity() {
         binding.recyclerSeriesGrid.apply {
             layoutManager = GridLayoutManager(this@SeriesActivity, 5)
             setHasFixedSize(true)
-            setItemViewCacheSize(60)
+            setItemViewCacheSize(80)
         }
 
         setupFilterButtons()
@@ -70,7 +70,6 @@ class SeriesActivity : AppCompatActivity() {
         loadCategories()
         preloadGlobalCatalog()
 
-        // Tastatur beim Start NICHT öffnen
         binding.recyclerSeriesCategories.post {
             binding.recyclerSeriesCategories.requestFocus()
         }
@@ -87,7 +86,6 @@ class SeriesActivity : AppCompatActivity() {
     }
 
     private fun setupSearch() {
-        // Tastatur erst öffnen wenn aktiv auf die Suche geklickt wird
         binding.editSeriesSearch.isFocusableInTouchMode = false
         binding.editSeriesSearch.setOnClickListener {
             binding.editSeriesSearch.isFocusableInTouchMode = true
@@ -96,7 +94,6 @@ class SeriesActivity : AppCompatActivity() {
             imm.showSoftInput(binding.editSeriesSearch, InputMethodManager.SHOW_IMPLICIT)
         }
 
-        // Tastatur schließen bei Bestätigung
         binding.editSeriesSearch.setOnEditorActionListener { _, actionId, event ->
             if (actionId == EditorInfo.IME_ACTION_SEARCH || actionId == EditorInfo.IME_ACTION_DONE || actionId == EditorInfo.IME_ACTION_GO ||
                 (event != null && event.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN)) {
@@ -121,7 +118,18 @@ class SeriesActivity : AppCompatActivity() {
                             openSeriesDetail(series)
                         })
                     } else {
-                        val pool = if (allSeriesGlobal.isNotEmpty()) allSeriesGlobal else currentSeries
+                        // Sprachfilter auf globale Suche anwenden (z.B. nur deutsche Serien bei DE Filter)
+                        val allowedCategoryIds = if (currentFilter == LangFilter.ALL) null
+                        else client.filterCategories(allCategories, currentFilter).map { it.id }.toSet()
+
+                        val pool = if (allowedCategoryIds != null && allSeriesGlobal.isNotEmpty()) {
+                            allSeriesGlobal.filter { allowedCategoryIds.contains(it.categoryId) }
+                        } else if (allSeriesGlobal.isNotEmpty()) {
+                            allSeriesGlobal
+                        } else {
+                            currentSeries
+                        }
+
                         val filtered = pool.filter { it.name.contains(q, ignoreCase = true) }
                         binding.txtSeriesCategoryTitle.text = "Suchergebnisse (${filtered.size})"
                         binding.recyclerSeriesGrid.adapter = SeriesAdapter(filtered, { series ->
@@ -178,7 +186,6 @@ class SeriesActivity : AppCompatActivity() {
     }
 
     private fun loadSeries(category: Category) {
-        // Suche bei Kategorie-Klick sofort beenden
         if (binding.editSeriesSearch.text.isNotEmpty()) {
             binding.editSeriesSearch.setText("")
             hideKeyboard()
@@ -189,7 +196,6 @@ class SeriesActivity : AppCompatActivity() {
 
         binding.txtSeriesCategoryTitle.text = category.name
 
-        // Blitzschnelles Umschalten über Cache (0ms Wartezeit)
         val cached = categoryCache[category.id]
         if (cached != null) {
             currentSeries = cached
@@ -260,7 +266,7 @@ class SeriesActivity : AppCompatActivity() {
         startActivity(intent)
     }
 
-    // --- Absolute Fokus-Verriegelung: In der Titelauswahl bleibt der Cursor 100% in der Grid ---
+    // --- Absolute Hard-Lock D-Pad Navigation in der Grid ---
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.action == KeyEvent.ACTION_DOWN) {
             val focused = currentFocus
@@ -272,22 +278,43 @@ class SeriesActivity : AppCompatActivity() {
 
                 when (event.keyCode) {
                     KeyEvent.KEYCODE_BACK -> {
-                        // Wechsel zurück zur Kategorie-Auswahl
                         val catHolder = binding.recyclerSeriesCategories.findViewHolderForAdapterPosition(0)
                         catHolder?.itemView?.requestFocus() ?: binding.recyclerSeriesCategories.requestFocus()
                         return true
                     }
-                    KeyEvent.KEYCODE_DPAD_LEFT -> {
-                        if (gridPos % 5 == 0) return true // Blockiert Ausbrechen nach links
-                    }
-                    KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                        if (gridPos % 5 == 4 || gridPos == total - 1) return true // Blockiert Ausbrechen nach rechts
+                    KeyEvent.KEYCODE_DPAD_DOWN -> {
+                        val nextPos = gridPos + 5
+                        if (nextPos < total) {
+                            binding.recyclerSeriesGrid.scrollToPosition(nextPos)
+                            binding.recyclerSeriesGrid.post {
+                                binding.recyclerSeriesGrid.findViewHolderForAdapterPosition(nextPos)?.itemView?.requestFocus()
+                            }
+                        }
+                        return true
                     }
                     KeyEvent.KEYCODE_DPAD_UP -> {
-                        if (gridPos < 5) return true // Blockiert Ausbrechen nach oben
+                        val prevPos = gridPos - 5
+                        if (prevPos >= 0) {
+                            binding.recyclerSeriesGrid.scrollToPosition(prevPos)
+                            binding.recyclerSeriesGrid.post {
+                                binding.recyclerSeriesGrid.findViewHolderForAdapterPosition(prevPos)?.itemView?.requestFocus()
+                            }
+                        }
+                        return true
                     }
-                    KeyEvent.KEYCODE_DPAD_DOWN -> {
-                        if (gridPos >= total - 5) return true // Blockiert Ausbrechen nach unten
+                    KeyEvent.KEYCODE_DPAD_LEFT -> {
+                        if (gridPos % 5 > 0) {
+                            val target = gridPos - 1
+                            binding.recyclerSeriesGrid.findViewHolderForAdapterPosition(target)?.itemView?.requestFocus()
+                        }
+                        return true
+                    }
+                    KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                        if (gridPos % 5 < 4 && gridPos < total - 1) {
+                            val target = gridPos + 1
+                            binding.recyclerSeriesGrid.findViewHolderForAdapterPosition(target)?.itemView?.requestFocus()
+                        }
+                        return true
                     }
                 }
             }

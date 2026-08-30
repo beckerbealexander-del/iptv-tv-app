@@ -41,6 +41,7 @@ class SeriesDetailActivity : AppCompatActivity() {
     private var autoPlay: Boolean = false
     private var hasAutoPlayed: Boolean = false
     private var currentSeasonIndex: Int = 0
+    private var currentSeasonNum: Int = 1
     private var historyList: List<HistoryItem> = emptyList()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -68,7 +69,7 @@ class SeriesDetailActivity : AppCompatActivity() {
         binding.recyclerEpisodes.apply {
             layoutManager = LinearLayoutManager(this@SeriesDetailActivity)
             setHasFixedSize(true)
-            setItemViewCacheSize(30)
+            setItemViewCacheSize(40)
         }
 
         if (seriesItem != null) {
@@ -89,6 +90,24 @@ class SeriesDetailActivity : AppCompatActivity() {
         super.onResume()
         historyList = historyManager.getHistory()
         binding.recyclerEpisodes.adapter?.notifyDataSetChanged()
+
+        // Zuletzt gesehene Folge markieren / fokussieren
+        val sName = seriesItem?.name ?: seriesInfo?.info?.name
+        val match = historyList.firstOrNull { 
+            (seriesId > 0 && it.streamId == seriesId) || 
+            (!sName.isNullOrEmpty() && it.title.startsWith(sName))
+        }
+        if (match != null && seriesInfo != null) {
+            val epList = seriesInfo?.episodes?.get(currentSeasonNum.toString()) ?: emptyList()
+            val epIdx = epList.indexOfFirst { it.season == match.season && it.episodeNum == match.episodeNum }
+            if (epIdx >= 0) {
+                binding.recyclerEpisodes.scrollToPosition(epIdx)
+                binding.recyclerEpisodes.post {
+                    val holder = binding.recyclerEpisodes.findViewHolderForAdapterPosition(epIdx)
+                    holder?.itemView?.requestFocus()
+                }
+            }
+        }
     }
 
     private fun resolveSeriesByNameAndLoad(title: String) {
@@ -163,11 +182,13 @@ class SeriesDetailActivity : AppCompatActivity() {
 
                 val seasons = info.seasons ?: emptyList()
                 val initialSeasonNum = if (targetSeason > 0) targetSeason else (seasons.firstOrNull()?.seasonNumber ?: 1)
+                currentSeasonNum = initialSeasonNum
                 currentSeasonIndex = seasons.indexOfFirst { it.seasonNumber == initialSeasonNum }.coerceAtLeast(0)
 
                 if (seasons.isNotEmpty()) {
                     binding.recyclerSeasons.adapter = SeasonAdapter(seasons) { season, idx ->
                         currentSeasonIndex = idx
+                        currentSeasonNum = season.seasonNumber
                         loadEpisodesForSeason(season.seasonNumber, requestFocusOnEpisode = false)
                     }
                     loadEpisodesForSeason(initialSeasonNum, requestFocusOnEpisode = true)
@@ -184,6 +205,7 @@ class SeriesDetailActivity : AppCompatActivity() {
     }
 
     private fun loadEpisodesForSeason(seasonNum: Int, requestFocusOnEpisode: Boolean) {
+        currentSeasonNum = seasonNum
         val epList = seriesInfo?.episodes?.get(seasonNum.toString()) ?: emptyList()
         displayEpisodes(epList, requestFocusOnEpisode)
     }
@@ -228,6 +250,58 @@ class SeriesDetailActivity : AppCompatActivity() {
         startActivity(intent)
     }
 
+    private fun focusCurrentSeasonTab() {
+        binding.recyclerSeasons.scrollToPosition(currentSeasonIndex)
+        binding.recyclerSeasons.post {
+            val seasonHolder = binding.recyclerSeasons.findViewHolderForAdapterPosition(currentSeasonIndex)
+            seasonHolder?.itemView?.requestFocus() ?: binding.recyclerSeasons.requestFocus()
+        }
+    }
+
+    // --- Absolute Fokus-Verriegelung: In den Folgen kann der Cursor nicht seitlich in die Beschreibung ausbrechen ---
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.action == KeyEvent.ACTION_DOWN) {
+            val focused = currentFocus
+            val isEpisode = isViewInRecyclerView(focused, binding.recyclerEpisodes)
+
+            if (isEpisode) {
+                when (event.keyCode) {
+                    KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                        return true // Blockiert seitliches Ausbrechen in die linke Spalte
+                    }
+                    KeyEvent.KEYCODE_DPAD_UP -> {
+                        val epPos = getFocusedAdapterPosition(focused, binding.recyclerEpisodes)
+                        if (epPos == 0) {
+                            focusCurrentSeasonTab()
+                            return true
+                        }
+                    }
+                }
+            }
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
+    private fun isViewInRecyclerView(view: View?, rv: RecyclerView): Boolean {
+        var cur = view
+        while (cur != null) {
+            if (cur == rv) return true
+            val p = cur.parent
+            cur = p as? View
+        }
+        return false
+    }
+
+    private fun getFocusedAdapterPosition(view: View?, rv: RecyclerView): Int {
+        var cur = view
+        while (cur != null && cur != rv) {
+            val p = cur.parent
+            if (p == rv) return rv.getChildAdapterPosition(cur)
+            cur = p as? View
+        }
+        return -1
+    }
+
     inner class SeasonAdapter(
         private val seasons: List<SeasonItem>,
         private val onSelect: (SeasonItem, Int) -> Unit
@@ -245,13 +319,13 @@ class SeriesDetailActivity : AppCompatActivity() {
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val season = seasons[position]
             holder.txtName.text = season.name ?: "Staffel ${season.seasonNumber}"
+            holder.itemView.isSelected = (position == currentSeasonIndex)
 
             holder.itemView.setOnClickListener { onSelect(season, position) }
             holder.itemView.setOnFocusChangeListener { _, hasFocus ->
                 if (hasFocus) onSelect(season, position)
             }
 
-            // D-Pad Randbegrenzung: Beim schnellen Scrollen/Halten NIEMALS in die Episoden springen!
             holder.itemView.setOnKeyListener { _, keyCode, event ->
                 if (event.action == KeyEvent.ACTION_DOWN) {
                     if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && position == seasons.size - 1) {
@@ -336,8 +410,7 @@ class SeriesDetailActivity : AppCompatActivity() {
             holder.itemView.setOnKeyListener { _, keyCode, event ->
                 if (event.action == KeyEvent.ACTION_DOWN) {
                     if (keyCode == KeyEvent.KEYCODE_DPAD_UP && position == 0) {
-                        val seasonHolder = binding.recyclerSeasons.findViewHolderForAdapterPosition(currentSeasonIndex)
-                        seasonHolder?.itemView?.requestFocus() ?: binding.recyclerSeasons.requestFocus()
+                        focusCurrentSeasonTab()
                         return@setOnKeyListener true
                     }
                 }

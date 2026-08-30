@@ -62,7 +62,7 @@ class VodActivity : AppCompatActivity() {
         binding.recyclerVodGrid.apply {
             layoutManager = GridLayoutManager(this@VodActivity, 5)
             setHasFixedSize(true)
-            setItemViewCacheSize(60)
+            setItemViewCacheSize(80)
         }
 
         setupFilterButtons()
@@ -70,7 +70,6 @@ class VodActivity : AppCompatActivity() {
         loadCategories()
         preloadGlobalCatalog()
 
-        // Tastatur beim Start NICHT öffnen
         binding.recyclerVodCategories.post {
             binding.recyclerVodCategories.requestFocus()
         }
@@ -87,7 +86,6 @@ class VodActivity : AppCompatActivity() {
     }
 
     private fun setupSearch() {
-        // Tastatur erst öffnen wenn aktiv auf die Suche geklickt wird
         binding.editVodSearch.isFocusableInTouchMode = false
         binding.editVodSearch.setOnClickListener {
             binding.editVodSearch.isFocusableInTouchMode = true
@@ -96,7 +94,6 @@ class VodActivity : AppCompatActivity() {
             imm.showSoftInput(binding.editVodSearch, InputMethodManager.SHOW_IMPLICIT)
         }
 
-        // Tastatur schließen bei Bestätigung
         binding.editVodSearch.setOnEditorActionListener { _, actionId, event ->
             if (actionId == EditorInfo.IME_ACTION_SEARCH || actionId == EditorInfo.IME_ACTION_DONE || actionId == EditorInfo.IME_ACTION_GO ||
                 (event != null && event.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN)) {
@@ -121,7 +118,18 @@ class VodActivity : AppCompatActivity() {
                             playMovie(movie)
                         })
                     } else {
-                        val pool = if (allMoviesGlobal.isNotEmpty()) allMoviesGlobal else currentMovies
+                        // Sprachfilter auf globale Suche anwenden (z.B. nur deutsche Filme bei DE Filter)
+                        val allowedCategoryIds = if (currentFilter == LangFilter.ALL) null
+                        else client.filterCategories(allCategories, currentFilter).map { it.id }.toSet()
+
+                        val pool = if (allowedCategoryIds != null && allMoviesGlobal.isNotEmpty()) {
+                            allMoviesGlobal.filter { allowedCategoryIds.contains(it.categoryId) }
+                        } else if (allMoviesGlobal.isNotEmpty()) {
+                            allMoviesGlobal
+                        } else {
+                            currentMovies
+                        }
+
                         val filtered = pool.filter { it.name.contains(q, ignoreCase = true) }
                         binding.txtVodCategoryTitle.text = "Suchergebnisse (${filtered.size})"
                         binding.recyclerVodGrid.adapter = MovieAdapter(filtered, { movie ->
@@ -178,7 +186,6 @@ class VodActivity : AppCompatActivity() {
     }
 
     private fun loadMovies(category: Category) {
-        // Suche bei Kategorie-Klick sofort beenden
         if (binding.editVodSearch.text.isNotEmpty()) {
             binding.editVodSearch.setText("")
             hideKeyboard()
@@ -189,7 +196,6 @@ class VodActivity : AppCompatActivity() {
 
         binding.txtVodCategoryTitle.text = category.name
 
-        // Blitzschnelles Umschalten über Cache (0ms Wartezeit)
         val cached = categoryCache[category.id]
         if (cached != null) {
             currentMovies = cached
@@ -264,7 +270,7 @@ class VodActivity : AppCompatActivity() {
         startActivity(intent)
     }
 
-    // --- Absolute Fokus-Verriegelung: In der Titelauswahl bleibt der Cursor 100% in der Grid ---
+    // --- Absolute Hard-Lock D-Pad Navigation in der Grid ---
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.action == KeyEvent.ACTION_DOWN) {
             val focused = currentFocus
@@ -276,22 +282,43 @@ class VodActivity : AppCompatActivity() {
 
                 when (event.keyCode) {
                     KeyEvent.KEYCODE_BACK -> {
-                        // Wechsel zurück zur Kategorie-Auswahl
                         val catHolder = binding.recyclerVodCategories.findViewHolderForAdapterPosition(0)
                         catHolder?.itemView?.requestFocus() ?: binding.recyclerVodCategories.requestFocus()
                         return true
                     }
-                    KeyEvent.KEYCODE_DPAD_LEFT -> {
-                        if (gridPos % 5 == 0) return true // Blockiert Ausbrechen nach links
-                    }
-                    KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                        if (gridPos % 5 == 4 || gridPos == total - 1) return true // Blockiert Ausbrechen nach rechts
+                    KeyEvent.KEYCODE_DPAD_DOWN -> {
+                        val nextPos = gridPos + 5
+                        if (nextPos < total) {
+                            binding.recyclerVodGrid.scrollToPosition(nextPos)
+                            binding.recyclerVodGrid.post {
+                                binding.recyclerVodGrid.findViewHolderForAdapterPosition(nextPos)?.itemView?.requestFocus()
+                            }
+                        }
+                        return true
                     }
                     KeyEvent.KEYCODE_DPAD_UP -> {
-                        if (gridPos < 5) return true // Blockiert Ausbrechen nach oben
+                        val prevPos = gridPos - 5
+                        if (prevPos >= 0) {
+                            binding.recyclerVodGrid.scrollToPosition(prevPos)
+                            binding.recyclerVodGrid.post {
+                                binding.recyclerVodGrid.findViewHolderForAdapterPosition(prevPos)?.itemView?.requestFocus()
+                            }
+                        }
+                        return true
                     }
-                    KeyEvent.KEYCODE_DPAD_DOWN -> {
-                        if (gridPos >= total - 5) return true // Blockiert Ausbrechen nach unten
+                    KeyEvent.KEYCODE_DPAD_LEFT -> {
+                        if (gridPos % 5 > 0) {
+                            val target = gridPos - 1
+                            binding.recyclerVodGrid.findViewHolderForAdapterPosition(target)?.itemView?.requestFocus()
+                        }
+                        return true
+                    }
+                    KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                        if (gridPos % 5 < 4 && gridPos < total - 1) {
+                            val target = gridPos + 1
+                            binding.recyclerVodGrid.findViewHolderForAdapterPosition(target)?.itemView?.requestFocus()
+                        }
+                        return true
                     }
                 }
             }
