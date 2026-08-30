@@ -46,7 +46,7 @@ class LiveTvActivity : AppCompatActivity() {
     }
 
     private fun setupPlayer() {
-        exoPlayer = ExoPlayer.Builder(this).build()
+        exoPlayer = com.alex.iptvplayer.util.PlayerUtils.createExoPlayer(this)
         binding.miniPlayerView.player = exoPlayer
     }
 

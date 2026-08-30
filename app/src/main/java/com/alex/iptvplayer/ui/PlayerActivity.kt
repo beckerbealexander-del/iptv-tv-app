@@ -14,6 +14,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import com.alex.iptvplayer.data.LiveStream
 import com.alex.iptvplayer.data.XtreamClient
 import com.alex.iptvplayer.databinding.ActivityPlayerBinding
+import com.alex.iptvplayer.util.PlayerUtils
 
 class PlayerActivity : AppCompatActivity() {
 
@@ -45,28 +46,25 @@ class PlayerActivity : AppCompatActivity() {
     private fun setupPlayer(url: String, name: String) {
         showChannelInfo(name)
 
-        exoPlayer = ExoPlayer.Builder(this)
-            .setSeekForwardIncrementMs(10000)
-            .setSeekBackIncrementMs(10000)
-            .build().apply {
-                binding.playerView.player = this
+        exoPlayer = PlayerUtils.createExoPlayer(this).apply {
+            binding.playerView.player = this
 
-                addListener(object : Player.Listener {
-                    override fun onPlaybackStateChanged(state: Int) {
-                        binding.playerLoading.visibility =
-                            if (state == Player.STATE_BUFFERING) View.VISIBLE else View.GONE
-                    }
+            addListener(object : Player.Listener {
+                override fun onPlaybackStateChanged(state: Int) {
+                    binding.playerLoading.visibility =
+                        if (state == Player.STATE_BUFFERING) View.VISIBLE else View.GONE
+                }
 
-                    override fun onPlayerError(error: PlaybackException) {
-                        Toast.makeText(this@PlayerActivity, "Wiedergabefehler: ${error.message}", Toast.LENGTH_SHORT).show()
-                    }
-                })
+                override fun onPlayerError(error: PlaybackException) {
+                    Toast.makeText(this@PlayerActivity, "Wiedergabefehler: ${error.message}", Toast.LENGTH_SHORT).show()
+                }
+            })
 
-                val mediaItem = MediaItem.fromUri(url)
-                setMediaItem(mediaItem)
-                prepare()
-                playWhenReady = true
-            }
+            val mediaItem = MediaItem.fromUri(url)
+            setMediaItem(mediaItem)
+            prepare()
+            playWhenReady = true
+        }
     }
 
     private fun showChannelInfo(name: String) {
