@@ -69,6 +69,11 @@ class VodActivity : AppCompatActivity() {
         setupSearch()
         loadCategories()
         preloadGlobalCatalog()
+
+        // Tastatur beim Start NICHT öffnen
+        binding.recyclerVodCategories.post {
+            binding.recyclerVodCategories.requestFocus()
+        }
     }
 
     private fun preloadGlobalCatalog() {
@@ -82,13 +87,20 @@ class VodActivity : AppCompatActivity() {
     }
 
     private fun setupSearch() {
-        // Tastatur schließen bei Bestätigung (Häkchen / Suche)
+        // Tastatur erst öffnen wenn aktiv auf die Suche geklickt wird
+        binding.editVodSearch.isFocusableInTouchMode = false
+        binding.editVodSearch.setOnClickListener {
+            binding.editVodSearch.isFocusableInTouchMode = true
+            binding.editVodSearch.requestFocus()
+            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+            imm.showSoftInput(binding.editVodSearch, InputMethodManager.SHOW_IMPLICIT)
+        }
+
+        // Tastatur schließen bei Bestätigung
         binding.editVodSearch.setOnEditorActionListener { _, actionId, event ->
             if (actionId == EditorInfo.IME_ACTION_SEARCH || actionId == EditorInfo.IME_ACTION_DONE || actionId == EditorInfo.IME_ACTION_GO ||
                 (event != null && event.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN)) {
-                val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-                imm.hideSoftInputFromWindow(binding.editVodSearch.windowToken, 0)
-                binding.editVodSearch.clearFocus()
+                hideKeyboard()
                 binding.recyclerVodGrid.requestFocus()
                 true
             } else false
@@ -100,7 +112,7 @@ class VodActivity : AppCompatActivity() {
                 searchJob?.cancel()
                 val q = s?.toString()?.trim() ?: ""
                 searchJob = lifecycleScope.launch {
-                    delay(350) // Debounce: Verhindert Mehrfach-Löschen von Buchstaben
+                    delay(350)
                     if (q.isEmpty()) {
                         binding.txtVodCategoryTitle.text = "Filme"
                         binding.recyclerVodGrid.adapter = MovieAdapter(currentMovies, { movie ->
@@ -122,6 +134,13 @@ class VodActivity : AppCompatActivity() {
             }
             override fun afterTextChanged(s: Editable?) {}
         })
+    }
+
+    private fun hideKeyboard() {
+        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+        imm.hideSoftInputFromWindow(binding.editVodSearch.windowToken, 0)
+        binding.editVodSearch.isFocusableInTouchMode = false
+        binding.editVodSearch.clearFocus()
     }
 
     private fun setupFilterButtons() {
@@ -159,6 +178,12 @@ class VodActivity : AppCompatActivity() {
     }
 
     private fun loadMovies(category: Category) {
+        // Suche bei Kategorie-Klick sofort beenden
+        if (binding.editVodSearch.text.isNotEmpty()) {
+            binding.editVodSearch.setText("")
+            hideKeyboard()
+        }
+
         if (selectedCategoryId == category.id && currentMovies.isNotEmpty()) return
         selectedCategoryId = category.id
 
@@ -239,18 +264,39 @@ class VodActivity : AppCompatActivity() {
         startActivity(intent)
     }
 
-    // --- Zurück-Taste: Von Titeln zurück zur Kategorie-Auswahl ---
-    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        if (keyCode == KeyEvent.KEYCODE_BACK) {
+    // --- Absolute Fokus-Verriegelung: In der Titelauswahl bleibt der Cursor 100% in der Grid ---
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.action == KeyEvent.ACTION_DOWN) {
             val focused = currentFocus
-            if (isViewInView(focused, binding.recyclerVodGrid)) {
-                // Zurück zur Kategorie-Auswahl springen
-                val catHolder = binding.recyclerVodCategories.findViewHolderForAdapterPosition(0)
-                catHolder?.itemView?.requestFocus() ?: binding.recyclerVodCategories.requestFocus()
-                return true
+            val isGrid = isViewInView(focused, binding.recyclerVodGrid)
+
+            if (isGrid) {
+                val gridPos = getFocusedGridPosition(focused)
+                val total = (binding.recyclerVodGrid.adapter?.itemCount ?: 0)
+
+                when (event.keyCode) {
+                    KeyEvent.KEYCODE_BACK -> {
+                        // Wechsel zurück zur Kategorie-Auswahl
+                        val catHolder = binding.recyclerVodCategories.findViewHolderForAdapterPosition(0)
+                        catHolder?.itemView?.requestFocus() ?: binding.recyclerVodCategories.requestFocus()
+                        return true
+                    }
+                    KeyEvent.KEYCODE_DPAD_LEFT -> {
+                        if (gridPos % 5 == 0) return true // Blockiert Ausbrechen nach links
+                    }
+                    KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                        if (gridPos % 5 == 4 || gridPos == total - 1) return true // Blockiert Ausbrechen nach rechts
+                    }
+                    KeyEvent.KEYCODE_DPAD_UP -> {
+                        if (gridPos < 5) return true // Blockiert Ausbrechen nach oben
+                    }
+                    KeyEvent.KEYCODE_DPAD_DOWN -> {
+                        if (gridPos >= total - 5) return true // Blockiert Ausbrechen nach unten
+                    }
+                }
             }
         }
-        return super.onKeyDown(keyCode, event)
+        return super.dispatchKeyEvent(event)
     }
 
     private fun isViewInView(view: View?, target: View): Boolean {
@@ -261,6 +307,18 @@ class VodActivity : AppCompatActivity() {
             cur = p as? View
         }
         return false
+    }
+
+    private fun getFocusedGridPosition(view: View?): Int {
+        var cur = view
+        while (cur != null && cur != binding.recyclerVodGrid) {
+            val p = cur.parent
+            if (p == binding.recyclerVodGrid) {
+                return binding.recyclerVodGrid.getChildAdapterPosition(cur)
+            }
+            cur = p as? View
+        }
+        return -1
     }
 
     inner class VodCategoryAdapter(
@@ -282,10 +340,8 @@ class VodActivity : AppCompatActivity() {
             holder.txtName.text = cat.name
             holder.itemView.isSelected = (cat.id == selectedCategoryId)
 
-            // Kategorie wird AUSSCHLIESSLICH bei Klick mit OK gewechselt!
             holder.itemView.setOnClickListener {
                 selectedCategoryId = cat.id
-                // Fokus bleibt fest auf diesem Element, kein notifyDataSetChanged() Focus-Reset!
                 holder.itemView.requestFocus()
                 onSelect(cat)
             }
@@ -330,14 +386,6 @@ class VodActivity : AppCompatActivity() {
             }
 
             holder.itemView.setOnClickListener { onClick(movie) }
-
-            // Fokus-Sperre: Links in der Grid bleibt in der Grid (Wechsel nach links nur über BACK!)
-            holder.itemView.setOnKeyListener { _, keyCode, event ->
-                if (event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_LEFT && position % 5 == 0) {
-                    return@setOnKeyListener true // Blockiert Ausbrechen nach links
-                }
-                false
-            }
         }
 
         override fun getItemCount() = items.size
