@@ -1,12 +1,16 @@
 package com.alex.iptvplayer.ui
 
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
+import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
@@ -78,13 +82,25 @@ class VodActivity : AppCompatActivity() {
     }
 
     private fun setupSearch() {
+        // Tastatur schließen bei Bestätigung (Häkchen / Suche)
+        binding.editVodSearch.setOnEditorActionListener { _, actionId, event ->
+            if (actionId == EditorInfo.IME_ACTION_SEARCH || actionId == EditorInfo.IME_ACTION_DONE || actionId == EditorInfo.IME_ACTION_GO ||
+                (event != null && event.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN)) {
+                val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+                imm.hideSoftInputFromWindow(binding.editVodSearch.windowToken, 0)
+                binding.editVodSearch.clearFocus()
+                binding.recyclerVodGrid.requestFocus()
+                true
+            } else false
+        }
+
         binding.editVodSearch.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
                 searchJob?.cancel()
                 val q = s?.toString()?.trim() ?: ""
                 searchJob = lifecycleScope.launch {
-                    delay(350) // Debounce: Verhindert Mehrfach-Löschen von Buchstaben beim schnellen Tippen
+                    delay(350) // Debounce: Verhindert Mehrfach-Löschen von Buchstaben
                     if (q.isEmpty()) {
                         binding.txtVodCategoryTitle.text = "Filme"
                         binding.recyclerVodGrid.adapter = MovieAdapter(currentMovies, { movie ->
@@ -120,7 +136,7 @@ class VodActivity : AppCompatActivity() {
         if (filtered.none { it.id == "ALL_MOVIES" }) {
             filtered.add(0, Category(id = "ALL_MOVIES", name = "✨ Alle Filme"))
         }
-        binding.recyclerVodCategories.adapter = VodCategoryAdapter(filtered, selectedCategoryId) { cat ->
+        binding.recyclerVodCategories.adapter = VodCategoryAdapter(filtered) { cat ->
             loadMovies(cat)
         }
         if (filtered.isNotEmpty() && selectedCategoryId == null) {
@@ -223,9 +239,32 @@ class VodActivity : AppCompatActivity() {
         startActivity(intent)
     }
 
+    // --- Zurück-Taste: Von Titeln zurück zur Kategorie-Auswahl ---
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_BACK) {
+            val focused = currentFocus
+            if (isViewInView(focused, binding.recyclerVodGrid)) {
+                // Zurück zur Kategorie-Auswahl springen
+                val catHolder = binding.recyclerVodCategories.findViewHolderForAdapterPosition(0)
+                catHolder?.itemView?.requestFocus() ?: binding.recyclerVodCategories.requestFocus()
+                return true
+            }
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
+    private fun isViewInView(view: View?, target: View): Boolean {
+        var cur = view
+        while (cur != null) {
+            if (cur == target) return true
+            val p = cur.parent
+            cur = p as? View
+        }
+        return false
+    }
+
     inner class VodCategoryAdapter(
         private val items: List<Category>,
-        private var activeCatId: String?,
         private val onSelect: (Category) -> Unit
     ) : RecyclerView.Adapter<VodCategoryAdapter.ViewHolder>() {
 
@@ -241,12 +280,13 @@ class VodActivity : AppCompatActivity() {
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val cat = items[position]
             holder.txtName.text = cat.name
-            holder.itemView.isSelected = (cat.id == activeCatId)
+            holder.itemView.isSelected = (cat.id == selectedCategoryId)
 
             // Kategorie wird AUSSCHLIESSLICH bei Klick mit OK gewechselt!
             holder.itemView.setOnClickListener {
-                activeCatId = cat.id
-                notifyDataSetChanged()
+                selectedCategoryId = cat.id
+                // Fokus bleibt fest auf diesem Element, kein notifyDataSetChanged() Focus-Reset!
+                holder.itemView.requestFocus()
                 onSelect(cat)
             }
         }
@@ -290,6 +330,14 @@ class VodActivity : AppCompatActivity() {
             }
 
             holder.itemView.setOnClickListener { onClick(movie) }
+
+            // Fokus-Sperre: Links in der Grid bleibt in der Grid (Wechsel nach links nur über BACK!)
+            holder.itemView.setOnKeyListener { _, keyCode, event ->
+                if (event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_LEFT && position % 5 == 0) {
+                    return@setOnKeyListener true // Blockiert Ausbrechen nach links
+                }
+                false
+            }
         }
 
         override fun getItemCount() = items.size

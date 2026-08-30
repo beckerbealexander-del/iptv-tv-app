@@ -1,12 +1,16 @@
 package com.alex.iptvplayer.ui
 
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
+import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
@@ -78,13 +82,25 @@ class SeriesActivity : AppCompatActivity() {
     }
 
     private fun setupSearch() {
+        // Tastatur schließen bei Bestätigung (Häkchen / Suche)
+        binding.editSeriesSearch.setOnEditorActionListener { _, actionId, event ->
+            if (actionId == EditorInfo.IME_ACTION_SEARCH || actionId == EditorInfo.IME_ACTION_DONE || actionId == EditorInfo.IME_ACTION_GO ||
+                (event != null && event.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN)) {
+                val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+                imm.hideSoftInputFromWindow(binding.editSeriesSearch.windowToken, 0)
+                binding.editSeriesSearch.clearFocus()
+                binding.recyclerSeriesGrid.requestFocus()
+                true
+            } else false
+        }
+
         binding.editSeriesSearch.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
                 searchJob?.cancel()
                 val q = s?.toString()?.trim() ?: ""
                 searchJob = lifecycleScope.launch {
-                    delay(350) // Debounce: Sauberes Tippen und Löschen einzelner Zeichen
+                    delay(350) // Debounce
                     if (q.isEmpty()) {
                         binding.txtSeriesCategoryTitle.text = "Serien"
                         binding.recyclerSeriesGrid.adapter = SeriesAdapter(currentSeries, { series ->
@@ -120,7 +136,7 @@ class SeriesActivity : AppCompatActivity() {
         if (filtered.none { it.id == "ALL_SERIES" }) {
             filtered.add(0, Category(id = "ALL_SERIES", name = "✨ Alle Serien"))
         }
-        binding.recyclerSeriesCategories.adapter = SeriesCategoryAdapter(filtered, selectedCategoryId) { cat ->
+        binding.recyclerSeriesCategories.adapter = SeriesCategoryAdapter(filtered) { cat ->
             loadSeries(cat)
         }
         if (filtered.isNotEmpty() && selectedCategoryId == null) {
@@ -219,9 +235,32 @@ class SeriesActivity : AppCompatActivity() {
         startActivity(intent)
     }
 
+    // --- Zurück-Taste: Von Titeln zurück zur Kategorie-Auswahl ---
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_BACK) {
+            val focused = currentFocus
+            if (isViewInView(focused, binding.recyclerSeriesGrid)) {
+                // Zurück zur Kategorie-Auswahl springen
+                val catHolder = binding.recyclerSeriesCategories.findViewHolderForAdapterPosition(0)
+                catHolder?.itemView?.requestFocus() ?: binding.recyclerSeriesCategories.requestFocus()
+                return true
+            }
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
+    private fun isViewInView(view: View?, target: View): Boolean {
+        var cur = view
+        while (cur != null) {
+            if (cur == target) return true
+            val p = cur.parent
+            cur = p as? View
+        }
+        return false
+    }
+
     inner class SeriesCategoryAdapter(
         private val items: List<Category>,
-        private var activeCatId: String?,
         private val onSelect: (Category) -> Unit
     ) : RecyclerView.Adapter<SeriesCategoryAdapter.ViewHolder>() {
 
@@ -237,12 +276,12 @@ class SeriesActivity : AppCompatActivity() {
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val cat = items[position]
             holder.txtName.text = cat.name
-            holder.itemView.isSelected = (cat.id == activeCatId)
+            holder.itemView.isSelected = (cat.id == selectedCategoryId)
 
             // Kategorie wird AUSSCHLIESSLICH bei Klick mit OK gewechselt!
             holder.itemView.setOnClickListener {
-                activeCatId = cat.id
-                notifyDataSetChanged()
+                selectedCategoryId = cat.id
+                holder.itemView.requestFocus()
                 onSelect(cat)
             }
         }
@@ -286,6 +325,14 @@ class SeriesActivity : AppCompatActivity() {
             }
 
             holder.itemView.setOnClickListener { onClick(s) }
+
+            // Fokus-Sperre: Links in der Grid bleibt in der Grid (Wechsel nach links nur über BACK!)
+            holder.itemView.setOnKeyListener { _, keyCode, event ->
+                if (event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_LEFT && position % 5 == 0) {
+                    return@setOnKeyListener true // Blockiert Ausbrechen nach links
+                }
+                false
+            }
         }
 
         override fun getItemCount() = items.size

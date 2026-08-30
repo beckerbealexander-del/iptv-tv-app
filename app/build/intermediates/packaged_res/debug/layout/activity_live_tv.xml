@@ -6,7 +6,7 @@
     android:background="#000000"
     android:orientation="horizontal">
 
-    <!-- Linke Spalte: TV-Kategorien & Sprachfilter -->
+    <!-- Linke Spalte: Suche + Filter + TV-Kategorien -->
     <LinearLayout
         android:layout_width="210dp"
         android:layout_height="match_parent"
@@ -23,7 +23,22 @@
             android:textStyle="bold"
             android:layout_marginBottom="6dp" />
 
-        <!-- Schnellauswahl Filter-Buttons (DE, RU, Alle) -->
+        <!-- 1. Suchleiste ÜBER den Filter-Buttons -->
+        <EditText
+            android:id="@+id/editLiveSearch"
+            android:layout_width="match_parent"
+            android:layout_height="32dp"
+            android:background="@drawable/card_focus_selector"
+            android:hint="🔍 Sender suchen..."
+            android:textColor="@color/text_primary"
+            android:textColorHint="@color/text_secondary"
+            android:textSize="11sp"
+            android:paddingHorizontal="10dp"
+            android:singleLine="true"
+            android:imeOptions="actionSearch"
+            android:layout_marginBottom="6dp" />
+
+        <!-- 2. Schnellauswahl Filter-Buttons (DE, RU, Alle) -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -36,11 +51,10 @@
                 android:layout_height="28dp"
                 android:layout_weight="1"
                 android:background="@drawable/card_focus_selector"
-                android:nextFocusDown="@+id/recyclerCategories"
                 android:text="🇩🇪 DE"
                 android:textColor="@color/text_primary"
-                android:textSize="11sp"
-                android:layout_marginEnd="2dp" />
+                android:textSize="10.5sp"
+                android:layout_marginEnd="3dp" />
 
             <Button
                 android:id="@+id/btnLiveFilterRu"
@@ -48,11 +62,10 @@
                 android:layout_height="28dp"
                 android:layout_weight="1"
                 android:background="@drawable/card_focus_selector"
-                android:nextFocusDown="@+id/recyclerCategories"
                 android:text="🇷🇺 RU"
                 android:textColor="@color/text_primary"
-                android:textSize="11sp"
-                android:layout_marginEnd="2dp" />
+                android:textSize="10.5sp"
+                android:layout_marginEnd="3dp" />
 
             <Button
                 android:id="@+id/btnLiveFilterAll"
@@ -60,10 +73,9 @@
                 android:layout_height="28dp"
                 android:layout_weight="1"
                 android:background="@drawable/card_focus_selector"
-                android:nextFocusDown="@+id/recyclerCategories"
                 android:text="🌍 Alle"
                 android:textColor="@color/text_primary"
-                android:textSize="11sp" />
+                android:textSize="10.5sp" />
         </LinearLayout>
 
         <ProgressBar
@@ -77,9 +89,7 @@
             android:id="@+id/recyclerCategories"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:descendantFocusability="afterDescendants"
-            android:nextFocusRight="@+id/recyclerChannels"
-            android:nextFocusUp="@+id/btnLiveFilterDe" />
+            android:descendantFocusability="afterDescendants" />
     </LinearLayout>
 
     <!-- Rechte Spalte: TiviMate Style EPG Timeline Grid + PIP Mini-Player -->
@@ -90,7 +100,7 @@
         android:orientation="vertical"
         android:padding="8dp">
 
-        <!-- 1. Obere Leiste: PIP Mini-Player (Live TV Vorschau mit Audio) + Sendungsinfos + Suche -->
+        <!-- 1. Obere Leiste: PIP Mini-Player (Live TV Vorschau mit Audio) + Sendungsinfos -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="115dp"
@@ -117,9 +127,8 @@
 
             <!-- Sendungsinfos -->
             <LinearLayout
-                android:layout_width="0dp"
+                android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:layout_weight="1"
                 android:orientation="vertical">
 
                 <LinearLayout
@@ -162,23 +171,6 @@
                     android:textColor="@color/text_secondary"
                     android:textSize="10.5sp" />
             </LinearLayout>
-
-            <!-- Suche -->
-            <EditText
-                android:id="@+id/editLiveSearch"
-                android:layout_width="160dp"
-                android:layout_height="32dp"
-                android:background="@drawable/card_focus_selector"
-                android:hint="🔍 Suchen..."
-                android:nextFocusDown="@+id/recyclerChannels"
-                android:nextFocusLeft="@+id/recyclerCategories"
-                android:textColor="@color/text_primary"
-                android:textColorHint="@color/text_secondary"
-                android:textSize="11sp"
-                android:paddingHorizontal="8dp"
-                android:singleLine="true"
-                android:layout_marginStart="8dp"
-                android:layout_gravity="center_vertical" />
         </LinearLayout>
 
         <!-- 2. TiviMate Zeitstrahl-Kopfleiste (Vergangenheit bis Zukunft) -->
@@ -239,9 +231,7 @@
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
-            android:descendantFocusability="afterDescendants"
-            android:nextFocusLeft="@+id/recyclerCategories"
-            android:nextFocusUp="@+id/editLiveSearch" />
+            android:descendantFocusability="afterDescendants" />
     </LinearLayout>
 
 </LinearLayout>

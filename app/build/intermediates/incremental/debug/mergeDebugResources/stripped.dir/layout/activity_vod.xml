@@ -5,7 +5,7 @@
     android:background="#000000"
     android:orientation="horizontal">
 
-    <!-- Linke Spalte: Film-Kategorien & Sprachfilter -->
+    <!-- Linke Spalte: Suche + Filter + Film-Kategorien -->
     <LinearLayout
         android:layout_width="210dp"
         android:layout_height="match_parent"
@@ -22,7 +22,22 @@
             android:textStyle="bold"
             android:layout_marginBottom="6dp" />
 
-        <!-- Schnellauswahl Filter-Buttons (DE, RU, Alle) -->
+        <!-- 1. Suchleiste ÜBER den Filter-Buttons -->
+        <EditText
+            android:id="@+id/editVodSearch"
+            android:layout_width="match_parent"
+            android:layout_height="32dp"
+            android:background="@drawable/card_focus_selector"
+            android:hint="🔍 Film suchen..."
+            android:textColor="@color/text_primary"
+            android:textColorHint="@color/text_secondary"
+            android:textSize="11sp"
+            android:paddingHorizontal="10dp"
+            android:singleLine="true"
+            android:imeOptions="actionSearch"
+            android:layout_marginBottom="6dp" />
+
+        <!-- 2. Schnellauswahl Filter-Buttons (DE, RU, Alle) -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -32,34 +47,34 @@
             <Button
                 android:id="@+id/btnVodFilterDe"
                 android:layout_width="0dp"
-                android:layout_height="30dp"
+                android:layout_height="28dp"
                 android:layout_weight="1"
                 android:background="@drawable/card_focus_selector"
                 android:text="🇩🇪 DE"
                 android:textColor="@color/text_primary"
-                android:textSize="11sp"
+                android:textSize="10.5sp"
                 android:layout_marginEnd="3dp" />
 
             <Button
                 android:id="@+id/btnVodFilterRu"
                 android:layout_width="0dp"
-                android:layout_height="30dp"
+                android:layout_height="28dp"
                 android:layout_weight="1"
                 android:background="@drawable/card_focus_selector"
                 android:text="🇷🇺 RU"
                 android:textColor="@color/text_primary"
-                android:textSize="11sp"
+                android:textSize="10.5sp"
                 android:layout_marginEnd="3dp" />
 
             <Button
                 android:id="@+id/btnVodFilterAll"
                 android:layout_width="0dp"
-                android:layout_height="30dp"
+                android:layout_height="28dp"
                 android:layout_weight="1"
                 android:background="@drawable/card_focus_selector"
                 android:text="🌍 Alle"
                 android:textColor="@color/text_primary"
-                android:textSize="11sp" />
+                android:textSize="10.5sp" />
         </LinearLayout>
 
         <ProgressBar
@@ -75,7 +90,7 @@
             android:layout_height="match_parent" />
     </LinearLayout>
 
-    <!-- Rechte Spalte: Suche, Hero Banner & Movie Grid -->
+    <!-- Rechte Spalte: Hero Banner & Movie Grid -->
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="match_parent"
@@ -83,37 +98,15 @@
         android:orientation="vertical"
         android:padding="12dp">
 
-        <!-- Obere Leiste: Suche & Kategorie-Titel -->
-        <LinearLayout
+        <TextView
+            android:id="@+id/txtVodCategoryTitle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:layout_marginBottom="8dp">
-
-            <TextView
-                android:id="@+id/txtVodCategoryTitle"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Filme"
-                android:textColor="@color/text_primary"
-                android:textSize="16sp"
-                android:textStyle="bold" />
-
-            <!-- Integrierte globale Filmsuche -->
-            <EditText
-                android:id="@+id/editVodSearch"
-                android:layout_width="260dp"
-                android:layout_height="36dp"
-                android:background="@drawable/card_focus_selector"
-                android:hint="🔍 Film suchen (global)..."
-                android:textColor="@color/text_primary"
-                android:textColorHint="@color/text_secondary"
-                android:textSize="12sp"
-                android:paddingHorizontal="12dp"
-                android:singleLine="true" />
-        </LinearLayout>
+            android:text="Filme"
+            android:textColor="@color/text_primary"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="6dp" />
 
         <!-- Kompakter Hero Banner -->
         <LinearLayout
@@ -183,9 +176,7 @@
             android:id="@+id/recyclerVodGrid"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:descendantFocusability="afterDescendants"
-            android:nextFocusLeft="@+id/recyclerVodCategories"
-            android:nextFocusUp="@+id/editVodSearch" />
+            android:descendantFocusability="afterDescendants" />
     </LinearLayout>
 
 </LinearLayout>

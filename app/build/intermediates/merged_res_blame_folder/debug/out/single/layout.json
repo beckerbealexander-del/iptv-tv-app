@@ -8,6 +8,10 @@
         "source": "com.alex.iptvplayer.app-main-6:/layout/activity_vod.xml"
     },
     {
+        "merged": "com.alex.iptvplayer.app-mergeDebugResources-3:/layout/activity_live_tv.xml",
+        "source": "com.alex.iptvplayer.app-main-6:/layout/activity_live_tv.xml"
+    },
+    {
         "merged": "C:\\Users\\becke\\.gradle\\daemon\\8.4\\com.alex.iptvplayer.app-mergeDebugResources-3:\\layout\\item_epg_program_block.xml",
         "source": "C:\\Users\\becke\\.gradle\\daemon\\8.4\\com.alex.iptvplayer.app-main-6:\\layout\\item_epg_program_block.xml"
     },

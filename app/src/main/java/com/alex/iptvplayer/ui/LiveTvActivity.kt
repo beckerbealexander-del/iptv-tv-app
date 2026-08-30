@@ -1,5 +1,6 @@
 package com.alex.iptvplayer.ui
 
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.text.Editable
@@ -8,6 +9,8 @@ import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
@@ -125,6 +128,18 @@ class LiveTvActivity : AppCompatActivity() {
     }
 
     private fun setupSearch() {
+        // Tastatur schließen bei Bestätigung
+        binding.editLiveSearch.setOnEditorActionListener { _, actionId, event ->
+            if (actionId == EditorInfo.IME_ACTION_SEARCH || actionId == EditorInfo.IME_ACTION_DONE || actionId == EditorInfo.IME_ACTION_GO ||
+                (event != null && event.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN)) {
+                val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+                imm.hideSoftInputFromWindow(binding.editLiveSearch.windowToken, 0)
+                binding.editLiveSearch.clearFocus()
+                binding.recyclerChannels.requestFocus()
+                true
+            } else false
+        }
+
         binding.editLiveSearch.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
@@ -149,7 +164,7 @@ class LiveTvActivity : AppCompatActivity() {
     private fun applyFilter(filter: LangFilter) {
         currentFilter = filter
         val filtered = client.filterCategories(allCategories, filter)
-        binding.recyclerCategories.adapter = CategoryAdapter(filtered, selectedCategoryId) { category ->
+        binding.recyclerCategories.adapter = CategoryAdapter(filtered) { category ->
             loadChannels(category)
         }
 
@@ -263,6 +278,18 @@ class LiveTvActivity : AppCompatActivity() {
         startActivity(intent)
     }
 
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_BACK) {
+            val focused = currentFocus
+            if (isViewInRecyclerView(focused, binding.recyclerChannels)) {
+                val catHolder = binding.recyclerCategories.findViewHolderForAdapterPosition(0)
+                catHolder?.itemView?.requestFocus() ?: binding.recyclerCategories.requestFocus()
+                return true
+            }
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
     // --- Absolute Hardware D-Pad Sperre: Fokus kann die Senderliste NIEMALS ungewollt verlassen ---
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.action == KeyEvent.ACTION_DOWN) {
@@ -290,24 +317,13 @@ class LiveTvActivity : AppCompatActivity() {
                                 val holder = binding.recyclerChannels.findViewHolderForAdapterPosition(prevPos) as? ChannelAdapter.ViewHolder
                                 holder?.header?.requestFocus()
                             }
-                        } else if (channelPos == 0) {
-                            binding.editLiveSearch.requestFocus()
                         }
                         return true
                     }
                     KeyEvent.KEYCODE_DPAD_LEFT -> {
-                        if (isHeaderFocused(focused)) {
-                            val curCatHolder = binding.recyclerCategories.findViewHolderForAdapterPosition(0) as? CategoryAdapter.ViewHolder
-                            curCatHolder?.itemView?.requestFocus() ?: binding.recyclerCategories.requestFocus()
-                            return true
-                        }
+                        // Links blockieren (Wechsel zurück zu Kategorien nur über BACK-Taste)
+                        return true
                     }
-                }
-            } else if (isViewInRecyclerView(focused, binding.recyclerCategories)) {
-                if (event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
-                    val curChanHolder = binding.recyclerChannels.findViewHolderForAdapterPosition(0) as? ChannelAdapter.ViewHolder
-                    curChanHolder?.header?.requestFocus() ?: binding.recyclerChannels.requestFocus()
-                    return true
                 }
             }
         }
@@ -336,14 +352,9 @@ class LiveTvActivity : AppCompatActivity() {
         return -1
     }
 
-    private fun isHeaderFocused(view: View?): Boolean {
-        return view?.id == R.id.channelHeader
-    }
-
     // --- Adapter 1: Kategorien ---
     inner class CategoryAdapter(
         private val items: List<Category>,
-        private var activeCatId: String?,
         private val onSelect: (Category) -> Unit
     ) : RecyclerView.Adapter<CategoryAdapter.ViewHolder>() {
 
@@ -359,12 +370,12 @@ class LiveTvActivity : AppCompatActivity() {
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val cat = items[position]
             holder.txtName.text = cat.name
-            holder.itemView.isSelected = (cat.id == activeCatId)
+            holder.itemView.isSelected = (cat.id == selectedCategoryId)
 
             // Kategorie wird AUSSCHLIESSLICH bei Klick mit OK gewechselt!
             holder.itemView.setOnClickListener {
-                activeCatId = cat.id
-                notifyDataSetChanged()
+                selectedCategoryId = cat.id
+                holder.itemView.requestFocus()
                 onSelect(cat)
             }
         }
