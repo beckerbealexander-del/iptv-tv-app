@@ -23,24 +23,24 @@ class XtreamClient(context: Context) {
 
     private val gson = Gson()
 
-    // Echte Render-Adresse deines Servers
+    // Original-Zugangsdaten vom Anbieter (cf.rilox.sbs)
     var serverUrl: String
-        get() = prefs.getString("server_url", "https://iptvproxy-x8rs.onrender.com")!!.trimEnd('/')
+        get() = prefs.getString("server_url", "http://cf.rilox.sbs")!!.trimEnd('/')
         set(value) = prefs.edit().putString("server_url", value.trimEnd('/')).apply()
 
     var username: String
-        get() = prefs.getString("username", "1")!!
+        get() = prefs.getString("username", "fb5940d0a3a0")!!
         set(value) = prefs.edit().putString("username", value).apply()
 
     var password: String
-        get() = prefs.getString("password", "1")!!
+        get() = prefs.getString("password", "b1d99e5206")!!
         set(value) = prefs.edit().putString("password", value).apply()
 
     private fun buildApiUrl(action: String, extraParams: String = ""): String {
         return "$serverUrl/player_api.php?username=$username&password=$password&action=$action$extraParams"
     }
 
-    // Stream URLs für den ExoPlayer
+    // Stream URLs für den ExoPlayer (direkt vom Anbieter)
     fun getLiveStreamUrl(streamId: Int): String {
         return "$serverUrl/live/$username/$password/$streamId.ts"
     }
@@ -53,7 +53,7 @@ class XtreamClient(context: Context) {
         return "$serverUrl/series/$username/$password/$streamId.$extension"
     }
 
-    // 1. Live TV
+    // 1. Live TV (Original-Kategorien in Original-Reihenfolge)
     suspend fun getLiveCategories(): List<Category> = withContext(Dispatchers.IO) {
         val url = buildApiUrl("get_live_categories")
         val json = executeGet(url)
@@ -102,7 +102,7 @@ class XtreamClient(context: Context) {
         }
     }
 
-    // 2. VOD Filme
+    // 2. VOD Filme (Original-Kategorien)
     suspend fun getVodCategories(): List<Category> = withContext(Dispatchers.IO) {
         val url = buildApiUrl("get_vod_categories")
         val json = executeGet(url)
@@ -118,7 +118,7 @@ class XtreamClient(context: Context) {
         gson.fromJson(json, type) ?: emptyList()
     }
 
-    // 3. Serien
+    // 3. Serien (Original-Kategorien)
     suspend fun getSeriesCategories(): List<Category> = withContext(Dispatchers.IO) {
         val url = buildApiUrl("get_series_categories")
         val json = executeGet(url)
@@ -143,7 +143,7 @@ class XtreamClient(context: Context) {
     private fun executeGet(url: String): String {
         val request = Request.Builder()
             .url(url)
-            .header("User-Agent", "AlexIPTVPlayer/1.0 (Android TV)")
+            .header("User-Agent", "IPTVSmartersPro/1.0.0 (Linux; Android 11; TV)")
             .build()
         httpClient.newCall(request).execute().use { response ->
             if (!response.isSuccessful) throw Exception("HTTP Error: ${response.code}")
