@@ -16,15 +16,15 @@ class XtreamClient(context: Context) {
         context.getSharedPreferences("iptv_settings", Context.MODE_PRIVATE)
 
     private val httpClient = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(20, TimeUnit.SECONDS)
+        .connectTimeout(25, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
         .build()
 
     private val gson = Gson()
 
-    // Standard-Server und Easy-Login Voreinstellungen
+    // Echte Render-Adresse deines Servers
     var serverUrl: String
-        get() = prefs.getString("server_url", "https://iptvproxy-pbfh.onrender.com")!!.trimEnd('/')
+        get() = prefs.getString("server_url", "https://iptvproxy-x8rs.onrender.com")!!.trimEnd('/')
         set(value) = prefs.edit().putString("server_url", value.trimEnd('/')).apply()
 
     var username: String
