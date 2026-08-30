@@ -44,11 +44,14 @@ class LiveTvActivity : AppCompatActivity() {
     private var currentFilter = LangFilter.AUTO_DE_RU_ADULT
     private var currentStreams: List<LiveStream> = emptyList()
     private var selectedCategoryId: String? = null
+    private val channelCategoryCache = HashMap<String, List<LiveStream>>()
     private val epgCache = HashMap<Int, List<EpgProgram>>()
 
     // PIP Mini-Player
     private var pipPlayer: ExoPlayer? = null
     private var activePipStream: LiveStream? = null
+
+    private var searchJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -87,7 +90,6 @@ class LiveTvActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        // Zuletzt gesehenen Sender aus der Historie ermitteln und im PIP weiterspielen
         val lastWatched = historyManager.getRecentLiveChannels().firstOrNull()
         if (lastWatched != null) {
             playPipStream(lastWatched)
@@ -126,9 +128,13 @@ class LiveTvActivity : AppCompatActivity() {
         binding.editLiveSearch.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                searchJob?.cancel()
                 val q = s?.toString()?.trim()?.lowercase() ?: ""
-                val filtered = if (q.isEmpty()) currentStreams else currentStreams.filter { it.name.lowercase().contains(q) }
-                binding.recyclerChannels.adapter = ChannelAdapter(filtered)
+                searchJob = lifecycleScope.launch {
+                    delay(300) // Debounce
+                    val filtered = if (q.isEmpty()) currentStreams else currentStreams.filter { it.name.lowercase().contains(q) }
+                    binding.recyclerChannels.adapter = ChannelAdapter(filtered)
+                }
             }
             override fun afterTextChanged(s: Editable?) {}
         })
@@ -143,7 +149,7 @@ class LiveTvActivity : AppCompatActivity() {
     private fun applyFilter(filter: LangFilter) {
         currentFilter = filter
         val filtered = client.filterCategories(allCategories, filter)
-        binding.recyclerCategories.adapter = CategoryAdapter(filtered) { category ->
+        binding.recyclerCategories.adapter = CategoryAdapter(filtered, selectedCategoryId) { category ->
             loadChannels(category)
         }
 
@@ -157,7 +163,7 @@ class LiveTvActivity : AppCompatActivity() {
             }
         }
 
-        if (filtered.isNotEmpty()) {
+        if (filtered.isNotEmpty() && selectedCategoryId == null) {
             loadChannels(filtered[0])
         }
     }
@@ -177,13 +183,23 @@ class LiveTvActivity : AppCompatActivity() {
     }
 
     private fun loadChannels(category: Category, preselectedStreamId: Int? = null) {
-        if (selectedCategoryId == category.id && preselectedStreamId == null) return
+        if (selectedCategoryId == category.id && preselectedStreamId == null && currentStreams.isNotEmpty()) return
         selectedCategoryId = category.id
+
+        val cached = channelCategoryCache[category.id]
+        if (cached != null && preselectedStreamId == null) {
+            currentStreams = cached
+            binding.progressChannels.visibility = View.GONE
+            binding.recyclerChannels.adapter = ChannelAdapter(cached)
+            return
+        }
 
         binding.progressChannels.visibility = View.VISIBLE
         lifecycleScope.launch {
             try {
-                currentStreams = client.getLiveStreams(category.id)
+                val list = client.getLiveStreams(category.id)
+                channelCategoryCache[category.id] = list
+                currentStreams = list
                 binding.progressChannels.visibility = View.GONE
                 binding.recyclerChannels.adapter = ChannelAdapter(currentStreams)
 
@@ -327,10 +343,9 @@ class LiveTvActivity : AppCompatActivity() {
     // --- Adapter 1: Kategorien ---
     inner class CategoryAdapter(
         private val items: List<Category>,
+        private var activeCatId: String?,
         private val onSelect: (Category) -> Unit
     ) : RecyclerView.Adapter<CategoryAdapter.ViewHolder>() {
-
-        private var focusJob: Job? = null
 
         inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
             val txtName: TextView = view.findViewById(R.id.txtCategoryName)
@@ -344,21 +359,13 @@ class LiveTvActivity : AppCompatActivity() {
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val cat = items[position]
             holder.txtName.text = cat.name
+            holder.itemView.isSelected = (cat.id == activeCatId)
 
+            // Kategorie wird AUSSCHLIESSLICH bei Klick mit OK gewechselt!
             holder.itemView.setOnClickListener {
+                activeCatId = cat.id
+                notifyDataSetChanged()
                 onSelect(cat)
-            }
-
-            holder.itemView.setOnFocusChangeListener { _, hasFocus ->
-                if (hasFocus) {
-                    focusJob?.cancel()
-                    focusJob = lifecycleScope.launch {
-                        delay(600)
-                        if (holder.itemView.hasFocus()) {
-                            onSelect(cat)
-                        }
-                    }
-                }
             }
         }
 
@@ -398,7 +405,6 @@ class LiveTvActivity : AppCompatActivity() {
                 openFullscreenPlayer(s, position)
             }
 
-            // Beim Scrollen / Hovern: Nur EPG-Vorschau aktualisieren, PIP-Stream NICHT unterbrechen!
             holder.header.setOnFocusChangeListener { _, hasFocus ->
                 if (hasFocus) {
                     showChannelPreview(s, null)

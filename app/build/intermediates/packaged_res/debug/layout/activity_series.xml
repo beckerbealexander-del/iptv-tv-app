@@ -182,7 +182,10 @@
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/recyclerSeriesGrid"
             android:layout_width="match_parent"
-            android:layout_height="match_parent" />
+            android:layout_height="match_parent"
+            android:descendantFocusability="afterDescendants"
+            android:nextFocusLeft="@+id/recyclerSeriesCategories"
+            android:nextFocusUp="@+id/editSeriesSearch" />
     </LinearLayout>
 
 </LinearLayout>

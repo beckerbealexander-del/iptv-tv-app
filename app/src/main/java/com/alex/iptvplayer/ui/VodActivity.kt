@@ -36,7 +36,11 @@ class VodActivity : AppCompatActivity() {
     private var currentMovies: List<VodStream> = emptyList()
     private var allMoviesGlobal: List<VodStream> = emptyList()
     private var selectedCategoryId: String? = null
+    private val categoryCache = HashMap<String, List<VodStream>>()
+
     private var loadJob: Job? = null
+    private var searchJob: Job? = null
+    private var heroJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -48,13 +52,13 @@ class VodActivity : AppCompatActivity() {
         binding.recyclerVodCategories.apply {
             layoutManager = LinearLayoutManager(this@VodActivity)
             setHasFixedSize(true)
-            setItemViewCacheSize(30)
+            setItemViewCacheSize(60)
         }
 
         binding.recyclerVodGrid.apply {
             layoutManager = GridLayoutManager(this@VodActivity, 5)
             setHasFixedSize(true)
-            setItemViewCacheSize(40)
+            setItemViewCacheSize(60)
         }
 
         setupFilterButtons()
@@ -77,23 +81,27 @@ class VodActivity : AppCompatActivity() {
         binding.editVodSearch.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                searchJob?.cancel()
                 val q = s?.toString()?.trim() ?: ""
-                if (q.isEmpty()) {
-                    binding.txtVodCategoryTitle.text = "Filme"
-                    binding.recyclerVodGrid.adapter = MovieAdapter(currentMovies, { movie ->
-                        updateHeroBanner(movie)
-                    }, { movie ->
-                        playMovie(movie)
-                    })
-                } else {
-                    val pool = if (allMoviesGlobal.isNotEmpty()) allMoviesGlobal else currentMovies
-                    val filtered = pool.filter { it.name.contains(q, ignoreCase = true) }
-                    binding.txtVodCategoryTitle.text = "Suchergebnisse (${filtered.size})"
-                    binding.recyclerVodGrid.adapter = MovieAdapter(filtered, { movie ->
-                        updateHeroBanner(movie)
-                    }, { movie ->
-                        playMovie(movie)
-                    })
+                searchJob = lifecycleScope.launch {
+                    delay(350) // Debounce: Verhindert Mehrfach-Löschen von Buchstaben beim schnellen Tippen
+                    if (q.isEmpty()) {
+                        binding.txtVodCategoryTitle.text = "Filme"
+                        binding.recyclerVodGrid.adapter = MovieAdapter(currentMovies, { movie ->
+                            updateHeroBannerDebounced(movie)
+                        }, { movie ->
+                            playMovie(movie)
+                        })
+                    } else {
+                        val pool = if (allMoviesGlobal.isNotEmpty()) allMoviesGlobal else currentMovies
+                        val filtered = pool.filter { it.name.contains(q, ignoreCase = true) }
+                        binding.txtVodCategoryTitle.text = "Suchergebnisse (${filtered.size})"
+                        binding.recyclerVodGrid.adapter = MovieAdapter(filtered, { movie ->
+                            updateHeroBannerDebounced(movie)
+                        }, { movie ->
+                            playMovie(movie)
+                        })
+                    }
                 }
             }
             override fun afterTextChanged(s: Editable?) {}
@@ -112,10 +120,10 @@ class VodActivity : AppCompatActivity() {
         if (filtered.none { it.id == "ALL_MOVIES" }) {
             filtered.add(0, Category(id = "ALL_MOVIES", name = "✨ Alle Filme"))
         }
-        binding.recyclerVodCategories.adapter = VodCategoryAdapter(filtered) { cat ->
+        binding.recyclerVodCategories.adapter = VodCategoryAdapter(filtered, selectedCategoryId) { cat ->
             loadMovies(cat)
         }
-        if (filtered.isNotEmpty()) {
+        if (filtered.isNotEmpty() && selectedCategoryId == null) {
             loadMovies(filtered[0])
         }
     }
@@ -135,20 +143,37 @@ class VodActivity : AppCompatActivity() {
     }
 
     private fun loadMovies(category: Category) {
-        if (selectedCategoryId == category.id) return
+        if (selectedCategoryId == category.id && currentMovies.isNotEmpty()) return
         selectedCategoryId = category.id
 
         binding.txtVodCategoryTitle.text = category.name
-        binding.progressVod.visibility = View.VISIBLE
 
+        // Blitzschnelles Umschalten über Cache (0ms Wartezeit)
+        val cached = categoryCache[category.id]
+        if (cached != null) {
+            currentMovies = cached
+            binding.progressVod.visibility = View.GONE
+            binding.recyclerVodGrid.adapter = MovieAdapter(cached, { movie ->
+                updateHeroBannerDebounced(movie)
+            }, { movie ->
+                playMovie(movie)
+            })
+            if (cached.isNotEmpty()) {
+                updateHeroBanner(cached[0])
+            }
+            return
+        }
+
+        binding.progressVod.visibility = View.VISIBLE
         loadJob?.cancel()
         loadJob = lifecycleScope.launch {
             try {
                 val list = client.getVodStreams(category.id)
+                categoryCache[category.id] = list
                 currentMovies = list
                 binding.progressVod.visibility = View.GONE
                 binding.recyclerVodGrid.adapter = MovieAdapter(list, { movie ->
-                    updateHeroBanner(movie)
+                    updateHeroBannerDebounced(movie)
                 }, { movie ->
                     playMovie(movie)
                 })
@@ -160,6 +185,14 @@ class VodActivity : AppCompatActivity() {
                 binding.progressVod.visibility = View.GONE
                 Toast.makeText(this@VodActivity, "Fehler beim Laden: ${e.message}", Toast.LENGTH_SHORT).show()
             }
+        }
+    }
+
+    private fun updateHeroBannerDebounced(movie: VodStream) {
+        heroJob?.cancel()
+        heroJob = lifecycleScope.launch {
+            delay(150)
+            updateHeroBanner(movie)
         }
     }
 
@@ -192,10 +225,9 @@ class VodActivity : AppCompatActivity() {
 
     inner class VodCategoryAdapter(
         private val items: List<Category>,
+        private var activeCatId: String?,
         private val onSelect: (Category) -> Unit
     ) : RecyclerView.Adapter<VodCategoryAdapter.ViewHolder>() {
-
-        private var focusJob: Job? = null
 
         inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
             val txtName: TextView = view.findViewById(R.id.txtCategoryName)
@@ -209,19 +241,13 @@ class VodActivity : AppCompatActivity() {
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val cat = items[position]
             holder.txtName.text = cat.name
+            holder.itemView.isSelected = (cat.id == activeCatId)
 
+            // Kategorie wird AUSSCHLIESSLICH bei Klick mit OK gewechselt!
             holder.itemView.setOnClickListener {
+                activeCatId = cat.id
+                notifyDataSetChanged()
                 onSelect(cat)
-            }
-
-            holder.itemView.setOnFocusChangeListener { _, hasFocus ->
-                if (hasFocus) {
-                    focusJob?.cancel()
-                    focusJob = lifecycleScope.launch {
-                        delay(350)
-                        onSelect(cat)
-                    }
-                }
             }
         }
 

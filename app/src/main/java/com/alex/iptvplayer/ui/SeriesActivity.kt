@@ -36,7 +36,11 @@ class SeriesActivity : AppCompatActivity() {
     private var currentSeries: List<SeriesItem> = emptyList()
     private var allSeriesGlobal: List<SeriesItem> = emptyList()
     private var selectedCategoryId: String? = null
+    private val categoryCache = HashMap<String, List<SeriesItem>>()
+
     private var loadJob: Job? = null
+    private var searchJob: Job? = null
+    private var heroJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -48,13 +52,13 @@ class SeriesActivity : AppCompatActivity() {
         binding.recyclerSeriesCategories.apply {
             layoutManager = LinearLayoutManager(this@SeriesActivity)
             setHasFixedSize(true)
-            setItemViewCacheSize(30)
+            setItemViewCacheSize(60)
         }
 
         binding.recyclerSeriesGrid.apply {
             layoutManager = GridLayoutManager(this@SeriesActivity, 5)
             setHasFixedSize(true)
-            setItemViewCacheSize(40)
+            setItemViewCacheSize(60)
         }
 
         setupFilterButtons()
@@ -77,23 +81,27 @@ class SeriesActivity : AppCompatActivity() {
         binding.editSeriesSearch.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                searchJob?.cancel()
                 val q = s?.toString()?.trim() ?: ""
-                if (q.isEmpty()) {
-                    binding.txtSeriesCategoryTitle.text = "Serien"
-                    binding.recyclerSeriesGrid.adapter = SeriesAdapter(currentSeries, { series ->
-                        updateHeroBanner(series)
-                    }, { series ->
-                        openSeriesDetail(series)
-                    })
-                } else {
-                    val pool = if (allSeriesGlobal.isNotEmpty()) allSeriesGlobal else currentSeries
-                    val filtered = pool.filter { it.name.contains(q, ignoreCase = true) }
-                    binding.txtSeriesCategoryTitle.text = "Suchergebnisse (${filtered.size})"
-                    binding.recyclerSeriesGrid.adapter = SeriesAdapter(filtered, { series ->
-                        updateHeroBanner(series)
-                    }, { series ->
-                        openSeriesDetail(series)
-                    })
+                searchJob = lifecycleScope.launch {
+                    delay(350) // Debounce: Sauberes Tippen und Löschen einzelner Zeichen
+                    if (q.isEmpty()) {
+                        binding.txtSeriesCategoryTitle.text = "Serien"
+                        binding.recyclerSeriesGrid.adapter = SeriesAdapter(currentSeries, { series ->
+                            updateHeroBannerDebounced(series)
+                        }, { series ->
+                            openSeriesDetail(series)
+                        })
+                    } else {
+                        val pool = if (allSeriesGlobal.isNotEmpty()) allSeriesGlobal else currentSeries
+                        val filtered = pool.filter { it.name.contains(q, ignoreCase = true) }
+                        binding.txtSeriesCategoryTitle.text = "Suchergebnisse (${filtered.size})"
+                        binding.recyclerSeriesGrid.adapter = SeriesAdapter(filtered, { series ->
+                            updateHeroBannerDebounced(series)
+                        }, { series ->
+                            openSeriesDetail(series)
+                        })
+                    }
                 }
             }
             override fun afterTextChanged(s: Editable?) {}
@@ -112,10 +120,10 @@ class SeriesActivity : AppCompatActivity() {
         if (filtered.none { it.id == "ALL_SERIES" }) {
             filtered.add(0, Category(id = "ALL_SERIES", name = "✨ Alle Serien"))
         }
-        binding.recyclerSeriesCategories.adapter = SeriesCategoryAdapter(filtered) { cat ->
+        binding.recyclerSeriesCategories.adapter = SeriesCategoryAdapter(filtered, selectedCategoryId) { cat ->
             loadSeries(cat)
         }
-        if (filtered.isNotEmpty()) {
+        if (filtered.isNotEmpty() && selectedCategoryId == null) {
             loadSeries(filtered[0])
         }
     }
@@ -135,20 +143,37 @@ class SeriesActivity : AppCompatActivity() {
     }
 
     private fun loadSeries(category: Category) {
-        if (selectedCategoryId == category.id) return
+        if (selectedCategoryId == category.id && currentSeries.isNotEmpty()) return
         selectedCategoryId = category.id
 
         binding.txtSeriesCategoryTitle.text = category.name
-        binding.progressSeries.visibility = View.VISIBLE
 
+        // Blitzschnelles Umschalten über Cache (0ms Wartezeit)
+        val cached = categoryCache[category.id]
+        if (cached != null) {
+            currentSeries = cached
+            binding.progressSeries.visibility = View.GONE
+            binding.recyclerSeriesGrid.adapter = SeriesAdapter(cached, { series ->
+                updateHeroBannerDebounced(series)
+            }, { series ->
+                openSeriesDetail(series)
+            })
+            if (cached.isNotEmpty()) {
+                updateHeroBanner(cached[0])
+            }
+            return
+        }
+
+        binding.progressSeries.visibility = View.VISIBLE
         loadJob?.cancel()
         loadJob = lifecycleScope.launch {
             try {
                 val list = client.getSeries(category.id)
+                categoryCache[category.id] = list
                 currentSeries = list
                 binding.progressSeries.visibility = View.GONE
                 binding.recyclerSeriesGrid.adapter = SeriesAdapter(list, { series ->
-                    updateHeroBanner(series)
+                    updateHeroBannerDebounced(series)
                 }, { series ->
                     openSeriesDetail(series)
                 })
@@ -160,6 +185,14 @@ class SeriesActivity : AppCompatActivity() {
                 binding.progressSeries.visibility = View.GONE
                 Toast.makeText(this@SeriesActivity, "Fehler beim Laden: ${e.message}", Toast.LENGTH_SHORT).show()
             }
+        }
+    }
+
+    private fun updateHeroBannerDebounced(series: SeriesItem) {
+        heroJob?.cancel()
+        heroJob = lifecycleScope.launch {
+            delay(150)
+            updateHeroBanner(series)
         }
     }
 
@@ -188,10 +221,9 @@ class SeriesActivity : AppCompatActivity() {
 
     inner class SeriesCategoryAdapter(
         private val items: List<Category>,
+        private var activeCatId: String?,
         private val onSelect: (Category) -> Unit
     ) : RecyclerView.Adapter<SeriesCategoryAdapter.ViewHolder>() {
-
-        private var focusJob: Job? = null
 
         inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
             val txtName: TextView = view.findViewById(R.id.txtCategoryName)
@@ -205,19 +237,13 @@ class SeriesActivity : AppCompatActivity() {
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val cat = items[position]
             holder.txtName.text = cat.name
+            holder.itemView.isSelected = (cat.id == activeCatId)
 
+            // Kategorie wird AUSSCHLIESSLICH bei Klick mit OK gewechselt!
             holder.itemView.setOnClickListener {
+                activeCatId = cat.id
+                notifyDataSetChanged()
                 onSelect(cat)
-            }
-
-            holder.itemView.setOnFocusChangeListener { _, hasFocus ->
-                if (hasFocus) {
-                    focusJob?.cancel()
-                    focusJob = lifecycleScope.launch {
-                        delay(350)
-                        onSelect(cat)
-                    }
-                }
             }
         }
 
