@@ -61,15 +61,25 @@ data class SeriesItem(
     @SerializedName("category_id") val categoryId: String? = null
 ) : Serializable
 
+data class SeriesDetailsInfo(
+    @SerializedName("name") val name: String? = null,
+    @SerializedName("cover") val cover: String? = null,
+    @SerializedName("plot") val plot: String? = null,
+    @SerializedName("genre") val genre: String? = null,
+    @SerializedName("releaseDate") val releaseDate: String? = null,
+    @SerializedName("rating") val rating: String? = null
+) : Serializable
+
 data class SeriesInfoResponse(
     @SerializedName("seasons") val seasons: List<SeasonItem>? = null,
+    @SerializedName("info") val info: SeriesDetailsInfo? = null,
     @SerializedName("episodes") val episodes: Map<String, List<EpisodeItem>>? = null
 ) : Serializable
 
 data class SeasonItem(
     @SerializedName("season_number") val seasonNumber: Int,
     @SerializedName("name") val name: String? = null,
-    @SerializedName("episode_count") val episodeCount: Int = 0
+    @SerializedName("episode_count") val episodeCount: String? = null
 ) : Serializable
 
 data class EpisodeItem(
@@ -77,5 +87,12 @@ data class EpisodeItem(
     @SerializedName("episode_num") val episodeNum: Int,
     @SerializedName("title") val title: String,
     @SerializedName("container_extension") val containerExtension: String? = "mp4",
-    @SerializedName("season") val season: Int = 1
+    @SerializedName("season") val season: Int = 1,
+    @SerializedName("info") val info: EpisodeInfo? = null
+) : Serializable
+
+data class EpisodeInfo(
+    @SerializedName("plot") val plot: String? = null,
+    @SerializedName("duration") val duration: String? = null,
+    @SerializedName("movie_image") val movieImage: String? = null
 ) : Serializable

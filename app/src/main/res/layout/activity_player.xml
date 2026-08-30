@@ -23,6 +23,38 @@
         android:layout_gravity="center"
         android:visibility="gone" />
 
+    <!-- Netflix-Style Mittlerer Spul-Indikator -->
+    <LinearLayout
+        android:id="@+id/osdScrubBubble"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:background="@drawable/card_focus_selector"
+        android:paddingHorizontal="32dp"
+        android:paddingVertical="18dp"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/txtScrubSpeed"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="⏩ +30s"
+            android:textColor="@color/accent_gold"
+            android:textSize="32sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/txtScrubTargetTime"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="00:25:40"
+            android:textColor="@color/text_primary"
+            android:textSize="20sp" />
+    </LinearLayout>
+
     <!-- Top OSD: Titel & Qualitäts-Badges -->
     <LinearLayout
         android:id="@+id/osdTop"
@@ -131,7 +163,7 @@
                 android:layout_marginStart="12dp" />
         </LinearLayout>
 
-        <!-- Schnellwahltasten für Fernbedienung -->
+        <!-- Schnellwahltasten für Fernbedienung (Fokus-fähig) -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -141,35 +173,41 @@
             <Button
                 android:id="@+id/btnPlayPause"
                 android:layout_width="wrap_content"
-                android:layout_height="36dp"
+                android:layout_height="40dp"
                 android:background="@drawable/card_focus_selector"
-                android:text="⏸ Pause (OK)"
+                android:clickable="true"
+                android:focusable="true"
+                android:text="⏸ Pause"
                 android:textColor="@color/text_primary"
-                android:textSize="12sp"
-                android:paddingHorizontal="14dp"
-                android:layout_marginEnd="10dp" />
+                android:textSize="13sp"
+                android:paddingHorizontal="16dp"
+                android:layout_marginEnd="12dp" />
 
             <Button
                 android:id="@+id/btnAudioTracks"
                 android:layout_width="wrap_content"
-                android:layout_height="36dp"
+                android:layout_height="40dp"
                 android:background="@drawable/card_focus_selector"
+                android:clickable="true"
+                android:focusable="true"
                 android:text="🔊 Tonspur"
                 android:textColor="@color/text_primary"
-                android:textSize="12sp"
-                android:paddingHorizontal="14dp"
-                android:layout_marginEnd="10dp" />
+                android:textSize="13sp"
+                android:paddingHorizontal="16dp"
+                android:layout_marginEnd="12dp" />
 
             <Button
                 android:id="@+id/btnSubtitles"
                 android:layout_width="wrap_content"
-                android:layout_height="36dp"
+                android:layout_height="40dp"
                 android:background="@drawable/card_focus_selector"
+                android:clickable="true"
+                android:focusable="true"
                 android:text="💬 Untertitel"
                 android:textColor="@color/text_primary"
-                android:textSize="12sp"
-                android:paddingHorizontal="14dp"
-                android:layout_marginEnd="10dp" />
+                android:textSize="13sp"
+                android:paddingHorizontal="16dp"
+                android:layout_marginEnd="12dp" />
 
             <TextView
                 android:id="@+id/txtHintControls"
@@ -177,7 +215,7 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:gravity="end"
-                android:text="◀ / ▶ 10s spulen | ▲ Menü"
+                android:text="◀ / ▶ Halten zum schnellen Spulen"
                 android:textColor="@color/text_secondary"
                 android:textSize="13sp" />
         </LinearLayout>

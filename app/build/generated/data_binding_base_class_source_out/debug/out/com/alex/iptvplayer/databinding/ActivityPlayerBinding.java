@@ -46,6 +46,9 @@ public final class ActivityPlayerBinding implements ViewBinding {
   public final LinearLayout osdBottom;
 
   @NonNull
+  public final LinearLayout osdScrubBubble;
+
+  @NonNull
   public final LinearLayout osdTop;
 
   @NonNull
@@ -70,6 +73,12 @@ public final class ActivityPlayerBinding implements ViewBinding {
   public final TextView txtPlayerTitle;
 
   @NonNull
+  public final TextView txtScrubSpeed;
+
+  @NonNull
+  public final TextView txtScrubTargetTime;
+
+  @NonNull
   public final TextView txtTimeCurrent;
 
   @NonNull
@@ -78,12 +87,13 @@ public final class ActivityPlayerBinding implements ViewBinding {
   private ActivityPlayerBinding(@NonNull FrameLayout rootView, @NonNull TextView badgeAudio,
       @NonNull TextView badgeQuality, @NonNull Button btnAudioTracks, @NonNull Button btnPlayPause,
       @NonNull Button btnSubtitles, @NonNull LinearLayout layoutTimeline,
-      @NonNull LinearLayout osdBottom, @NonNull LinearLayout osdTop,
-      @NonNull ProgressBar playerLoading, @NonNull FrameLayout playerRoot,
-      @NonNull SeekBar playerSeekBar, @NonNull PlayerView playerView,
-      @NonNull TextView txtHintControls, @NonNull TextView txtPlayerSubtitle,
-      @NonNull TextView txtPlayerTitle, @NonNull TextView txtTimeCurrent,
-      @NonNull TextView txtTimeTotal) {
+      @NonNull LinearLayout osdBottom, @NonNull LinearLayout osdScrubBubble,
+      @NonNull LinearLayout osdTop, @NonNull ProgressBar playerLoading,
+      @NonNull FrameLayout playerRoot, @NonNull SeekBar playerSeekBar,
+      @NonNull PlayerView playerView, @NonNull TextView txtHintControls,
+      @NonNull TextView txtPlayerSubtitle, @NonNull TextView txtPlayerTitle,
+      @NonNull TextView txtScrubSpeed, @NonNull TextView txtScrubTargetTime,
+      @NonNull TextView txtTimeCurrent, @NonNull TextView txtTimeTotal) {
     this.rootView = rootView;
     this.badgeAudio = badgeAudio;
     this.badgeQuality = badgeQuality;
@@ -92,6 +102,7 @@ public final class ActivityPlayerBinding implements ViewBinding {
     this.btnSubtitles = btnSubtitles;
     this.layoutTimeline = layoutTimeline;
     this.osdBottom = osdBottom;
+    this.osdScrubBubble = osdScrubBubble;
     this.osdTop = osdTop;
     this.playerLoading = playerLoading;
     this.playerRoot = playerRoot;
@@ -100,6 +111,8 @@ public final class ActivityPlayerBinding implements ViewBinding {
     this.txtHintControls = txtHintControls;
     this.txtPlayerSubtitle = txtPlayerSubtitle;
     this.txtPlayerTitle = txtPlayerTitle;
+    this.txtScrubSpeed = txtScrubSpeed;
+    this.txtScrubTargetTime = txtScrubTargetTime;
     this.txtTimeCurrent = txtTimeCurrent;
     this.txtTimeTotal = txtTimeTotal;
   }
@@ -173,6 +186,12 @@ public final class ActivityPlayerBinding implements ViewBinding {
         break missingId;
       }
 
+      id = R.id.osdScrubBubble;
+      LinearLayout osdScrubBubble = ViewBindings.findChildViewById(rootView, id);
+      if (osdScrubBubble == null) {
+        break missingId;
+      }
+
       id = R.id.osdTop;
       LinearLayout osdTop = ViewBindings.findChildViewById(rootView, id);
       if (osdTop == null) {
@@ -217,6 +236,18 @@ public final class ActivityPlayerBinding implements ViewBinding {
         break missingId;
       }
 
+      id = R.id.txtScrubSpeed;
+      TextView txtScrubSpeed = ViewBindings.findChildViewById(rootView, id);
+      if (txtScrubSpeed == null) {
+        break missingId;
+      }
+
+      id = R.id.txtScrubTargetTime;
+      TextView txtScrubTargetTime = ViewBindings.findChildViewById(rootView, id);
+      if (txtScrubTargetTime == null) {
+        break missingId;
+      }
+
       id = R.id.txtTimeCurrent;
       TextView txtTimeCurrent = ViewBindings.findChildViewById(rootView, id);
       if (txtTimeCurrent == null) {
@@ -230,9 +261,10 @@ public final class ActivityPlayerBinding implements ViewBinding {
       }
 
       return new ActivityPlayerBinding((FrameLayout) rootView, badgeAudio, badgeQuality,
-          btnAudioTracks, btnPlayPause, btnSubtitles, layoutTimeline, osdBottom, osdTop,
-          playerLoading, playerRoot, playerSeekBar, playerView, txtHintControls, txtPlayerSubtitle,
-          txtPlayerTitle, txtTimeCurrent, txtTimeTotal);
+          btnAudioTracks, btnPlayPause, btnSubtitles, layoutTimeline, osdBottom, osdScrubBubble,
+          osdTop, playerLoading, playerRoot, playerSeekBar, playerView, txtHintControls,
+          txtPlayerSubtitle, txtPlayerTitle, txtScrubSpeed, txtScrubTargetTime, txtTimeCurrent,
+          txtTimeTotal);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));

@@ -63,6 +63,10 @@
             android:exported="false"
             android:screenOrientation="landscape" />
         <activity
+            android:name="com.alex.iptvplayer.ui.SeriesDetailActivity"
+            android:exported="false"
+            android:screenOrientation="landscape" />
+        <activity
             android:name="com.alex.iptvplayer.ui.PlayerActivity"
             android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
             android:exported="false"

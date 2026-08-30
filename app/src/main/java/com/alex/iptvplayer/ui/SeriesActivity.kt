@@ -8,7 +8,6 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
@@ -16,7 +15,6 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.alex.iptvplayer.R
 import com.alex.iptvplayer.data.Category
-import com.alex.iptvplayer.data.EpisodeItem
 import com.alex.iptvplayer.data.SeriesItem
 import com.alex.iptvplayer.data.XtreamClient
 import com.alex.iptvplayer.databinding.ActivitySeriesBinding
@@ -75,7 +73,7 @@ class SeriesActivity : AppCompatActivity() {
                 val list = client.getSeries(category.id)
                 binding.progressSeries.visibility = View.GONE
                 binding.recyclerSeriesGrid.adapter = SeriesAdapter(list) { series ->
-                    showEpisodesDialog(series)
+                    openSeriesDetail(series)
                 }
             } catch (e: Exception) {
                 binding.progressSeries.visibility = View.GONE
@@ -84,37 +82,9 @@ class SeriesActivity : AppCompatActivity() {
         }
     }
 
-    private fun showEpisodesDialog(series: SeriesItem) {
-        lifecycleScope.launch {
-            try {
-                val info = client.getSeriesInfo(series.seriesId)
-                val allEpisodes = mutableListOf<EpisodeItem>()
-                info.episodes?.values?.forEach { list -> allEpisodes.addAll(list) }
-
-                if (allEpisodes.isEmpty()) {
-                    Toast.makeText(this@SeriesActivity, "Keine Episoden verfügbar", Toast.LENGTH_SHORT).show()
-                    return@launch
-                }
-
-                val titles = allEpisodes.map { "Staffel ${it.season} - Ep ${it.episodeNum}: ${it.title}" }.toTypedArray()
-                AlertDialog.Builder(this@SeriesActivity, androidx.appcompat.R.style.Theme_AppCompat_Dialog_Alert)
-                    .setTitle(series.name)
-                    .setItems(titles) { _, which ->
-                        val ep = allEpisodes[which]
-                        playEpisode(series.name, ep)
-                    }
-                    .setNegativeButton("Zurück", null)
-                    .show()
-            } catch (e: Exception) {
-                Toast.makeText(this@SeriesActivity, "Fehler beim Laden der Episoden: ${e.message}", Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
-
-    private fun playEpisode(seriesName: String, ep: EpisodeItem) {
-        val intent = Intent(this, PlayerActivity::class.java).apply {
-            putExtra("STREAM_URL", client.getSeriesStreamUrl(ep.id, ep.containerExtension ?: "mp4"))
-            putExtra("STREAM_NAME", "$seriesName - S${ep.season}E${ep.episodeNum}")
+    private fun openSeriesDetail(series: SeriesItem) {
+        val intent = Intent(this, SeriesDetailActivity::class.java).apply {
+            putExtra("SERIES_ITEM", series)
         }
         startActivity(intent)
     }

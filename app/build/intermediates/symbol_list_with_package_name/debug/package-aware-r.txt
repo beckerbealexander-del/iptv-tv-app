@@ -4077,6 +4077,8 @@ id ignoreRequest
 id image
 id imgChannelLogo
 id imgDetailLogo
+id imgDetailSeriesCover
+id imgEpisodeThumb
 id imgPoster
 id indeterminate
 id info
@@ -4247,6 +4249,7 @@ id open_search_view_status_bar_spacer
 id open_search_view_toolbar
 id open_search_view_toolbar_container
 id osdBottom
+id osdScrubBubble
 id osdTop
 id outline
 id outward
@@ -4281,6 +4284,7 @@ id postLayout
 id pressed
 id progressCategories
 id progressChannels
+id progressEpisodes
 id progressSeries
 id progressVod
 id progress_circular
@@ -4290,6 +4294,8 @@ id ratio
 id rectangles
 id recyclerCategories
 id recyclerChannels
+id recyclerEpisodes
+id recyclerSeasons
 id recyclerSeriesCategories
 id recyclerSeriesGrid
 id recyclerVodCategories
@@ -4426,15 +4432,25 @@ id txtCategoryName
 id txtCategoryTitle
 id txtChannelName
 id txtDetailName
+id txtDetailSeriesGenre
+id txtDetailSeriesPlot
+id txtDetailSeriesRating
+id txtDetailSeriesTitle
 id txtEpgCurrentDesc
 id txtEpgCurrentTime
 id txtEpgCurrentTitle
 id txtEpgNextTime
 id txtEpgNextTitle
+id txtEpisodeDuration
+id txtEpisodeNumAndTitle
+id txtEpisodePlot
 id txtHintControls
 id txtPlayerSubtitle
 id txtPlayerTitle
 id txtPosterTitle
+id txtScrubSpeed
+id txtScrubTargetTime
+id txtSeasonName
 id txtSeriesCategoryTitle
 id txtTimeCurrent
 id txtTimeTotal
@@ -4616,6 +4632,7 @@ layout activity_live_tv
 layout activity_main
 layout activity_player
 layout activity_series
+layout activity_series_detail
 layout activity_settings
 layout activity_vod
 layout custom_dialog
@@ -4648,7 +4665,9 @@ layout ime_base_split_test_activity
 layout ime_secondary_split_test_activity
 layout item_category
 layout item_channel
+layout item_episode_card
 layout item_poster
+layout item_season_tab
 layout lb_action_1_line
 layout lb_action_2_lines
 layout lb_background_window

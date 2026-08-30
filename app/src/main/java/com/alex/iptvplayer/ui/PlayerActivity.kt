@@ -39,7 +39,14 @@ class PlayerActivity : AppCompatActivity() {
 
     private val osdHandler = Handler(Looper.getMainLooper())
     private val progressHandler = Handler(Looper.getMainLooper())
+    private val scrubHandler = Handler(Looper.getMainLooper())
     private var epgJob: Job? = null
+
+    // Netflix-Style Spulen Variablen
+    private var targetSeekPosition: Long = -1
+    private var scrubStepIndex = 0
+    private val scrubSteps = longArrayOf(10_000, 30_000, 60_000, 150_000, 300_000) // 10s, 30s, 1m, 2.5m, 5m
+    private var lastScrubTime = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -53,7 +60,7 @@ class PlayerActivity : AppCompatActivity() {
         currentStreamId = intent.getIntExtra("STREAM_ID", -1)
         currentIndex = intent.getIntExtra("CURRENT_INDEX", -1)
 
-        @Suppress("UNCHECKED_CAST")
+        @Suppress("DEPRECATION")
         streamList = (intent.getSerializableExtra("STREAM_LIST") as? ArrayList<LiveStream>) ?: emptyList()
         isLive = streamList.isNotEmpty()
 
@@ -67,7 +74,7 @@ class PlayerActivity : AppCompatActivity() {
             binding.txtHintControls.text = "▲ / ▼ Umschalten | OK Info"
         } else {
             binding.layoutTimeline.visibility = View.VISIBLE
-            binding.txtHintControls.text = "◀ / ▶ 10s spulen | OK Pause"
+            binding.txtHintControls.text = "◀ / ▶ Halten zum schnellen Spulen"
         }
 
         binding.btnPlayPause.setOnClickListener { togglePlayPause() }
@@ -106,7 +113,7 @@ class PlayerActivity : AppCompatActivity() {
                 }
 
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
-                    binding.btnPlayPause.text = if (isPlaying) "⏸ Pause (OK)" else "▶ Play (OK)"
+                    binding.btnPlayPause.text = if (isPlaying) "⏸ Pause" else "▶ Play"
                 }
 
                 override fun onTracksChanged(tracks: Tracks) {
@@ -160,7 +167,7 @@ class PlayerActivity : AppCompatActivity() {
         progressHandler.post(object : Runnable {
             override fun run() {
                 val player = exoPlayer
-                if (player != null && !isLive && player.duration > 0) {
+                if (player != null && !isLive && player.duration > 0 && targetSeekPosition < 0) {
                     val current = player.currentPosition
                     val total = player.duration
                     binding.txtTimeCurrent.text = formatTime(current)
@@ -212,11 +219,63 @@ class PlayerActivity : AppCompatActivity() {
 
         osdHandler.removeCallbacksAndMessages(null)
         osdHandler.postDelayed({
-            if (exoPlayer?.isPlaying == true) {
+            if (exoPlayer?.isPlaying == true && !isOsdFocused()) {
                 binding.osdTop.visibility = View.GONE
                 binding.osdBottom.visibility = View.GONE
             }
         }, 5000)
+    }
+
+    private fun isOsdFocused(): Boolean {
+        return binding.btnPlayPause.hasFocus() ||
+                binding.btnAudioTracks.hasFocus() ||
+                binding.btnSubtitles.hasFocus() ||
+                binding.playerSeekBar.hasFocus()
+    }
+
+    // --- Netflix-Style Scrubbing (Spulen mit Geschwindigkeits-Stufen) ---
+    private fun performNetflixScrub(forward: Boolean) {
+        val player = exoPlayer ?: return
+        val now = System.currentTimeMillis()
+
+        if (now - lastScrubTime < 600) {
+            scrubStepIndex = (scrubStepIndex + 1).coerceAtMost(scrubSteps.size - 1)
+        } else {
+            scrubStepIndex = 0
+            targetSeekPosition = player.currentPosition
+        }
+        lastScrubTime = now
+
+        val stepMs = scrubSteps[scrubStepIndex]
+        if (forward) {
+            targetSeekPosition = (targetSeekPosition + stepMs).coerceAtMost(player.duration)
+        } else {
+            targetSeekPosition = (targetSeekPosition - stepMs).coerceAtLeast(0)
+        }
+
+        // Zeige Netflix-Style Spul-Blase
+        val icon = if (forward) "⏩ +" else "⏪ -"
+        val stepSec = stepMs / 1000
+        val stepText = if (stepSec >= 60) "${stepSec / 60}m" else "${stepSec}s"
+        binding.txtScrubSpeed.text = "$icon$stepText"
+        binding.txtScrubTargetTime.text = "${formatTime(targetSeekPosition)} / ${formatTime(player.duration)}"
+        binding.osdScrubBubble.visibility = View.VISIBLE
+
+        showOsd(binding.txtPlayerTitle.text.toString(), currentStreamId)
+        binding.txtTimeCurrent.text = formatTime(targetSeekPosition)
+        if (player.duration > 0) {
+            binding.playerSeekBar.progress = ((targetSeekPosition * 1000) / player.duration).toInt()
+        }
+
+        // Debounce: Erst nach 600ms Ruhe tatsächlich seeken
+        scrubHandler.removeCallbacksAndMessages(null)
+        scrubHandler.postDelayed({
+            if (targetSeekPosition >= 0) {
+                player.seekTo(targetSeekPosition)
+                targetSeekPosition = -1
+                binding.osdScrubBubble.visibility = View.GONE
+            }
+        }, 600)
     }
 
     // --- Audio-Spuren Dialog ---
@@ -297,28 +356,51 @@ class PlayerActivity : AppCompatActivity() {
     // --- Fernbedienungssteuerung (D-Pad) ---
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         when (keyCode) {
-            // Spulen vorwärts (10s)
+            // Netflix-Style Spulen vorwärts
             KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {
-                if (!isLive && exoPlayer != null) {
-                    val newPos = (exoPlayer!!.currentPosition + 10_000).coerceAtMost(exoPlayer!!.duration)
-                    exoPlayer!!.seekTo(newPos)
-                    showOsd(binding.txtPlayerTitle.text.toString(), currentStreamId)
+                if (!isLive && !isOsdFocused()) {
+                    performNetflixScrub(true)
                     return true
                 }
             }
-            // Spulen rückwärts (10s)
+            // Netflix-Style Spulen rückwärts
             KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_MEDIA_REWIND -> {
-                if (!isLive && exoPlayer != null) {
-                    val newPos = (exoPlayer!!.currentPosition - 10_000).coerceAtLeast(0)
-                    exoPlayer!!.seekTo(newPos)
-                    showOsd(binding.txtPlayerTitle.text.toString(), currentStreamId)
+                if (!isLive && !isOsdFocused()) {
+                    performNetflixScrub(false)
                     return true
                 }
             }
-            // Play / Pause oder OSD öffnen
+            // Runter-Taste: OSD Buttons fokussieren oder zappen
+            KeyEvent.KEYCODE_DPAD_DOWN -> {
+                if (isLive) {
+                    zapPreviousChannel()
+                    return true
+                } else {
+                    if (binding.osdBottom.visibility != View.VISIBLE) {
+                        showOsd(binding.txtPlayerTitle.text.toString(), currentStreamId)
+                    }
+                    binding.btnPlayPause.requestFocus()
+                    return true
+                }
+            }
+            // Hoch-Taste: OSD öffnen oder direkt Zapping
+            KeyEvent.KEYCODE_DPAD_UP -> {
+                if (isLive) {
+                    zapNextChannel()
+                    return true
+                } else {
+                    showOsd(binding.txtPlayerTitle.text.toString(), currentStreamId)
+                    binding.btnAudioTracks.requestFocus()
+                    return true
+                }
+            }
+            // Play / Pause oder OSD Bestätigung
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
                 if (!isLive) {
-                    togglePlayPause()
+                    if (!isOsdFocused()) {
+                        togglePlayPause()
+                        return true
+                    }
                 } else {
                     if (binding.osdBottom.visibility == View.VISIBLE) {
                         binding.osdTop.visibility = View.GONE
@@ -326,25 +408,8 @@ class PlayerActivity : AppCompatActivity() {
                     } else {
                         showOsd(binding.txtPlayerTitle.text.toString(), currentStreamId)
                     }
+                    return true
                 }
-                return true
-            }
-            // Zapping im Live TV / Menü öffnen in VOD
-            KeyEvent.KEYCODE_DPAD_UP -> {
-                if (isLive) {
-                    zapNextChannel()
-                } else {
-                    showAudioTrackDialog()
-                }
-                return true
-            }
-            KeyEvent.KEYCODE_DPAD_DOWN -> {
-                if (isLive) {
-                    zapPreviousChannel()
-                } else {
-                    showOsd(binding.txtPlayerTitle.text.toString(), currentStreamId)
-                }
-                return true
             }
         }
         return super.onKeyDown(keyCode, event)
@@ -380,6 +445,7 @@ class PlayerActivity : AppCompatActivity() {
         super.onDestroy()
         osdHandler.removeCallbacksAndMessages(null)
         progressHandler.removeCallbacksAndMessages(null)
+        scrubHandler.removeCallbacksAndMessages(null)
         exoPlayer?.release()
         exoPlayer = null
     }
