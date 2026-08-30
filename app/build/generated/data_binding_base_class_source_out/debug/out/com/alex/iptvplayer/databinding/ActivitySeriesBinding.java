@@ -34,6 +34,18 @@ public final class ActivitySeriesBinding implements ViewBinding {
   public final Button btnSeriesFilterRu;
 
   @NonNull
+  public final Button btnSeriesSortAlpha;
+
+  @NonNull
+  public final Button btnSeriesSortDefault;
+
+  @NonNull
+  public final Button btnSeriesSortRating;
+
+  @NonNull
+  public final Button btnSeriesSortYear;
+
+  @NonNull
   public final EditText editSeriesSearch;
 
   @NonNull
@@ -68,6 +80,8 @@ public final class ActivitySeriesBinding implements ViewBinding {
 
   private ActivitySeriesBinding(@NonNull LinearLayout rootView, @NonNull Button btnSeriesFilterAll,
       @NonNull Button btnSeriesFilterDe, @NonNull Button btnSeriesFilterRu,
+      @NonNull Button btnSeriesSortAlpha, @NonNull Button btnSeriesSortDefault,
+      @NonNull Button btnSeriesSortRating, @NonNull Button btnSeriesSortYear,
       @NonNull EditText editSeriesSearch, @NonNull ImageView imgHeroSeriesCover,
       @NonNull ProgressBar progressSeries, @NonNull ProgressBar progressSeriesCats,
       @NonNull RecyclerView recyclerSeriesCategories, @NonNull RecyclerView recyclerSeriesGrid,
@@ -78,6 +92,10 @@ public final class ActivitySeriesBinding implements ViewBinding {
     this.btnSeriesFilterAll = btnSeriesFilterAll;
     this.btnSeriesFilterDe = btnSeriesFilterDe;
     this.btnSeriesFilterRu = btnSeriesFilterRu;
+    this.btnSeriesSortAlpha = btnSeriesSortAlpha;
+    this.btnSeriesSortDefault = btnSeriesSortDefault;
+    this.btnSeriesSortRating = btnSeriesSortRating;
+    this.btnSeriesSortYear = btnSeriesSortYear;
     this.editSeriesSearch = editSeriesSearch;
     this.imgHeroSeriesCover = imgHeroSeriesCover;
     this.progressSeries = progressSeries;
@@ -133,6 +151,30 @@ public final class ActivitySeriesBinding implements ViewBinding {
       id = R.id.btnSeriesFilterRu;
       Button btnSeriesFilterRu = ViewBindings.findChildViewById(rootView, id);
       if (btnSeriesFilterRu == null) {
+        break missingId;
+      }
+
+      id = R.id.btnSeriesSortAlpha;
+      Button btnSeriesSortAlpha = ViewBindings.findChildViewById(rootView, id);
+      if (btnSeriesSortAlpha == null) {
+        break missingId;
+      }
+
+      id = R.id.btnSeriesSortDefault;
+      Button btnSeriesSortDefault = ViewBindings.findChildViewById(rootView, id);
+      if (btnSeriesSortDefault == null) {
+        break missingId;
+      }
+
+      id = R.id.btnSeriesSortRating;
+      Button btnSeriesSortRating = ViewBindings.findChildViewById(rootView, id);
+      if (btnSeriesSortRating == null) {
+        break missingId;
+      }
+
+      id = R.id.btnSeriesSortYear;
+      Button btnSeriesSortYear = ViewBindings.findChildViewById(rootView, id);
+      if (btnSeriesSortYear == null) {
         break missingId;
       }
 
@@ -203,7 +245,8 @@ public final class ActivitySeriesBinding implements ViewBinding {
       }
 
       return new ActivitySeriesBinding((LinearLayout) rootView, btnSeriesFilterAll,
-          btnSeriesFilterDe, btnSeriesFilterRu, editSeriesSearch, imgHeroSeriesCover,
+          btnSeriesFilterDe, btnSeriesFilterRu, btnSeriesSortAlpha, btnSeriesSortDefault,
+          btnSeriesSortRating, btnSeriesSortYear, editSeriesSearch, imgHeroSeriesCover,
           progressSeries, progressSeriesCats, recyclerSeriesCategories, recyclerSeriesGrid,
           seriesHeroBanner, txtHeroSeriesHint, txtHeroSeriesRating, txtHeroSeriesTitle,
           txtSeriesCategoryTitle);

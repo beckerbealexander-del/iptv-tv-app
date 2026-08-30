@@ -24,6 +24,14 @@ id btnSearchClear
 id btnSeriesFilterAll
 id btnSeriesFilterDe
 id btnSeriesFilterRu
+id btnSeriesSortAlpha
+id btnSeriesSortDefault
+id btnSeriesSortRating
+id btnSeriesSortYear
+id btnSortAlpha
+id btnSortDefault
+id btnSortRating
+id btnSortYear
 id btnSubtitles
 id btnVodFilterAll
 id btnVodFilterDe

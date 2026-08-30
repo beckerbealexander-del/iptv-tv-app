@@ -36,11 +36,15 @@ class SeriesActivity : AppCompatActivity() {
     private lateinit var binding: ActivitySeriesBinding
     private lateinit var client: XtreamClient
     private var allCategories: List<Category> = emptyList()
+    private var displayedCategories: List<Category> = emptyList()
     private var currentFilter = LangFilter.AUTO_DE_RU_ADULT
     private var currentSeries: List<SeriesItem> = emptyList()
+    private var rawCategorySeries: List<SeriesItem> = emptyList()
     private var allSeriesGlobal: List<SeriesItem> = emptyList()
     private var selectedCategoryId: String? = null
     private val categoryCache = HashMap<String, List<SeriesItem>>()
+
+    private var currentSortMode: String = "DEFAULT"
 
     private var loadJob: Job? = null
     private var searchJob: Job? = null
@@ -65,7 +69,10 @@ class SeriesActivity : AppCompatActivity() {
             setItemViewCacheSize(80)
         }
 
+        binding.txtSeriesCategoryTitle.text = "👈 Wähle eine Kategorie oder nutze die Suche"
+
         setupFilterButtons()
+        setupSortButtons()
         setupSearch()
         loadCategories()
         preloadGlobalCatalog()
@@ -82,6 +89,37 @@ class SeriesActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 // Silent
             }
+        }
+    }
+
+    private fun setupSortButtons() {
+        binding.btnSeriesSortDefault.setOnClickListener { applySorting("DEFAULT") }
+        binding.btnSeriesSortRating.setOnClickListener { applySorting("RATING") }
+        binding.btnSeriesSortYear.setOnClickListener { applySorting("YEAR") }
+        binding.btnSeriesSortAlpha.setOnClickListener { applySorting("ALPHA") }
+    }
+
+    private fun applySorting(mode: String) {
+        currentSortMode = mode
+        if (rawCategorySeries.isEmpty()) return
+
+        val sorted = when (mode) {
+            "RATING" -> rawCategorySeries.sortedByDescending { it.rating?.toFloatOrNull() ?: 0f }
+            "YEAR" -> rawCategorySeries.sortedByDescending { 
+                val year = Regex("\\b(19\\d\\d|20\\d\\d)\\b").find(it.name)?.value?.toIntOrNull() ?: 0
+                year
+            }
+            "ALPHA" -> rawCategorySeries.sortedBy { it.name.lowercase() }
+            else -> rawCategorySeries
+        }
+        currentSeries = sorted
+        binding.recyclerSeriesGrid.adapter = SeriesAdapter(sorted, { series ->
+            updateHeroBannerDebounced(series)
+        }, { series ->
+            openSeriesDetail(series)
+        })
+        if (sorted.isNotEmpty()) {
+            updateHeroBanner(sorted[0])
         }
     }
 
@@ -112,13 +150,9 @@ class SeriesActivity : AppCompatActivity() {
                     delay(350)
                     if (q.isEmpty()) {
                         binding.txtSeriesCategoryTitle.text = "Serien"
-                        binding.recyclerSeriesGrid.adapter = SeriesAdapter(currentSeries, { series ->
-                            updateHeroBannerDebounced(series)
-                        }, { series ->
-                            openSeriesDetail(series)
-                        })
+                        rawCategorySeries = currentSeries
+                        applySorting(currentSortMode)
                     } else {
-                        // Sprachfilter auf globale Suche anwenden (z.B. nur deutsche Serien bei DE Filter)
                         val allowedCategoryIds = if (currentFilter == LangFilter.ALL) null
                         else client.filterCategories(allCategories, currentFilter).map { it.id }.toSet()
 
@@ -132,11 +166,8 @@ class SeriesActivity : AppCompatActivity() {
 
                         val filtered = pool.filter { it.name.contains(q, ignoreCase = true) }
                         binding.txtSeriesCategoryTitle.text = "Suchergebnisse (${filtered.size})"
-                        binding.recyclerSeriesGrid.adapter = SeriesAdapter(filtered, { series ->
-                            updateHeroBannerDebounced(series)
-                        }, { series ->
-                            openSeriesDetail(series)
-                        })
+                        rawCategorySeries = filtered
+                        applySorting(currentSortMode)
                     }
                 }
             }
@@ -163,12 +194,11 @@ class SeriesActivity : AppCompatActivity() {
         if (filtered.none { it.id == "ALL_SERIES" }) {
             filtered.add(0, Category(id = "ALL_SERIES", name = "✨ Alle Serien"))
         }
+        displayedCategories = filtered
         binding.recyclerSeriesCategories.adapter = SeriesCategoryAdapter(filtered) { cat ->
             loadSeries(cat)
         }
-        if (filtered.isNotEmpty() && selectedCategoryId == null) {
-            loadSeries(filtered[0])
-        }
+        // Keine automatische Vorauswahl, damit das Laden nicht ungefragt passiert!
     }
 
     private fun loadCategories() {
@@ -191,23 +221,15 @@ class SeriesActivity : AppCompatActivity() {
             hideKeyboard()
         }
 
-        if (selectedCategoryId == category.id && currentSeries.isNotEmpty()) return
         selectedCategoryId = category.id
-
+        binding.recyclerSeriesCategories.adapter?.notifyDataSetChanged()
         binding.txtSeriesCategoryTitle.text = category.name
 
         val cached = categoryCache[category.id]
         if (cached != null) {
-            currentSeries = cached
+            rawCategorySeries = cached
             binding.progressSeries.visibility = View.GONE
-            binding.recyclerSeriesGrid.adapter = SeriesAdapter(cached, { series ->
-                updateHeroBannerDebounced(series)
-            }, { series ->
-                openSeriesDetail(series)
-            })
-            if (cached.isNotEmpty()) {
-                updateHeroBanner(cached[0])
-            }
+            applySorting(currentSortMode)
             return
         }
 
@@ -217,17 +239,9 @@ class SeriesActivity : AppCompatActivity() {
             try {
                 val list = client.getSeries(category.id)
                 categoryCache[category.id] = list
-                currentSeries = list
+                rawCategorySeries = list
                 binding.progressSeries.visibility = View.GONE
-                binding.recyclerSeriesGrid.adapter = SeriesAdapter(list, { series ->
-                    updateHeroBannerDebounced(series)
-                }, { series ->
-                    openSeriesDetail(series)
-                })
-
-                if (list.isNotEmpty()) {
-                    updateHeroBanner(list[0])
-                }
+                applySorting(currentSortMode)
             } catch (e: Exception) {
                 binding.progressSeries.visibility = View.GONE
                 Toast.makeText(this@SeriesActivity, "Fehler beim Laden: ${e.message}", Toast.LENGTH_SHORT).show()
@@ -266,7 +280,16 @@ class SeriesActivity : AppCompatActivity() {
         startActivity(intent)
     }
 
-    // --- Absolute Hard-Lock D-Pad Navigation in der Grid ---
+    private fun focusSelectedCategory() {
+        val catIdx = displayedCategories.indexOfFirst { it.id == selectedCategoryId }.coerceAtLeast(0)
+        binding.recyclerSeriesCategories.scrollToPosition(catIdx)
+        binding.recyclerSeriesCategories.post {
+            val holder = binding.recyclerSeriesCategories.findViewHolderForAdapterPosition(catIdx)
+            holder?.itemView?.requestFocus() ?: binding.recyclerSeriesCategories.requestFocus()
+        }
+    }
+
+    // --- Hard-Lock D-Pad Navigation in der Grid mit sicherer Rückkehr zur gewählten Kategorie ---
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.action == KeyEvent.ACTION_DOWN) {
             val focused = currentFocus
@@ -278,8 +301,23 @@ class SeriesActivity : AppCompatActivity() {
 
                 when (event.keyCode) {
                     KeyEvent.KEYCODE_BACK -> {
-                        val catHolder = binding.recyclerSeriesCategories.findViewHolderForAdapterPosition(0)
-                        catHolder?.itemView?.requestFocus() ?: binding.recyclerSeriesCategories.requestFocus()
+                        focusSelectedCategory()
+                        return true
+                    }
+                    KeyEvent.KEYCODE_DPAD_LEFT -> {
+                        if (gridPos % 5 == 0) {
+                            focusSelectedCategory()
+                        } else {
+                            val target = gridPos - 1
+                            binding.recyclerSeriesGrid.findViewHolderForAdapterPosition(target)?.itemView?.requestFocus()
+                        }
+                        return true
+                    }
+                    KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                        if (gridPos % 5 < 4 && gridPos < total - 1) {
+                            val target = gridPos + 1
+                            binding.recyclerSeriesGrid.findViewHolderForAdapterPosition(target)?.itemView?.requestFocus()
+                        }
                         return true
                     }
                     KeyEvent.KEYCODE_DPAD_DOWN -> {
@@ -299,20 +337,8 @@ class SeriesActivity : AppCompatActivity() {
                             binding.recyclerSeriesGrid.post {
                                 binding.recyclerSeriesGrid.findViewHolderForAdapterPosition(prevPos)?.itemView?.requestFocus()
                             }
-                        }
-                        return true
-                    }
-                    KeyEvent.KEYCODE_DPAD_LEFT -> {
-                        if (gridPos % 5 > 0) {
-                            val target = gridPos - 1
-                            binding.recyclerSeriesGrid.findViewHolderForAdapterPosition(target)?.itemView?.requestFocus()
-                        }
-                        return true
-                    }
-                    KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                        if (gridPos % 5 < 4 && gridPos < total - 1) {
-                            val target = gridPos + 1
-                            binding.recyclerSeriesGrid.findViewHolderForAdapterPosition(target)?.itemView?.requestFocus()
+                        } else {
+                            binding.btnSeriesSortDefault.requestFocus()
                         }
                         return true
                     }
@@ -364,8 +390,6 @@ class SeriesActivity : AppCompatActivity() {
             holder.itemView.isSelected = (cat.id == selectedCategoryId)
 
             holder.itemView.setOnClickListener {
-                selectedCategoryId = cat.id
-                holder.itemView.requestFocus()
                 onSelect(cat)
             }
         }

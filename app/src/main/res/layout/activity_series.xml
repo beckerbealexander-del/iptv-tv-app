@@ -96,33 +96,92 @@
         android:layout_height="match_parent"
         android:layout_weight="1"
         android:orientation="vertical"
-        android:padding="12dp">
+        android:padding="10dp">
 
-        <TextView
-            android:id="@+id/txtSeriesCategoryTitle"
+        <!-- Kopfzeile mit Kategorie-Titel und Sortier-Buttons -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Serien"
-            android:textColor="@color/text_primary"
-            android:textSize="16sp"
-            android:textStyle="bold"
-            android:layout_marginBottom="6dp" />
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:layout_marginBottom="4dp">
+
+            <TextView
+                android:id="@+id/txtSeriesCategoryTitle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Serien"
+                android:textColor="@color/text_primary"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <!-- Sortier-Buttons -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btnSeriesSortDefault"
+                    android:layout_width="wrap_content"
+                    android:layout_height="26dp"
+                    android:background="@drawable/card_focus_selector"
+                    android:text="⚡ Standard"
+                    android:textColor="@color/text_primary"
+                    android:textSize="10sp"
+                    android:paddingHorizontal="6dp"
+                    android:layout_marginEnd="3dp" />
+
+                <Button
+                    android:id="@+id/btnSeriesSortRating"
+                    android:layout_width="wrap_content"
+                    android:layout_height="26dp"
+                    android:background="@drawable/card_focus_selector"
+                    android:text="⭐ Bewertung"
+                    android:textColor="@color/text_primary"
+                    android:textSize="10sp"
+                    android:paddingHorizontal="6dp"
+                    android:layout_marginEnd="3dp" />
+
+                <Button
+                    android:id="@+id/btnSeriesSortYear"
+                    android:layout_width="wrap_content"
+                    android:layout_height="26dp"
+                    android:background="@drawable/card_focus_selector"
+                    android:text="📅 Neu"
+                    android:textColor="@color/text_primary"
+                    android:textSize="10sp"
+                    android:paddingHorizontal="6dp"
+                    android:layout_marginEnd="3dp" />
+
+                <Button
+                    android:id="@+id/btnSeriesSortAlpha"
+                    android:layout_width="wrap_content"
+                    android:layout_height="26dp"
+                    android:background="@drawable/card_focus_selector"
+                    android:text="🔤 A-Z"
+                    android:textColor="@color/text_primary"
+                    android:textSize="10sp"
+                    android:paddingHorizontal="6dp" />
+            </LinearLayout>
+        </LinearLayout>
 
         <!-- Kompakter Hero Banner -->
         <LinearLayout
             android:id="@+id/seriesHeroBanner"
             android:layout_width="match_parent"
-            android:layout_height="110dp"
+            android:layout_height="100dp"
             android:background="#151515"
             android:orientation="horizontal"
-            android:padding="10dp"
+            android:padding="8dp"
             android:gravity="center_vertical"
-            android:layout_marginBottom="8dp">
+            android:layout_marginBottom="6dp">
 
             <ImageView
                 android:id="@+id/imgHeroSeriesCover"
-                android:layout_width="65dp"
-                android:layout_height="90dp"
+                android:layout_width="60dp"
+                android:layout_height="84dp"
                 android:scaleType="centerCrop"
                 android:src="@drawable/tv_banner"
                 android:layout_marginEnd="12dp" />
@@ -141,7 +200,7 @@
                     android:maxLines="1"
                     android:text="Serientitel"
                     android:textColor="@color/text_primary"
-                    android:textSize="16sp"
+                    android:textSize="15sp"
                     android:textStyle="bold" />
 
                 <TextView

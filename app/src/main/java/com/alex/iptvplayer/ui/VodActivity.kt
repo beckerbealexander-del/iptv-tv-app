@@ -36,11 +36,15 @@ class VodActivity : AppCompatActivity() {
     private lateinit var binding: ActivityVodBinding
     private lateinit var client: XtreamClient
     private var allCategories: List<Category> = emptyList()
+    private var displayedCategories: List<Category> = emptyList()
     private var currentFilter = LangFilter.AUTO_DE_RU_ADULT
     private var currentMovies: List<VodStream> = emptyList()
+    private var rawCategoryMovies: List<VodStream> = emptyList()
     private var allMoviesGlobal: List<VodStream> = emptyList()
     private var selectedCategoryId: String? = null
     private val categoryCache = HashMap<String, List<VodStream>>()
+
+    private var currentSortMode: String = "DEFAULT"
 
     private var loadJob: Job? = null
     private var searchJob: Job? = null
@@ -65,7 +69,10 @@ class VodActivity : AppCompatActivity() {
             setItemViewCacheSize(80)
         }
 
+        binding.txtVodCategoryTitle.text = "👈 Wähle eine Kategorie oder nutze die Suche"
+
         setupFilterButtons()
+        setupSortButtons()
         setupSearch()
         loadCategories()
         preloadGlobalCatalog()
@@ -82,6 +89,37 @@ class VodActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 // Silent
             }
+        }
+    }
+
+    private fun setupSortButtons() {
+        binding.btnSortDefault.setOnClickListener { applySorting("DEFAULT") }
+        binding.btnSortRating.setOnClickListener { applySorting("RATING") }
+        binding.btnSortYear.setOnClickListener { applySorting("YEAR") }
+        binding.btnSortAlpha.setOnClickListener { applySorting("ALPHA") }
+    }
+
+    private fun applySorting(mode: String) {
+        currentSortMode = mode
+        if (rawCategoryMovies.isEmpty()) return
+
+        val sorted = when (mode) {
+            "RATING" -> rawCategoryMovies.sortedByDescending { it.rating?.toFloatOrNull() ?: 0f }
+            "YEAR" -> rawCategoryMovies.sortedByDescending { 
+                val year = Regex("\\b(19\\d\\d|20\\d\\d)\\b").find(it.name)?.value?.toIntOrNull() ?: 0
+                year
+            }
+            "ALPHA" -> rawCategoryMovies.sortedBy { it.name.lowercase() }
+            else -> rawCategoryMovies
+        }
+        currentMovies = sorted
+        binding.recyclerVodGrid.adapter = MovieAdapter(sorted, { movie ->
+            updateHeroBannerDebounced(movie)
+        }, { movie ->
+            playMovie(movie)
+        })
+        if (sorted.isNotEmpty()) {
+            updateHeroBanner(sorted[0])
         }
     }
 
@@ -112,13 +150,9 @@ class VodActivity : AppCompatActivity() {
                     delay(350)
                     if (q.isEmpty()) {
                         binding.txtVodCategoryTitle.text = "Filme"
-                        binding.recyclerVodGrid.adapter = MovieAdapter(currentMovies, { movie ->
-                            updateHeroBannerDebounced(movie)
-                        }, { movie ->
-                            playMovie(movie)
-                        })
+                        rawCategoryMovies = currentMovies
+                        applySorting(currentSortMode)
                     } else {
-                        // Sprachfilter auf globale Suche anwenden (z.B. nur deutsche Filme bei DE Filter)
                         val allowedCategoryIds = if (currentFilter == LangFilter.ALL) null
                         else client.filterCategories(allCategories, currentFilter).map { it.id }.toSet()
 
@@ -132,11 +166,8 @@ class VodActivity : AppCompatActivity() {
 
                         val filtered = pool.filter { it.name.contains(q, ignoreCase = true) }
                         binding.txtVodCategoryTitle.text = "Suchergebnisse (${filtered.size})"
-                        binding.recyclerVodGrid.adapter = MovieAdapter(filtered, { movie ->
-                            updateHeroBannerDebounced(movie)
-                        }, { movie ->
-                            playMovie(movie)
-                        })
+                        rawCategoryMovies = filtered
+                        applySorting(currentSortMode)
                     }
                 }
             }
@@ -163,12 +194,11 @@ class VodActivity : AppCompatActivity() {
         if (filtered.none { it.id == "ALL_MOVIES" }) {
             filtered.add(0, Category(id = "ALL_MOVIES", name = "✨ Alle Filme"))
         }
+        displayedCategories = filtered
         binding.recyclerVodCategories.adapter = VodCategoryAdapter(filtered) { cat ->
             loadMovies(cat)
         }
-        if (filtered.isNotEmpty() && selectedCategoryId == null) {
-            loadMovies(filtered[0])
-        }
+        // Keine automatische Vorauswahl, damit das Laden nicht ungefragt passiert!
     }
 
     private fun loadCategories() {
@@ -191,23 +221,15 @@ class VodActivity : AppCompatActivity() {
             hideKeyboard()
         }
 
-        if (selectedCategoryId == category.id && currentMovies.isNotEmpty()) return
         selectedCategoryId = category.id
-
+        binding.recyclerVodCategories.adapter?.notifyDataSetChanged()
         binding.txtVodCategoryTitle.text = category.name
 
         val cached = categoryCache[category.id]
         if (cached != null) {
-            currentMovies = cached
+            rawCategoryMovies = cached
             binding.progressVod.visibility = View.GONE
-            binding.recyclerVodGrid.adapter = MovieAdapter(cached, { movie ->
-                updateHeroBannerDebounced(movie)
-            }, { movie ->
-                playMovie(movie)
-            })
-            if (cached.isNotEmpty()) {
-                updateHeroBanner(cached[0])
-            }
+            applySorting(currentSortMode)
             return
         }
 
@@ -217,17 +239,9 @@ class VodActivity : AppCompatActivity() {
             try {
                 val list = client.getVodStreams(category.id)
                 categoryCache[category.id] = list
-                currentMovies = list
+                rawCategoryMovies = list
                 binding.progressVod.visibility = View.GONE
-                binding.recyclerVodGrid.adapter = MovieAdapter(list, { movie ->
-                    updateHeroBannerDebounced(movie)
-                }, { movie ->
-                    playMovie(movie)
-                })
-
-                if (list.isNotEmpty()) {
-                    updateHeroBanner(list[0])
-                }
+                applySorting(currentSortMode)
             } catch (e: Exception) {
                 binding.progressVod.visibility = View.GONE
                 Toast.makeText(this@VodActivity, "Fehler beim Laden: ${e.message}", Toast.LENGTH_SHORT).show()
@@ -270,7 +284,16 @@ class VodActivity : AppCompatActivity() {
         startActivity(intent)
     }
 
-    // --- Absolute Hard-Lock D-Pad Navigation in der Grid ---
+    private fun focusSelectedCategory() {
+        val catIdx = displayedCategories.indexOfFirst { it.id == selectedCategoryId }.coerceAtLeast(0)
+        binding.recyclerVodCategories.scrollToPosition(catIdx)
+        binding.recyclerVodCategories.post {
+            val holder = binding.recyclerVodCategories.findViewHolderForAdapterPosition(catIdx)
+            holder?.itemView?.requestFocus() ?: binding.recyclerVodCategories.requestFocus()
+        }
+    }
+
+    // --- Hard-Lock D-Pad Navigation in der Grid mit sicherer Rückkehr zur gewählten Kategorie ---
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.action == KeyEvent.ACTION_DOWN) {
             val focused = currentFocus
@@ -282,8 +305,24 @@ class VodActivity : AppCompatActivity() {
 
                 when (event.keyCode) {
                     KeyEvent.KEYCODE_BACK -> {
-                        val catHolder = binding.recyclerVodCategories.findViewHolderForAdapterPosition(0)
-                        catHolder?.itemView?.requestFocus() ?: binding.recyclerVodCategories.requestFocus()
+                        focusSelectedCategory()
+                        return true
+                    }
+                    KeyEvent.KEYCODE_DPAD_LEFT -> {
+                        if (gridPos % 5 == 0) {
+                            // Ganz links: Zurück zur aktiven Kategorie in der linken Spalte
+                            focusSelectedCategory()
+                        } else {
+                            val target = gridPos - 1
+                            binding.recyclerVodGrid.findViewHolderForAdapterPosition(target)?.itemView?.requestFocus()
+                        }
+                        return true
+                    }
+                    KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                        if (gridPos % 5 < 4 && gridPos < total - 1) {
+                            val target = gridPos + 1
+                            binding.recyclerVodGrid.findViewHolderForAdapterPosition(target)?.itemView?.requestFocus()
+                        }
                         return true
                     }
                     KeyEvent.KEYCODE_DPAD_DOWN -> {
@@ -303,20 +342,8 @@ class VodActivity : AppCompatActivity() {
                             binding.recyclerVodGrid.post {
                                 binding.recyclerVodGrid.findViewHolderForAdapterPosition(prevPos)?.itemView?.requestFocus()
                             }
-                        }
-                        return true
-                    }
-                    KeyEvent.KEYCODE_DPAD_LEFT -> {
-                        if (gridPos % 5 > 0) {
-                            val target = gridPos - 1
-                            binding.recyclerVodGrid.findViewHolderForAdapterPosition(target)?.itemView?.requestFocus()
-                        }
-                        return true
-                    }
-                    KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                        if (gridPos % 5 < 4 && gridPos < total - 1) {
-                            val target = gridPos + 1
-                            binding.recyclerVodGrid.findViewHolderForAdapterPosition(target)?.itemView?.requestFocus()
+                        } else {
+                            binding.btnSortDefault.requestFocus()
                         }
                         return true
                     }
@@ -368,8 +395,6 @@ class VodActivity : AppCompatActivity() {
             holder.itemView.isSelected = (cat.id == selectedCategoryId)
 
             holder.itemView.setOnClickListener {
-                selectedCategoryId = cat.id
-                holder.itemView.requestFocus()
                 onSelect(cat)
             }
         }
