@@ -198,78 +198,7 @@
 
     </LinearLayout>
 
-    <!-- 2. Integrierter Such-Overlay (PIP läuft oben rechts unterbrechungsfrei sichtbar weiter!) -->
-    <LinearLayout
-        android:id="@+id/layoutSearchOverlay"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:background="@android:color/transparent"
-        android:orientation="horizontal"
-        android:visibility="gone">
 
-        <!-- Linker Suchbereich mit dunklem Hintergrund -->
-        <LinearLayout
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:background="#FA0B0B0B"
-            android:orientation="vertical"
-            android:padding="32dp">
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="🔍 Live TV Sender durchsuchen"
-                android:textColor="@color/text_primary"
-                android:textSize="20sp"
-                android:textStyle="bold"
-                android:layout_marginBottom="16dp" />
-
-            <EditText
-                android:id="@+id/editSearchOverlayQuery"
-                android:layout_width="match_parent"
-                android:layout_height="50dp"
-                android:background="@drawable/card_focus_selector"
-                android:hint="Sendername eingeben (z. B. Sky, Pro7, ZDF)..."
-                android:textColor="@color/text_primary"
-                android:textColorHint="@color/text_secondary"
-                android:textSize="15sp"
-                android:paddingHorizontal="16dp"
-                android:inputType="text"
-                android:imeOptions="actionSearch"
-                android:nextFocusDown="@+id/recyclerSearchOverlayHistory"
-                android:layout_marginBottom="24dp" />
-
-            <!-- Such-Historie Sektion -->
-            <LinearLayout
-                android:id="@+id/layoutSearchOverlayHistory"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="🕒 Letzte Suchen:"
-                    android:textColor="@color/accent_gold"
-                    android:textSize="14sp"
-                    android:textStyle="bold"
-                    android:layout_marginBottom="12dp" />
-
-                <androidx.recyclerview.widget.RecyclerView
-                    android:id="@+id/recyclerSearchOverlayHistory"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal" />
-            </LinearLayout>
-        </LinearLayout>
-
-        <!-- Rechter Bereich: 230dp komplett transparent für den PiP-Player oben rechts -->
-        <View
-            android:layout_width="240dp"
-            android:layout_height="match_parent"
-            android:background="@android:color/transparent" />
-    </LinearLayout>
 
     <!-- 3. Gemeinsamer Player-Container (Skaliert nahtlos zwischen Mini-PIP und Vollbild) -->
     <FrameLayout

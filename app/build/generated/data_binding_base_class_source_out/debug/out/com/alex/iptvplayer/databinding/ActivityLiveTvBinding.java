@@ -4,7 +4,6 @@ package com.alex.iptvplayer.databinding;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
@@ -28,19 +27,10 @@ public final class ActivityLiveTvBinding implements ViewBinding {
   public final TextView btnOpenLiveSearch;
 
   @NonNull
-  public final EditText editSearchOverlayQuery;
-
-  @NonNull
   public final LinearLayout layoutFullscreenOsd;
 
   @NonNull
   public final LinearLayout layoutOverview;
-
-  @NonNull
-  public final LinearLayout layoutSearchOverlay;
-
-  @NonNull
-  public final LinearLayout layoutSearchOverlayHistory;
 
   @NonNull
   public final FrameLayout livePlayerContainer;
@@ -71,9 +61,6 @@ public final class ActivityLiveTvBinding implements ViewBinding {
 
   @NonNull
   public final RecyclerView recyclerChannels;
-
-  @NonNull
-  public final RecyclerView recyclerSearchOverlayHistory;
 
   @NonNull
   public final FrameLayout rootLiveTv;
@@ -109,14 +96,12 @@ public final class ActivityLiveTvBinding implements ViewBinding {
   public final TextView txtPreviewTitle;
 
   private ActivityLiveTvBinding(@NonNull FrameLayout rootView, @NonNull TextView btnOpenLiveSearch,
-      @NonNull EditText editSearchOverlayQuery, @NonNull LinearLayout layoutFullscreenOsd,
-      @NonNull LinearLayout layoutOverview, @NonNull LinearLayout layoutSearchOverlay,
-      @NonNull LinearLayout layoutSearchOverlayHistory, @NonNull FrameLayout livePlayerContainer,
-      @NonNull PlayerView livePlayerView, @NonNull FrameLayout pipAnchor,
-      @NonNull View pipFocusBorder, @NonNull ProgressBar progressCategories,
-      @NonNull ProgressBar progressChannels, @NonNull ProgressBar progressCurrentProgram,
-      @NonNull ProgressBar progressOsdProgram, @NonNull RecyclerView recyclerCategories,
-      @NonNull RecyclerView recyclerChannels, @NonNull RecyclerView recyclerSearchOverlayHistory,
+      @NonNull LinearLayout layoutFullscreenOsd, @NonNull LinearLayout layoutOverview,
+      @NonNull FrameLayout livePlayerContainer, @NonNull PlayerView livePlayerView,
+      @NonNull FrameLayout pipAnchor, @NonNull View pipFocusBorder,
+      @NonNull ProgressBar progressCategories, @NonNull ProgressBar progressChannels,
+      @NonNull ProgressBar progressCurrentProgram, @NonNull ProgressBar progressOsdProgram,
+      @NonNull RecyclerView recyclerCategories, @NonNull RecyclerView recyclerChannels,
       @NonNull FrameLayout rootLiveTv, @NonNull TextView txtCurrentLiveTime,
       @NonNull TextView txtOsdChannelName, @NonNull TextView txtOsdChannelNum,
       @NonNull TextView txtOsdProgramDesc, @NonNull TextView txtOsdProgramTime,
@@ -125,11 +110,8 @@ public final class ActivityLiveTvBinding implements ViewBinding {
       @NonNull TextView txtPreviewTitle) {
     this.rootView = rootView;
     this.btnOpenLiveSearch = btnOpenLiveSearch;
-    this.editSearchOverlayQuery = editSearchOverlayQuery;
     this.layoutFullscreenOsd = layoutFullscreenOsd;
     this.layoutOverview = layoutOverview;
-    this.layoutSearchOverlay = layoutSearchOverlay;
-    this.layoutSearchOverlayHistory = layoutSearchOverlayHistory;
     this.livePlayerContainer = livePlayerContainer;
     this.livePlayerView = livePlayerView;
     this.pipAnchor = pipAnchor;
@@ -140,7 +122,6 @@ public final class ActivityLiveTvBinding implements ViewBinding {
     this.progressOsdProgram = progressOsdProgram;
     this.recyclerCategories = recyclerCategories;
     this.recyclerChannels = recyclerChannels;
-    this.recyclerSearchOverlayHistory = recyclerSearchOverlayHistory;
     this.rootLiveTv = rootLiveTv;
     this.txtCurrentLiveTime = txtCurrentLiveTime;
     this.txtOsdChannelName = txtOsdChannelName;
@@ -187,12 +168,6 @@ public final class ActivityLiveTvBinding implements ViewBinding {
         break missingId;
       }
 
-      id = R.id.editSearchOverlayQuery;
-      EditText editSearchOverlayQuery = ViewBindings.findChildViewById(rootView, id);
-      if (editSearchOverlayQuery == null) {
-        break missingId;
-      }
-
       id = R.id.layoutFullscreenOsd;
       LinearLayout layoutFullscreenOsd = ViewBindings.findChildViewById(rootView, id);
       if (layoutFullscreenOsd == null) {
@@ -202,18 +177,6 @@ public final class ActivityLiveTvBinding implements ViewBinding {
       id = R.id.layoutOverview;
       LinearLayout layoutOverview = ViewBindings.findChildViewById(rootView, id);
       if (layoutOverview == null) {
-        break missingId;
-      }
-
-      id = R.id.layoutSearchOverlay;
-      LinearLayout layoutSearchOverlay = ViewBindings.findChildViewById(rootView, id);
-      if (layoutSearchOverlay == null) {
-        break missingId;
-      }
-
-      id = R.id.layoutSearchOverlayHistory;
-      LinearLayout layoutSearchOverlayHistory = ViewBindings.findChildViewById(rootView, id);
-      if (layoutSearchOverlayHistory == null) {
         break missingId;
       }
 
@@ -274,12 +237,6 @@ public final class ActivityLiveTvBinding implements ViewBinding {
       id = R.id.recyclerChannels;
       RecyclerView recyclerChannels = ViewBindings.findChildViewById(rootView, id);
       if (recyclerChannels == null) {
-        break missingId;
-      }
-
-      id = R.id.recyclerSearchOverlayHistory;
-      RecyclerView recyclerSearchOverlayHistory = ViewBindings.findChildViewById(rootView, id);
-      if (recyclerSearchOverlayHistory == null) {
         break missingId;
       }
 
@@ -346,13 +303,11 @@ public final class ActivityLiveTvBinding implements ViewBinding {
       }
 
       return new ActivityLiveTvBinding((FrameLayout) rootView, btnOpenLiveSearch,
-          editSearchOverlayQuery, layoutFullscreenOsd, layoutOverview, layoutSearchOverlay,
-          layoutSearchOverlayHistory, livePlayerContainer, livePlayerView, pipAnchor,
+          layoutFullscreenOsd, layoutOverview, livePlayerContainer, livePlayerView, pipAnchor,
           pipFocusBorder, progressCategories, progressChannels, progressCurrentProgram,
-          progressOsdProgram, recyclerCategories, recyclerChannels, recyclerSearchOverlayHistory,
-          rootLiveTv, txtCurrentLiveTime, txtOsdChannelName, txtOsdChannelNum, txtOsdProgramDesc,
-          txtOsdProgramTime, txtOsdProgramTitle, txtOsdTechSpecs, txtPreviewDesc, txtPreviewTime,
-          txtPreviewTitle);
+          progressOsdProgram, recyclerCategories, recyclerChannels, rootLiveTv, txtCurrentLiveTime,
+          txtOsdChannelName, txtOsdChannelNum, txtOsdProgramDesc, txtOsdProgramTime,
+          txtOsdProgramTitle, txtOsdTechSpecs, txtPreviewDesc, txtPreviewTime, txtPreviewTitle);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));

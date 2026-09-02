@@ -1,6 +1,6 @@
 package com.alex.iptvplayer.ui
 
-import android.content.Context
+import android.content.Intent
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
@@ -10,12 +10,11 @@ import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.view.inputmethod.EditorInfo
-import android.view.inputmethod.InputMethodManager
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
@@ -58,12 +57,14 @@ class LiveTvActivity : AppCompatActivity() {
     private var currentChannelItems: List<ChannelWithEpg> = emptyList()
     private var allLiveStreamsGlobal: List<LiveStream> = emptyList()
 
-    // 1. Dreistufiges Status-System
+    // Status-Tracking
+    private var selectedCategoryId: String? = null
     private var nowPlayingStreamId: Int? = null
-    private var nowPlayingCategoryId: String? = null
-    private var inspectedCategoryId: String? = null
 
-    // 5. Aktiver Playlisten-Kontext (z. B. Suchergebnisse vs. Kategorie)
+    // 2. Sperre gegen Fokus-Zwischensprung in die Suche
+    private var isSwitchingCategories = false
+
+    // 5. Playlist-Kontext (z. B. Suche vs. Kategorie)
     private var activePlaylist: List<ChannelWithEpg> = emptyList()
     private var activePlaylistIndex: Int = 0
 
@@ -72,7 +73,6 @@ class LiveTvActivity : AppCompatActivity() {
 
     private var isInitialLoad = true
     private var isFullscreen = false
-    private var isSearchOverlayOpen = false
     private var currentSearchQuery: String? = null
 
     // Gemeinsamer Player für Mini-PIP und Vollbild
@@ -84,6 +84,16 @@ class LiveTvActivity : AppCompatActivity() {
     private val osdHandler = Handler(Looper.getMainLooper())
     private val hideOsdRunnable = Runnable {
         binding.layoutFullscreenOsd.visibility = View.GONE
+    }
+
+    // 3. Rollback zu sauberem SearchActivity-Launcher (Player läuft im Hintergrund unterbrechungsfrei weiter!)
+    private val searchLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == RESULT_OK) {
+            val query = result.data?.getStringExtra("SEARCH_QUERY")?.trim() ?: ""
+            if (query.isNotEmpty()) {
+                applySearchQuery(query)
+            }
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -111,7 +121,6 @@ class LiveTvActivity : AppCompatActivity() {
             adapter = channelAdapter
         }
 
-        setupSearchOverlay()
         setupSearchAndPipRouting()
         setupPipFocusVisuals()
 
@@ -123,14 +132,12 @@ class LiveTvActivity : AppCompatActivity() {
         preloadGlobalChannels()
     }
 
-    // 1. PIP-Fokus Highlight-Rahmen & Skalierung
     private fun setupPipFocusVisuals() {
         binding.livePlayerContainer.setOnFocusChangeListener { _, hasFocus ->
             if (!isFullscreen) {
                 binding.pipFocusBorder.visibility = if (hasFocus) View.VISIBLE else View.GONE
                 if (hasFocus) {
                     binding.livePlayerContainer.animate().scaleX(1.05f).scaleY(1.05f).setDuration(150).start()
-                    // Zeige sofort die Details des laufenden Streams!
                     if (activeStream != null) {
                         updatePipProgramInfo(activeStream!!, activeStreamEpg)
                     }
@@ -145,92 +152,22 @@ class LiveTvActivity : AppCompatActivity() {
         }
     }
 
-    // 2. Integrierter Such-Overlay (PIP läuft oben rechts unterbrechungsfrei sichtbar weiter!)
-    private fun setupSearchOverlay() {
-        binding.btnOpenLiveSearch.setOnClickListener {
-            openSearchOverlay()
-        }
-
-        binding.editSearchOverlayQuery.setOnEditorActionListener { _, actionId, event ->
-            if (actionId == EditorInfo.IME_ACTION_SEARCH || actionId == EditorInfo.IME_ACTION_DONE || actionId == EditorInfo.IME_ACTION_GO ||
-                (event != null && event.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN)) {
-                val q = binding.editSearchOverlayQuery.text.toString().trim()
-                if (q.isNotEmpty()) {
-                    submitSearchQuery(q)
-                }
-                true
-            } else false
-        }
-
-        binding.editSearchOverlayQuery.setOnKeyListener { _, keyCode, event ->
-            if (event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
-                val holder = binding.recyclerSearchOverlayHistory.findViewHolderForAdapterPosition(0)
-                if (holder != null) {
-                    holder.itemView.requestFocus()
-                    return@setOnKeyListener true
-                }
-            }
-            false
-        }
-
-        binding.recyclerSearchOverlayHistory.layoutManager =
-            LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
-    }
-
-    private fun openSearchOverlay() {
-        isSearchOverlayOpen = true
-        binding.layoutSearchOverlay.visibility = View.VISIBLE
-        binding.livePlayerContainer.bringToFront()
-        updatePipPosition()
-
-        // 2. Bild und Ton laufen aktiv weiter!
-        livePlayer?.playWhenReady = true
-        if (livePlayer?.isPlaying == false) {
-            livePlayer?.play()
-        }
-
-        binding.editSearchOverlayQuery.setText("")
-        loadSearchHistory()
-
-        binding.editSearchOverlayQuery.post {
-            binding.editSearchOverlayQuery.requestFocus()
-            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-            imm.showSoftInput(binding.editSearchOverlayQuery, InputMethodManager.SHOW_IMPLICIT)
-        }
-    }
-
-    private fun closeSearchOverlay() {
-        isSearchOverlayOpen = false
-        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-        imm.hideSoftInputFromWindow(binding.editSearchOverlayQuery.windowToken, 0)
-        binding.layoutSearchOverlay.visibility = View.GONE
-        binding.btnOpenLiveSearch.requestFocus()
-    }
-
-    private fun loadSearchHistory() {
-        val history = historyManager.getSearchHistory("LIVE")
-        if (history.isEmpty()) {
-            binding.layoutSearchOverlayHistory.visibility = View.GONE
-        } else {
-            binding.layoutSearchOverlayHistory.visibility = View.VISIBLE
-            binding.recyclerSearchOverlayHistory.adapter = HistoryChipAdapter(history) { query ->
-                submitSearchQuery(query)
-            }
-        }
-    }
-
-    private fun submitSearchQuery(query: String) {
-        historyManager.addSearchQuery("LIVE", query)
-        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-        imm.hideSoftInputFromWindow(binding.editSearchOverlayQuery.windowToken, 0)
-        binding.layoutSearchOverlay.visibility = View.GONE
-        isSearchOverlayOpen = false
-
-        applySearchQuery(query)
-    }
-
-    // 2. Definiertes Fokus-Routing zwischen Suche, PiP und Listen
     private fun setupSearchAndPipRouting() {
+        // 3. Klick auf Suche öffnet saubere Vollbild-Suche (Audio läuft im Hintergrund weiter)
+        binding.btnOpenLiveSearch.setOnClickListener {
+            val intent = Intent(this, SearchActivity::class.java).apply {
+                putExtra("SEARCH_TYPE", "LIVE")
+            }
+            searchLauncher.launch(intent)
+        }
+
+        // 2. Verhindere Fokus-Zwischensprung: Falls das Suchfeld während eines Kategoriewechsels fokussiert wird, sofort umleiten!
+        binding.btnOpenLiveSearch.setOnFocusChangeListener { _, hasFocus ->
+            if (hasFocus && isSwitchingCategories) {
+                focusTargetChannel(0)
+            }
+        }
+
         binding.btnOpenLiveSearch.setOnKeyListener { _, keyCode, event ->
             if (event.action == KeyEvent.ACTION_DOWN) {
                 when (keyCode) {
@@ -300,7 +237,7 @@ class LiveTvActivity : AppCompatActivity() {
         }
     }
 
-    // 2. WICHTIG: Nicht pausieren bei Tastatur/Overlay, nur wenn die Activity wirklich beendet wird!
+    // 3. Audio & Stream im Hintergrund unterbrechungsfrei weiterlaufen lassen
     override fun onPause() {
         super.onPause()
         if (isFinishing) {
@@ -322,17 +259,12 @@ class LiveTvActivity : AppCompatActivity() {
         livePlayer = null
     }
 
-    // D) UMSTELLUNG BEI SENDERWECHSEL:
-    // Now-Playing wandert komplett auf den neuen Sender und die zugehörige Kategorie um.
     private fun playLiveStream(stream: LiveStream) {
         nowPlayingStreamId = stream.streamId
-        nowPlayingCategoryId = inspectedCategoryId
-
         activeStream = stream
         historyManager.saveLiveChannel(stream)
 
-        channelAdapter?.updateNowPlaying(nowPlayingStreamId)
-        categoryAdapter?.updateStates(nowPlayingCategoryId, inspectedCategoryId)
+        channelAdapter?.notifyDataSetChanged()
 
         val url = client.getLiveStreamUrl(stream.streamId)
         val mediaItem = MediaItem.fromUri(url)
@@ -340,7 +272,6 @@ class LiveTvActivity : AppCompatActivity() {
         livePlayer?.prepare()
         livePlayer?.playWhenReady = true
 
-        // 3. EPG für den aktuellen Stream laden & Info aktualisieren
         lifecycleScope.launch {
             val cachedEpg = currentChannelItems.firstOrNull { it.stream.streamId == stream.streamId }?.epgList
             val epg = if (!cachedEpg.isNullOrEmpty()) cachedEpg else client.getEpg(stream.streamId)
@@ -352,7 +283,6 @@ class LiveTvActivity : AppCompatActivity() {
         }
     }
 
-    // 3. Programminfo rechts neben dem Mini-Player
     private fun updatePipProgramInfo(stream: LiveStream, program: EpgProgram?) {
         if (program != null) {
             binding.txtPreviewTitle.text = "${stream.name} – ${program.title}"
@@ -438,7 +368,6 @@ class LiveTvActivity : AppCompatActivity() {
         binding.livePlayerContainer.requestFocus()
         binding.livePlayerView.useController = false
 
-        // 4. Zeige OSD beim Eintritt in den Vollbildmodus für 5 Sekunden
         showOsd()
     }
 
@@ -450,7 +379,6 @@ class LiveTvActivity : AppCompatActivity() {
         focusTargetChannel(activePlaylistIndex)
     }
 
-    // 4. Player-Info-Overlay (OSD) mit Tech-Specs
     private fun showOsd() {
         osdHandler.removeCallbacks(hideOsdRunnable)
         if (activeStream != null) {
@@ -474,7 +402,6 @@ class LiveTvActivity : AppCompatActivity() {
         binding.txtOsdChannelNum.text = "${activePlaylistIndex + 1}"
         binding.txtOsdChannelName.text = stream.name
 
-        // Technische Stream-Metriken aus ExoPlayer auslesen
         val videoFormat = livePlayer?.videoFormat
         val audioFormat = livePlayer?.audioFormat
 
@@ -521,20 +448,18 @@ class LiveTvActivity : AppCompatActivity() {
         val newCategories = mutableListOf(searchCategory)
         newCategories.addAll(allCategories)
         displayedCategories = newCategories
-        inspectedCategoryId = "CURRENT_SEARCH"
+        selectedCategoryId = "CURRENT_SEARCH"
 
         categoryAdapter = CategoryAdapter(newCategories) { cat ->
             loadChannels(cat)
         }
         binding.recyclerCategories.adapter = categoryAdapter
-        categoryAdapter?.updateStates(nowPlayingCategoryId, inspectedCategoryId)
 
         val pool = if (allLiveStreamsGlobal.isNotEmpty()) allLiveStreamsGlobal else currentChannelItems.map { it.stream }
         val filtered = pool.filter { it.name.contains(query, ignoreCase = true) }
         val channelListWithEpg = filtered.map { ChannelWithEpg(it) }
         currentChannelItems = channelListWithEpg
 
-        // 5. Playlist-Kontext auf die Trefferliste der Suche setzen
         activePlaylist = channelListWithEpg
         activePlaylistIndex = 0
 
@@ -578,21 +503,21 @@ class LiveTvActivity : AppCompatActivity() {
         }
     }
 
-    // B) ZUSTAND "AKTIV DURCHSTÖBERT" (BROWSING / INSPECTED):
-    // Nur diese Kategorie wird als "durchstöbert" markiert. Die Now-Playing-Kategorie bleibt fest erhalten.
+    // 2. KATEGORIEWECHSEL: SOFORTIGER FOKUS AUF SENDER 0 OHNE ZWISCHENSPRUNG
     private fun loadChannels(category: Category, preselectedStreamId: Int? = null) {
         if (category.id == "CURRENT_SEARCH" && currentSearchQuery != null) {
             applySearchQuery(currentSearchQuery!!)
             return
         }
 
-        if (inspectedCategoryId == category.id && preselectedStreamId == null && currentChannelItems.isNotEmpty()) {
-            focusFirstChannel()
+        if (selectedCategoryId == category.id && preselectedStreamId == null && currentChannelItems.isNotEmpty()) {
+            focusTargetChannel(0)
             return
         }
 
-        inspectedCategoryId = category.id
-        categoryAdapter?.updateStates(nowPlayingCategoryId, inspectedCategoryId)
+        isSwitchingCategories = true
+        selectedCategoryId = category.id
+        categoryAdapter?.setSelectedCategoryId(category.id)
 
         // Cache-Check
         val cached = categoryChannelMap[category.id]
@@ -647,7 +572,16 @@ class LiveTvActivity : AppCompatActivity() {
         binding.recyclerChannels.scrollToPosition(position)
         binding.recyclerChannels.post {
             val holder = binding.recyclerChannels.findViewHolderForAdapterPosition(position) as? ChannelAdapter.ViewHolder
-            holder?.header?.requestFocus()
+            if (holder != null) {
+                holder.header.requestFocus()
+                isSwitchingCategories = false
+            } else {
+                binding.recyclerChannels.postDelayed({
+                    val retryHolder = binding.recyclerChannels.findViewHolderForAdapterPosition(position) as? ChannelAdapter.ViewHolder
+                    retryHolder?.header?.requestFocus()
+                    isSwitchingCategories = false
+                }, 50)
+            }
         }
     }
 
@@ -656,7 +590,7 @@ class LiveTvActivity : AppCompatActivity() {
     }
 
     private fun focusCurrentCategory() {
-        val catIndex = displayedCategories.indexOfFirst { it.id == inspectedCategoryId }.coerceAtLeast(0)
+        val catIndex = displayedCategories.indexOfFirst { it.id == selectedCategoryId }.coerceAtLeast(0)
         binding.recyclerCategories.scrollToPosition(catIndex)
         binding.recyclerCategories.post {
             val holder = binding.recyclerCategories.findViewHolderForAdapterPosition(catIndex)
@@ -692,11 +626,6 @@ class LiveTvActivity : AppCompatActivity() {
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         if (keyCode == KeyEvent.KEYCODE_BACK) {
-            if (isSearchOverlayOpen) {
-                closeSearchOverlay()
-                return true
-            }
-
             if (isFullscreen) {
                 setMiniPipMode()
                 return true
@@ -720,12 +649,10 @@ class LiveTvActivity : AppCompatActivity() {
                         setMiniPipMode()
                         return true
                     }
-                    // 4. OSD Toggle bei DPAD_CENTER / OK
                     KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
                         toggleOsd()
                         return true
                     }
-                    // 5. Channel-Zapping strikt innerhalb des aktiven Kontexts (z.B. Suche)
                     KeyEvent.KEYCODE_DPAD_UP -> {
                         if (activePlaylistIndex > 0) {
                             activePlaylistIndex--
@@ -800,7 +727,6 @@ class LiveTvActivity : AppCompatActivity() {
                         return true
                     }
                     KeyEvent.KEYCODE_DPAD_UP -> {
-                        // 2. Weg in den PiP: Vom 1. Sender nach oben in den PiP
                         if (channelPos == 0) {
                             binding.livePlayerContainer.requestFocus()
                             return true
@@ -884,7 +810,9 @@ class LiveTvActivity : AppCompatActivity() {
         return -1
     }
 
-    // --- Adapter 1: Kategorien mit DREISTUFIGEM Highlight-System ---
+    // --- Adapter 1: Kategorien mit DESIGN-ROLLBACK ---
+    // AKTIVE KATEGORIE: Nur farbige Fläche, komplett OHNE Umrandung.
+    // AKTUELLER FOKUS: NUR der leuchtende Rahmen, KEINE farbige Füllung.
     inner class CategoryAdapter(
         private val items: List<Category>,
         private val onSelect: (Category) -> Unit
@@ -894,10 +822,13 @@ class LiveTvActivity : AppCompatActivity() {
             val txtName: TextView = view.findViewById(R.id.txtCategoryName)
         }
 
-        fun updateStates(nowPlayingId: String?, inspectedId: String?) {
-            nowPlayingCategoryId = nowPlayingId
-            inspectedCategoryId = inspectedId
-            notifyDataSetChanged()
+        fun setSelectedCategoryId(newId: String?) {
+            val oldId = selectedCategoryId
+            selectedCategoryId = newId
+            val oldPos = items.indexOfFirst { it.id == oldId }
+            val newPos = items.indexOfFirst { it.id == newId }
+            if (oldPos != -1) notifyItemChanged(oldPos)
+            if (newPos != -1) notifyItemChanged(newPos)
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -907,6 +838,7 @@ class LiveTvActivity : AppCompatActivity() {
 
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val cat = items[position]
+            holder.txtName.text = cat.name
             applyCategoryStyle(holder, cat)
 
             holder.itemView.setOnFocusChangeListener { _, hasFocus ->
@@ -918,7 +850,6 @@ class LiveTvActivity : AppCompatActivity() {
 
             holder.itemView.setOnClickListener {
                 onSelect(cat)
-                focusTargetChannel(0)
             }
 
             holder.itemView.setOnKeyListener { _, keyCode, event ->
@@ -926,7 +857,6 @@ class LiveTvActivity : AppCompatActivity() {
                     when (keyCode) {
                         KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
                             onSelect(cat)
-                            focusTargetChannel(0)
                             return@setOnKeyListener true
                         }
                         KeyEvent.KEYCODE_DPAD_RIGHT -> {
@@ -953,45 +883,32 @@ class LiveTvActivity : AppCompatActivity() {
             }
         }
 
+        // 4. DESIGN-ROLLBACK: Farbige Fläche = Aktiv / Läuft gerade; Roter Rahmen = Cursor-Fokus
         private fun applyCategoryStyle(holder: ViewHolder, cat: Category) {
-            val isNowPlaying = (cat.id == nowPlayingCategoryId)
-            val isInspected = (cat.id == inspectedCategoryId)
+            val isActive = (cat.id == selectedCategoryId)
             val isFocused = holder.itemView.isFocused
 
-            // A) Icon / Text
-            if (isNowPlaying) {
-                holder.txtName.text = "▶  ${cat.name}"
-                holder.txtName.setTextColor(Color.parseColor("#FFFFFF"))
-            } else {
-                holder.txtName.text = cat.name
-                holder.txtName.setTextColor(if (isFocused) Color.parseColor("#FFFFFF") else Color.parseColor("#C8C8C8"))
-            }
+            holder.txtName.setTextColor(if (isFocused || isActive) Color.parseColor("#FFFFFF") else Color.parseColor("#B0B0B0"))
 
-            // B & C) Hintergrund und Rahmenlogik
             val drawable = GradientDrawable().apply {
                 cornerRadius = dpToPx(6).toFloat()
                 when {
-                    // C) D-Pad Cursor steht drauf: Dominanter roter Leuchtrahmen
-                    isFocused -> {
-                        setColor(Color.parseColor("#2E2E2E"))
+                    // Cursor steht auf der aktiven Kategorie: Farbige Fläche + roter Rahmen
+                    isFocused && isActive -> {
+                        setColor(Color.parseColor("#7A141A"))
                         setStroke(dpToPx(3), Color.parseColor("#E50914"))
                     }
-                    // Now-Playing UND gleichzeitig durchstöbert
-                    isNowPlaying && isInspected -> {
-                        setColor(Color.parseColor("#3D1418"))
-                        setStroke(dpToPx(2), Color.parseColor("#E50914"))
+                    // AKTUELLER FOKUS: NUR leuchtender Rahmen, KEINE flächige Füllung
+                    isFocused -> {
+                        setColor(Color.parseColor("#181818"))
+                        setStroke(dpToPx(3), Color.parseColor("#E50914"))
                     }
-                    // B) Aktiv durchstöbert (anderes Programm läuft im PiP): Edler blauer Akzentrahmen
-                    isInspected -> {
-                        setColor(Color.parseColor("#182333"))
-                        setStroke(dpToPx(2), Color.parseColor("#4A72B2"))
+                    // AKTIVE KATEGORIE: Nur farbiger Hintergrund, komplett OHNE Umrandung!
+                    isActive -> {
+                        setColor(Color.parseColor("#5A1216"))
+                        setStroke(0, Color.TRANSPARENT)
                     }
-                    // A) Now-Playing (Ursprung des PiP-Programms, während man woanders stöbert)
-                    isNowPlaying -> {
-                        setColor(Color.parseColor("#281114"))
-                        setStroke(dpToPx(1), Color.parseColor("#802026"))
-                    }
-                    // Inaktiv
+                    // Normal / Inaktiv
                     else -> {
                         setColor(Color.parseColor("#141414"))
                         setStroke(dpToPx(1), Color.parseColor("#222222"))
@@ -1000,7 +917,6 @@ class LiveTvActivity : AppCompatActivity() {
             }
             holder.itemView.background = drawable
 
-            // Skalierung bei Fokus
             if (isFocused) {
                 holder.itemView.scaleX = 1.03f
                 holder.itemView.scaleY = 1.03f
@@ -1031,11 +947,6 @@ class LiveTvActivity : AppCompatActivity() {
             notifyDataSetChanged()
         }
 
-        fun updateNowPlaying(streamId: Int?) {
-            nowPlayingStreamId = streamId
-            notifyDataSetChanged()
-        }
-
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
             val view = LayoutInflater.from(parent.context).inflate(R.layout.item_epg_channel_row, parent, false)
             return ViewHolder(view)
@@ -1044,17 +955,19 @@ class LiveTvActivity : AppCompatActivity() {
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val item = items[position]
             val s = item.stream
-            val isPlaying = (s.streamId == nowPlayingStreamId)
+            val isPlaying = (s.streamId == activeStream?.streamId)
 
-            // A) Sender-Nummer oder Now-Playing Icon
+            // 1. DATEN-BINDING BUG BEHOBEN: Echter dynamischer Sendername aus dem Stream-Objekt!
+            holder.txtName.text = s.name
+
             if (isPlaying) {
                 holder.txtNum.text = "▶"
                 holder.txtNum.setTextColor(Color.parseColor("#E50914"))
-                holder.txtName.setTextColor(Color.parseColor("#E50914"))
+                holder.txtName.setTextColor(Color.parseColor("#FFFFFF"))
             } else {
                 holder.txtNum.text = "${position + 1}"
                 holder.txtNum.setTextColor(Color.parseColor("#888888"))
-                holder.txtName.setTextColor(Color.parseColor("#FFFFFF"))
+                holder.txtName.setTextColor(Color.parseColor("#D0D0D0"))
             }
 
             if (!s.streamIcon.isNullOrEmpty()) {
@@ -1104,19 +1017,29 @@ class LiveTvActivity : AppCompatActivity() {
             }
         }
 
+        // 4. DESIGN-ROLLBACK FÜR SENDER-HIGHLIGHTS
+        // Farbige Fläche = Läuft gerade; Roter Rahmen = Cursor
         private fun applyChannelHeaderStyle(holder: ViewHolder, isPlaying: Boolean) {
             val isFocused = holder.header.isFocused
             val drawable = GradientDrawable().apply {
                 cornerRadius = dpToPx(6).toFloat()
                 when {
-                    isFocused -> {
-                        setColor(Color.parseColor("#2E2E2E"))
+                    // Cursor steht auf laufendem Sender: Farbige Fläche + roter Rahmen
+                    isFocused && isPlaying -> {
+                        setColor(Color.parseColor("#7A141A"))
                         setStroke(dpToPx(3), Color.parseColor("#E50914"))
                     }
-                    isPlaying -> {
-                        setColor(Color.parseColor("#2C1215"))
-                        setStroke(dpToPx(1.5f.toInt()), Color.parseColor("#8A2028"))
+                    // AKTUELLER FOKUS: NUR leuchtender Rahmen, KEINE farbige Füllung
+                    isFocused -> {
+                        setColor(Color.parseColor("#181818"))
+                        setStroke(dpToPx(3), Color.parseColor("#E50914"))
                     }
+                    // AKTUELL LAUFENDER SENDER: Nur farbiger Hintergrund, komplett OHNE Umrandung!
+                    isPlaying -> {
+                        setColor(Color.parseColor("#5A1216"))
+                        setStroke(0, Color.TRANSPARENT)
+                    }
+                    // Normal / Inaktiv
                     else -> {
                         setColor(Color.parseColor("#141414"))
                         setStroke(dpToPx(1), Color.parseColor("#222222"))
@@ -1183,46 +1106,5 @@ class LiveTvActivity : AppCompatActivity() {
         }
 
         override fun getItemCount() = programs.size
-    }
-
-    // --- Adapter 4: Such-Historie Chips im Overlay ---
-    inner class HistoryChipAdapter(
-        private val items: List<String>,
-        private val onClick: (String) -> Unit
-    ) : RecyclerView.Adapter<HistoryChipAdapter.ViewHolder>() {
-
-        inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-            val txt: TextView = view.findViewById(R.id.txtHistoryQuery)
-        }
-
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-            val view = LayoutInflater.from(parent.context).inflate(R.layout.item_search_history, parent, false)
-            return ViewHolder(view)
-        }
-
-        override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-            val q = items[position]
-            holder.txt.text = "🔍 $q"
-            holder.itemView.isFocusable = true
-            holder.itemView.isClickable = true
-
-            holder.itemView.setOnClickListener {
-                onClick(q)
-            }
-            holder.itemView.setOnKeyListener { _, keyCode, event ->
-                if (event.action == KeyEvent.ACTION_DOWN) {
-                    if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) {
-                        onClick(q)
-                        return@setOnKeyListener true
-                    } else if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
-                        binding.editSearchOverlayQuery.requestFocus()
-                        return@setOnKeyListener true
-                    }
-                }
-                false
-            }
-        }
-
-        override fun getItemCount() = items.size
     }
 }
