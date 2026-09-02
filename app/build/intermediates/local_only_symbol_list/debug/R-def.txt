@@ -9,6 +9,7 @@ color border_focused
 color netflix_red
 color text_primary
 color text_secondary
+drawable card_focus_border_red
 drawable card_focus_selector
 drawable category_item_bg
 drawable pip_focus_border
@@ -31,6 +32,9 @@ id btnSortDefault
 id btnSortRating
 id btnSortYear
 id btnSubtitles
+id btnTabAll
+id btnTabChannels
+id btnTabPrograms
 id channelHeader
 id editPassword
 id editSearchQuery
@@ -44,6 +48,7 @@ id imgHeroSeriesCover
 id imgHistoryChannelLogo
 id imgHistoryPoster
 id imgPoster
+id imgSearchChannelLogo
 id layoutFullscreenOsd
 id layoutOverview
 id layoutSearchHistory
@@ -51,6 +56,7 @@ id layoutSectionChannelHistory
 id layoutSectionMovieHistory
 id layoutSectionSeriesHistory
 id layoutSeriesSortBar
+id layoutTabs
 id layoutTimeline
 id layoutVodSortBar
 id livePlayerContainer
@@ -75,6 +81,7 @@ id progressEpisodeWatched
 id progressEpisodes
 id progressHistoryBar
 id progressOsdProgram
+id progressSearch
 id progressSeries
 id progressSeriesCats
 id progressVod
@@ -86,6 +93,7 @@ id recyclerChannels
 id recyclerEpisodes
 id recyclerMovieHistory
 id recyclerSearchHistory
+id recyclerSearchResults
 id recyclerSeasons
 id recyclerSeriesCategories
 id recyclerSeriesGrid
@@ -122,6 +130,7 @@ id txtHistorySubtitle
 id txtHistoryTitle
 id txtNoChannelHistory
 id txtNoMovieHistory
+id txtNoResults
 id txtNoSeriesHistory
 id txtOsdChannelName
 id txtOsdChannelNum
@@ -137,8 +146,14 @@ id txtPreviewTime
 id txtPreviewTitle
 id txtScrubSpeed
 id txtScrubTargetTime
+id txtSearchChannelCategory
+id txtSearchChannelName
+id txtSearchProgramChannel
+id txtSearchProgramTimeAndDesc
+id txtSearchProgramTitle
 id txtSearchTitle
 id txtSeasonName
+id txtSectionHeader
 id txtSeriesCategoryTitle
 id txtTimeCurrent
 id txtTimeTotal
@@ -160,7 +175,10 @@ layout item_episode_card
 layout item_history_card
 layout item_history_channel
 layout item_poster
+layout item_search_channel
 layout item_search_history
+layout item_search_program
+layout item_search_section_header
 layout item_season_tab
 string app_name
 string episodes

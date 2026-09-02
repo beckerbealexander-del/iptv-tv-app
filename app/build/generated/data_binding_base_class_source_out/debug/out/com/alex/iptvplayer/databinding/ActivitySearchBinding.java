@@ -6,6 +6,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -22,28 +23,60 @@ public final class ActivitySearchBinding implements ViewBinding {
   private final LinearLayout rootView;
 
   @NonNull
+  public final TextView btnTabAll;
+
+  @NonNull
+  public final TextView btnTabChannels;
+
+  @NonNull
+  public final TextView btnTabPrograms;
+
+  @NonNull
   public final EditText editSearchQuery;
 
   @NonNull
   public final LinearLayout layoutSearchHistory;
 
   @NonNull
+  public final LinearLayout layoutTabs;
+
+  @NonNull
+  public final ProgressBar progressSearch;
+
+  @NonNull
   public final RecyclerView recyclerSearchHistory;
+
+  @NonNull
+  public final RecyclerView recyclerSearchResults;
 
   @NonNull
   public final TextView txtHistoryHeader;
 
   @NonNull
+  public final TextView txtNoResults;
+
+  @NonNull
   public final TextView txtSearchTitle;
 
-  private ActivitySearchBinding(@NonNull LinearLayout rootView, @NonNull EditText editSearchQuery,
-      @NonNull LinearLayout layoutSearchHistory, @NonNull RecyclerView recyclerSearchHistory,
-      @NonNull TextView txtHistoryHeader, @NonNull TextView txtSearchTitle) {
+  private ActivitySearchBinding(@NonNull LinearLayout rootView, @NonNull TextView btnTabAll,
+      @NonNull TextView btnTabChannels, @NonNull TextView btnTabPrograms,
+      @NonNull EditText editSearchQuery, @NonNull LinearLayout layoutSearchHistory,
+      @NonNull LinearLayout layoutTabs, @NonNull ProgressBar progressSearch,
+      @NonNull RecyclerView recyclerSearchHistory, @NonNull RecyclerView recyclerSearchResults,
+      @NonNull TextView txtHistoryHeader, @NonNull TextView txtNoResults,
+      @NonNull TextView txtSearchTitle) {
     this.rootView = rootView;
+    this.btnTabAll = btnTabAll;
+    this.btnTabChannels = btnTabChannels;
+    this.btnTabPrograms = btnTabPrograms;
     this.editSearchQuery = editSearchQuery;
     this.layoutSearchHistory = layoutSearchHistory;
+    this.layoutTabs = layoutTabs;
+    this.progressSearch = progressSearch;
     this.recyclerSearchHistory = recyclerSearchHistory;
+    this.recyclerSearchResults = recyclerSearchResults;
     this.txtHistoryHeader = txtHistoryHeader;
+    this.txtNoResults = txtNoResults;
     this.txtSearchTitle = txtSearchTitle;
   }
 
@@ -74,6 +107,24 @@ public final class ActivitySearchBinding implements ViewBinding {
     // This is done to optimize the compiled bytecode for size and performance.
     int id;
     missingId: {
+      id = R.id.btnTabAll;
+      TextView btnTabAll = ViewBindings.findChildViewById(rootView, id);
+      if (btnTabAll == null) {
+        break missingId;
+      }
+
+      id = R.id.btnTabChannels;
+      TextView btnTabChannels = ViewBindings.findChildViewById(rootView, id);
+      if (btnTabChannels == null) {
+        break missingId;
+      }
+
+      id = R.id.btnTabPrograms;
+      TextView btnTabPrograms = ViewBindings.findChildViewById(rootView, id);
+      if (btnTabPrograms == null) {
+        break missingId;
+      }
+
       id = R.id.editSearchQuery;
       EditText editSearchQuery = ViewBindings.findChildViewById(rootView, id);
       if (editSearchQuery == null) {
@@ -86,9 +137,27 @@ public final class ActivitySearchBinding implements ViewBinding {
         break missingId;
       }
 
+      id = R.id.layoutTabs;
+      LinearLayout layoutTabs = ViewBindings.findChildViewById(rootView, id);
+      if (layoutTabs == null) {
+        break missingId;
+      }
+
+      id = R.id.progressSearch;
+      ProgressBar progressSearch = ViewBindings.findChildViewById(rootView, id);
+      if (progressSearch == null) {
+        break missingId;
+      }
+
       id = R.id.recyclerSearchHistory;
       RecyclerView recyclerSearchHistory = ViewBindings.findChildViewById(rootView, id);
       if (recyclerSearchHistory == null) {
+        break missingId;
+      }
+
+      id = R.id.recyclerSearchResults;
+      RecyclerView recyclerSearchResults = ViewBindings.findChildViewById(rootView, id);
+      if (recyclerSearchResults == null) {
         break missingId;
       }
 
@@ -98,14 +167,22 @@ public final class ActivitySearchBinding implements ViewBinding {
         break missingId;
       }
 
+      id = R.id.txtNoResults;
+      TextView txtNoResults = ViewBindings.findChildViewById(rootView, id);
+      if (txtNoResults == null) {
+        break missingId;
+      }
+
       id = R.id.txtSearchTitle;
       TextView txtSearchTitle = ViewBindings.findChildViewById(rootView, id);
       if (txtSearchTitle == null) {
         break missingId;
       }
 
-      return new ActivitySearchBinding((LinearLayout) rootView, editSearchQuery,
-          layoutSearchHistory, recyclerSearchHistory, txtHistoryHeader, txtSearchTitle);
+      return new ActivitySearchBinding((LinearLayout) rootView, btnTabAll, btnTabChannels,
+          btnTabPrograms, editSearchQuery, layoutSearchHistory, layoutTabs, progressSearch,
+          recyclerSearchHistory, recyclerSearchResults, txtHistoryHeader, txtNoResults,
+          txtSearchTitle);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));

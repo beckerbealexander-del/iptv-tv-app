@@ -3484,6 +3484,7 @@ drawable btn_radio_off_mtrl
 drawable btn_radio_off_to_on_mtrl_animation
 drawable btn_radio_on_mtrl
 drawable btn_radio_on_to_off_mtrl_animation
+drawable card_focus_border_red
 drawable card_focus_selector
 drawable category_item_bg
 drawable design_fab_background
@@ -3860,6 +3861,9 @@ id btnSortDefault
 id btnSortRating
 id btnSortYear
 id btnSubtitles
+id btnTabAll
+id btnTabChannels
+id btnTabPrograms
 id button
 id buttonPanel
 id button_start
@@ -4094,6 +4098,7 @@ id imgHeroSeriesCover
 id imgHistoryChannelLogo
 id imgHistoryPoster
 id imgPoster
+id imgSearchChannelLogo
 id indeterminate
 id info
 id infoOver
@@ -4118,6 +4123,7 @@ id layoutSectionChannelHistory
 id layoutSectionMovieHistory
 id layoutSectionSeriesHistory
 id layoutSeriesSortBar
+id layoutTabs
 id layoutTimeline
 id layoutVodSortBar
 id lb_action_button
@@ -4319,6 +4325,7 @@ id progressEpisodeWatched
 id progressEpisodes
 id progressHistoryBar
 id progressOsdProgram
+id progressSearch
 id progressSeries
 id progressSeriesCats
 id progressVod
@@ -4335,6 +4342,7 @@ id recyclerChannels
 id recyclerEpisodes
 id recyclerMovieHistory
 id recyclerSearchHistory
+id recyclerSearchResults
 id recyclerSeasons
 id recyclerSeriesCategories
 id recyclerSeriesGrid
@@ -4499,6 +4507,7 @@ id txtHistorySubtitle
 id txtHistoryTitle
 id txtNoChannelHistory
 id txtNoMovieHistory
+id txtNoResults
 id txtNoSeriesHistory
 id txtOsdChannelName
 id txtOsdChannelNum
@@ -4514,8 +4523,14 @@ id txtPreviewTime
 id txtPreviewTitle
 id txtScrubSpeed
 id txtScrubTargetTime
+id txtSearchChannelCategory
+id txtSearchChannelName
+id txtSearchProgramChannel
+id txtSearchProgramTimeAndDesc
+id txtSearchProgramTitle
 id txtSearchTitle
 id txtSeasonName
+id txtSectionHeader
 id txtSeriesCategoryTitle
 id txtTimeCurrent
 id txtTimeTotal
@@ -4738,7 +4753,10 @@ layout item_episode_card
 layout item_history_card
 layout item_history_channel
 layout item_poster
+layout item_search_channel
 layout item_search_history
+layout item_search_program
+layout item_search_section_header
 layout item_season_tab
 layout lb_action_1_line
 layout lb_action_2_lines
