@@ -87,7 +87,7 @@ class LiveTvActivity : AppCompatActivity() {
         binding.layoutFullscreenOsd.visibility = View.GONE
     }
 
-    // 2. SUCHE DIREKT IM SUCHFENSTER: Treffer starten den Sender sofort, KEINE temporäre Kategorie mehr!
+    // 3. SUCHE DIREKT IM SUCHFENSTER: Treffer starten den Sender sofort, KEINE temporäre Kategorie mehr!
     private val searchLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == RESULT_OK) {
             val streamId = result.data?.getIntExtra("SELECTED_STREAM_ID", -1) ?: -1
@@ -175,7 +175,7 @@ class LiveTvActivity : AppCompatActivity() {
     }
 
     private fun setupSearchAndPipRouting() {
-        // 2. Klick auf Suche öffnet saubere Vollbild-Dual-Suche
+        // Klick auf Suche öffnet saubere Vollbild-Dual-Suche
         binding.btnOpenLiveSearch.setOnClickListener {
             val intent = Intent(this, SearchActivity::class.java).apply {
                 putExtra("SEARCH_TYPE", "LIVE")
@@ -183,7 +183,7 @@ class LiveTvActivity : AppCompatActivity() {
             searchLauncher.launch(intent)
         }
 
-        // Fokus-Schutz: Falls während eines Kategoriewechsels die Suche Fokus erhält, sofort auf Sender 0 leiten
+        // Fokus-Schutz: Falls während eines Kategoriewechsels die Suche Fokus erhält, sofort auf Sender leiten
         binding.btnOpenLiveSearch.setOnFocusChangeListener { _, hasFocus ->
             if (hasFocus && isSwitchingCategories) {
                 focusTargetChannel(0)
@@ -281,16 +281,19 @@ class LiveTvActivity : AppCompatActivity() {
         livePlayer = null
     }
 
-    // Sender starten: Playing Category wandert auf die Kategorie dieses Senders
+    // 1. Sender starten: Roter Punkt wandert sofort zum neuen Sender und zu dessen Kategorie mit!
     private fun playLiveStream(stream: LiveStream) {
         nowPlayingStreamId = stream.streamId
-        playingCategoryId = browsingCategoryId
+
+        // Ermittle Ursprungskategorie des Senders
+        val targetCatId = stream.categoryId ?: browsingCategoryId
+        playingCategoryId = targetCatId
 
         activeStream = stream
         historyManager.saveLiveChannel(stream)
 
         channelAdapter?.notifyDataSetChanged()
-        categoryAdapter?.updateCategoryStates(playingCategoryId, browsingCategoryId)
+        categoryAdapter?.updateCategoryStates(playingId = playingCategoryId, newBrowsingId = browsingCategoryId)
 
         val url = client.getLiveStreamUrl(stream.streamId)
         val mediaItem = MediaItem.fromUri(url)
@@ -506,10 +509,10 @@ class LiveTvActivity : AppCompatActivity() {
         }
     }
 
-    // 1. KATEGORIEWECHSEL: Playing Category bleibt erhalten, alte Browsing Category verliert Markierung!
+    // 1. & 2. KATEGORIEWECHSEL & SENDER-RESTORE
     private fun loadChannels(category: Category, preselectedStreamId: Int? = null) {
         if (browsingCategoryId == category.id && preselectedStreamId == null && currentChannelItems.isNotEmpty()) {
-            focusTargetChannel(0)
+            focusTargetChannelForCategory(category)
             return
         }
 
@@ -517,7 +520,7 @@ class LiveTvActivity : AppCompatActivity() {
         val oldBrowsingId = browsingCategoryId
         browsingCategoryId = category.id
 
-        // Aktualisiere Kategorie-States: Alte Browsing verliert Markierung, neue Browsing wird markiert!
+        // Aktualisiere Kategorie-States
         categoryAdapter?.updateCategoryStates(
             playingId = playingCategoryId,
             newBrowsingId = browsingCategoryId,
@@ -532,8 +535,14 @@ class LiveTvActivity : AppCompatActivity() {
             binding.progressChannels.visibility = View.GONE
             channelAdapter?.updateItems(cached)
             if (cached.isNotEmpty()) {
-                showChannelPreview(cached[0].stream, cached[0].epgList.firstOrNull())
-                focusTargetChannel(0)
+                // 2. Sender-Restore: Wenn Rücksprung in die Playing Category -> Sender mit rotem Punkt fokussieren!
+                val restoreIndex = if (category.id == playingCategoryId && nowPlayingStreamId != null) {
+                    val idx = cached.indexOfFirst { it.stream.streamId == nowPlayingStreamId }
+                    if (idx != -1) idx else 0
+                } else 0
+
+                showChannelPreview(cached[restoreIndex].stream, cached[restoreIndex].epgList.firstOrNull())
+                focusTargetChannel(restoreIndex)
             }
             return
         }
@@ -551,6 +560,8 @@ class LiveTvActivity : AppCompatActivity() {
 
                 val targetItem = if (preselectedStreamId != null) {
                     currentChannelItems.firstOrNull { it.stream.streamId == preselectedStreamId } ?: currentChannelItems.firstOrNull()
+                } else if (category.id == playingCategoryId && nowPlayingStreamId != null) {
+                    currentChannelItems.firstOrNull { it.stream.streamId == nowPlayingStreamId } ?: currentChannelItems.firstOrNull()
                 } else {
                     currentChannelItems.firstOrNull()
                 }
@@ -572,9 +583,12 @@ class LiveTvActivity : AppCompatActivity() {
         }
     }
 
+    // 2. SENDER-RESTORE: Springt und scrollt exakt auf den Sender mit dem roten Punkt (mit Offset)
     private fun focusTargetChannel(position: Int) {
         activePlaylistIndex = position
-        binding.recyclerChannels.scrollToPosition(position)
+        val lm = binding.recyclerChannels.layoutManager as? LinearLayoutManager
+        lm?.scrollToPositionWithOffset(position, dpToPx(40)) ?: binding.recyclerChannels.scrollToPosition(position)
+
         binding.recyclerChannels.post {
             val holder = binding.recyclerChannels.findViewHolderForAdapterPosition(position) as? ChannelAdapter.ViewHolder
             if (holder != null) {
@@ -585,18 +599,27 @@ class LiveTvActivity : AppCompatActivity() {
                     val retryHolder = binding.recyclerChannels.findViewHolderForAdapterPosition(position) as? ChannelAdapter.ViewHolder
                     retryHolder?.header?.requestFocus()
                     isSwitchingCategories = false
-                }, 50)
+                }, 60)
             }
         }
     }
 
-    private fun focusFirstChannel() {
+    private fun focusTargetChannelForCategory(cat: Category) {
+        if (cat.id == playingCategoryId && nowPlayingStreamId != null) {
+            val targetIndex = currentChannelItems.indexOfFirst { it.stream.streamId == nowPlayingStreamId }
+            if (targetIndex != -1) {
+                focusTargetChannel(targetIndex)
+                return
+            }
+        }
         focusTargetChannel(0)
     }
 
     private fun focusCurrentCategory() {
         val catIndex = displayedCategories.indexOfFirst { it.id == browsingCategoryId }.coerceAtLeast(0)
-        binding.recyclerCategories.scrollToPosition(catIndex)
+        val lm = binding.recyclerCategories.layoutManager as? LinearLayoutManager
+        lm?.scrollToPositionWithOffset(catIndex, dpToPx(40)) ?: binding.recyclerCategories.scrollToPosition(catIndex)
+
         binding.recyclerCategories.post {
             val holder = binding.recyclerCategories.findViewHolderForAdapterPosition(catIndex)
             holder?.itemView?.requestFocus() ?: binding.recyclerCategories.requestFocus()
@@ -717,7 +740,10 @@ class LiveTvActivity : AppCompatActivity() {
                         if (channelPos < currentChannelItems.size - 1) {
                             val nextPos = channelPos + 1
                             activePlaylistIndex = nextPos
-                            binding.recyclerChannels.scrollToPosition(nextPos)
+                            (binding.recyclerChannels.layoutManager as? LinearLayoutManager)
+                                ?.scrollToPositionWithOffset(nextPos, dpToPx(40))
+                                ?: binding.recyclerChannels.scrollToPosition(nextPos)
+
                             binding.recyclerChannels.post {
                                 val holder = binding.recyclerChannels.findViewHolderForAdapterPosition(nextPos) as? ChannelAdapter.ViewHolder
                                 if (onEpg) {
@@ -738,7 +764,10 @@ class LiveTvActivity : AppCompatActivity() {
                         } else {
                             val prevPos = channelPos - 1
                             activePlaylistIndex = prevPos
-                            binding.recyclerChannels.scrollToPosition(prevPos)
+                            (binding.recyclerChannels.layoutManager as? LinearLayoutManager)
+                                ?.scrollToPositionWithOffset(prevPos, dpToPx(40))
+                                ?: binding.recyclerChannels.scrollToPosition(prevPos)
+
                             binding.recyclerChannels.post {
                                 val holder = binding.recyclerChannels.findViewHolderForAdapterPosition(prevPos) as? ChannelAdapter.ViewHolder
                                 if (onEpg) {
@@ -815,13 +844,14 @@ class LiveTvActivity : AppCompatActivity() {
         return -1
     }
 
-    // --- Adapter 1: Kategorien mit 2-Stufen-Markierung ---
+    // --- Adapter 1: Kategorien mit rotem Punkt & Browsing-Status ---
     inner class CategoryAdapter(
         private val items: List<Category>,
         private val onSelect: (Category) -> Unit
     ) : RecyclerView.Adapter<CategoryAdapter.ViewHolder>() {
 
         inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+            val dot: View = view.findViewById(R.id.dotIndicator)
             val txtName: TextView = view.findViewById(R.id.txtCategoryName)
         }
 
@@ -871,7 +901,8 @@ class LiveTvActivity : AppCompatActivity() {
                             return@setOnKeyListener true
                         }
                         KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                            focusFirstChannel()
+                            // 2. Sender-Restore: DPAD_RIGHT in die Senderliste springt direkt zum Sender mit dem roten Punkt!
+                            focusTargetChannelForCategory(cat)
                             return@setOnKeyListener true
                         }
                         KeyEvent.KEYCODE_DPAD_LEFT -> {
@@ -894,45 +925,35 @@ class LiveTvActivity : AppCompatActivity() {
             }
         }
 
-        // 1. OPTIK: Rotes Farbschema ohne Knallrot (Playing vs Browsing vs Cursor)
+        // 1. OPTIK: Roter Indikator-Punkt für Playing Category, dezente Tönung für Browsing Category
         private fun applyCategoryStyle(holder: ViewHolder, cat: Category) {
             val isPlaying = (cat.id == playingCategoryId)
             val isBrowsing = (cat.id == browsingCategoryId)
             val isFocused = holder.itemView.isFocused
 
-            // Text mit Status-Play-Symbol für Playing Category
-            if (isPlaying) {
-                holder.txtName.text = "▶  ${cat.name}"
-                holder.txtName.setTextColor(Color.parseColor("#FFFFFF"))
-            } else {
-                holder.txtName.text = cat.name
-                holder.txtName.setTextColor(if (isFocused || isBrowsing) Color.parseColor("#FFFFFF") else Color.parseColor("#B0B0B0"))
-            }
+            // 1. DYNAMISCHER ROTER PUNKT: Exakt an der Kategorie des aktiven Streams
+            holder.dot.visibility = if (isPlaying) View.VISIBLE else View.GONE
+            holder.txtName.text = cat.name
+            holder.txtName.setTextColor(if (isFocused || isBrowsing || isPlaying) Color.parseColor("#FFFFFF") else Color.parseColor("#B0B0B0"))
 
             val drawable = GradientDrawable().apply {
                 cornerRadius = dpToPx(6).toFloat()
                 when {
-                    // D-Pad Cursor steht auf diesem Element: Leuchtender 3dp roter Rahmen
+                    // D-Pad Cursor: Reiner roter Fokusrahmen (Border), kein Vollflächen-Knallrot
                     isFocused -> {
                         when {
-                            isPlaying && isBrowsing -> setColor(Color.parseColor("#701A22"))
                             isBrowsing -> setColor(Color.parseColor("#701A22"))
                             isPlaying -> setColor(Color.parseColor("#2C1014"))
                             else -> setColor(Color.parseColor("#1C1C1C"))
                         }
                         setStroke(dpToPx(3), Color.parseColor("#E50914"))
                     }
-                    // Playing UND Browsing gleichzeitig (kein Cursor): Rote Hintergrundtönung + feiner Rand
-                    isPlaying && isBrowsing -> {
-                        setColor(Color.parseColor("#701A22"))
-                        setStroke(dpToPx(1.5f.toInt()), Color.parseColor("#90202A"))
-                    }
-                    // Browsing Category (die gerade durchsucht wird): Sichtbare matte rote Tönung (bleibt stabil beim Drübernavigieren!)
+                    // Browsing Category: Sichtbare matte rote Tönung (bleibt stabil beim Drüber-Navigieren!)
                     isBrowsing -> {
                         setColor(Color.parseColor("#701A22"))
                         setStroke(dpToPx(1.5f.toInt()), Color.parseColor("#90202A"))
                     }
-                    // Playing Category (wo der Stream herkommt): Dunklere rote Akzentuierung
+                    // Playing Category (wo der Stream herkommt): Dunklere dezente Akzentuierung
                     isPlaying -> {
                         setColor(Color.parseColor("#2C1014"))
                         setStroke(dpToPx(1), Color.parseColor("#5A161B"))
@@ -958,7 +979,7 @@ class LiveTvActivity : AppCompatActivity() {
         override fun getItemCount() = items.size
     }
 
-    // --- Adapter 2: Senderzeilen mit horizontalem EPG Timeline Grid ---
+    // --- Adapter 2: Senderzeilen mit dynamischem rotem Punkt ---
     inner class ChannelAdapter(
         private var items: List<ChannelWithEpg>
     ) : RecyclerView.Adapter<ChannelAdapter.ViewHolder>() {
@@ -967,6 +988,7 @@ class LiveTvActivity : AppCompatActivity() {
             val header: View = view.findViewById(R.id.channelHeader)
             val txtNum: TextView = view.findViewById(R.id.txtChannelNum)
             val imgLogo: ImageView = view.findViewById(R.id.imgChannelLogo)
+            val dot: View = view.findViewById(R.id.dotChannelIndicator)
             val txtName: TextView = view.findViewById(R.id.txtChannelName)
             val recyclerPrograms: RecyclerView = view.findViewById(R.id.recyclerChannelPrograms)
         }
@@ -988,8 +1010,11 @@ class LiveTvActivity : AppCompatActivity() {
 
             holder.txtName.text = s.name
 
+            // 1. DYNAMISCHER ROTER PUNKT: Exakt neben dem aktuell laufenden Sender
+            holder.dot.visibility = if (isPlaying) View.VISIBLE else View.GONE
+
             if (isPlaying) {
-                holder.txtNum.text = "▶"
+                holder.txtNum.text = "${position + 1}"
                 holder.txtNum.setTextColor(Color.parseColor("#E50914"))
                 holder.txtName.setTextColor(Color.parseColor("#FFFFFF"))
             } else {
@@ -1050,17 +1075,16 @@ class LiveTvActivity : AppCompatActivity() {
             val drawable = GradientDrawable().apply {
                 cornerRadius = dpToPx(6).toFloat()
                 when {
-                    // Cursor steht auf laufendem Sender
+                    // Cursor: Reiner roter Fokusrahmen
                     isFocused && isPlaying -> {
                         setColor(Color.parseColor("#701A22"))
                         setStroke(dpToPx(3), Color.parseColor("#E50914"))
                     }
-                    // AKTUELLER FOKUS: NUR leuchtender 3dp roter Rahmen
                     isFocused -> {
                         setColor(Color.parseColor("#1C1C1C"))
                         setStroke(dpToPx(3), Color.parseColor("#E50914"))
                     }
-                    // AKTUELL LAUFENDER SENDER: Dezente rote Hintergrundtönung
+                    // Aktuell laufender Sender: Dezente Tönung
                     isPlaying -> {
                         setColor(Color.parseColor("#341216"))
                         setStroke(dpToPx(1), Color.parseColor("#7A1C24"))

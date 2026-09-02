@@ -25,6 +25,9 @@ public final class ItemEpgChannelRowBinding implements ViewBinding {
   public final LinearLayout channelHeader;
 
   @NonNull
+  public final View dotChannelIndicator;
+
+  @NonNull
   public final ImageView imgChannelLogo;
 
   @NonNull
@@ -37,11 +40,12 @@ public final class ItemEpgChannelRowBinding implements ViewBinding {
   public final TextView txtChannelNum;
 
   private ItemEpgChannelRowBinding(@NonNull LinearLayout rootView,
-      @NonNull LinearLayout channelHeader, @NonNull ImageView imgChannelLogo,
-      @NonNull RecyclerView recyclerChannelPrograms, @NonNull TextView txtChannelName,
-      @NonNull TextView txtChannelNum) {
+      @NonNull LinearLayout channelHeader, @NonNull View dotChannelIndicator,
+      @NonNull ImageView imgChannelLogo, @NonNull RecyclerView recyclerChannelPrograms,
+      @NonNull TextView txtChannelName, @NonNull TextView txtChannelNum) {
     this.rootView = rootView;
     this.channelHeader = channelHeader;
+    this.dotChannelIndicator = dotChannelIndicator;
     this.imgChannelLogo = imgChannelLogo;
     this.recyclerChannelPrograms = recyclerChannelPrograms;
     this.txtChannelName = txtChannelName;
@@ -81,6 +85,12 @@ public final class ItemEpgChannelRowBinding implements ViewBinding {
         break missingId;
       }
 
+      id = R.id.dotChannelIndicator;
+      View dotChannelIndicator = ViewBindings.findChildViewById(rootView, id);
+      if (dotChannelIndicator == null) {
+        break missingId;
+      }
+
       id = R.id.imgChannelLogo;
       ImageView imgChannelLogo = ViewBindings.findChildViewById(rootView, id);
       if (imgChannelLogo == null) {
@@ -105,8 +115,9 @@ public final class ItemEpgChannelRowBinding implements ViewBinding {
         break missingId;
       }
 
-      return new ItemEpgChannelRowBinding((LinearLayout) rootView, channelHeader, imgChannelLogo,
-          recyclerChannelPrograms, txtChannelName, txtChannelNum);
+      return new ItemEpgChannelRowBinding((LinearLayout) rootView, channelHeader,
+          dotChannelIndicator, imgChannelLogo, recyclerChannelPrograms, txtChannelName,
+          txtChannelNum);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));

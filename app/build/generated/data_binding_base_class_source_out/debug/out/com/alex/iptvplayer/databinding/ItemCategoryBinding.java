@@ -4,7 +4,7 @@ package com.alex.iptvplayer.databinding;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.FrameLayout;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -17,19 +17,24 @@ import java.lang.String;
 
 public final class ItemCategoryBinding implements ViewBinding {
   @NonNull
-  private final FrameLayout rootView;
+  private final LinearLayout rootView;
+
+  @NonNull
+  public final View dotIndicator;
 
   @NonNull
   public final TextView txtCategoryName;
 
-  private ItemCategoryBinding(@NonNull FrameLayout rootView, @NonNull TextView txtCategoryName) {
+  private ItemCategoryBinding(@NonNull LinearLayout rootView, @NonNull View dotIndicator,
+      @NonNull TextView txtCategoryName) {
     this.rootView = rootView;
+    this.dotIndicator = dotIndicator;
     this.txtCategoryName = txtCategoryName;
   }
 
   @Override
   @NonNull
-  public FrameLayout getRoot() {
+  public LinearLayout getRoot() {
     return rootView;
   }
 
@@ -54,13 +59,19 @@ public final class ItemCategoryBinding implements ViewBinding {
     // This is done to optimize the compiled bytecode for size and performance.
     int id;
     missingId: {
+      id = R.id.dotIndicator;
+      View dotIndicator = ViewBindings.findChildViewById(rootView, id);
+      if (dotIndicator == null) {
+        break missingId;
+      }
+
       id = R.id.txtCategoryName;
       TextView txtCategoryName = ViewBindings.findChildViewById(rootView, id);
       if (txtCategoryName == null) {
         break missingId;
       }
 
-      return new ItemCategoryBinding((FrameLayout) rootView, txtCategoryName);
+      return new ItemCategoryBinding((LinearLayout) rootView, dotIndicator, txtCategoryName);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));

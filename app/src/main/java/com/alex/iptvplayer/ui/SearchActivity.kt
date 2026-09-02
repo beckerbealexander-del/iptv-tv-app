@@ -85,7 +85,7 @@ class SearchActivity : AppCompatActivity() {
             loadGlobalStreams()
         }
 
-        // Live-Suche während der Eingabe (Debounce 350ms)
+        // Live-Suche während der Eingabe (Debounce 300ms)
         binding.editSearchQuery.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {
@@ -95,7 +95,7 @@ class SearchActivity : AppCompatActivity() {
                 } else if (searchType == "LIVE") {
                     searchJob?.cancel()
                     searchJob = lifecycleScope.launch {
-                        delay(350)
+                        delay(300)
                         performDualSearch(query)
                     }
                 }
@@ -120,25 +120,11 @@ class SearchActivity : AppCompatActivity() {
             } else false
         }
 
-        // Navigation nach unten
+        // 4. FOKUS-WECHSEL: DPAD_DOWN aus dem Suchfeld springt zwingend auf den ersten Treffer
         binding.editSearchQuery.setOnKeyListener { _, keyCode, event ->
             if (event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
-                if (binding.layoutTabs.visibility == View.VISIBLE) {
-                    binding.btnTabAll.requestFocus()
-                    return@setOnKeyListener true
-                } else if (binding.layoutSearchHistory.visibility == View.VISIBLE) {
-                    val holder = binding.recyclerSearchHistory.findViewHolderForAdapterPosition(0)
-                    if (holder != null) {
-                        holder.itemView.requestFocus()
-                        return@setOnKeyListener true
-                    }
-                } else if (binding.recyclerSearchResults.visibility == View.VISIBLE) {
-                    val holder = binding.recyclerSearchResults.findViewHolderForAdapterPosition(0)
-                    if (holder != null) {
-                        holder.itemView.requestFocus()
-                        return@setOnKeyListener true
-                    }
-                }
+                focusFirstSearchResult()
+                return@setOnKeyListener true
             }
             false
         }
@@ -147,6 +133,35 @@ class SearchActivity : AppCompatActivity() {
             binding.editSearchQuery.requestFocus()
             val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
             imm.showSoftInput(binding.editSearchQuery, InputMethodManager.SHOW_IMPLICIT)
+        }
+    }
+
+    // 4. Fokus zwingend auf das erste Ergebnis (oder Tabs/Historie) setzen
+    private fun focusFirstSearchResult() {
+        if (binding.recyclerSearchResults.visibility == View.VISIBLE) {
+            val count = binding.recyclerSearchResults.adapter?.itemCount ?: 0
+            if (count > 0) {
+                binding.recyclerSearchResults.scrollToPosition(0)
+                binding.recyclerSearchResults.post {
+                    // Suche nach dem ersten Element, das focusable ist (meist Index 1 nach dem Header)
+                    for (i in 0 until count) {
+                        val holder = binding.recyclerSearchResults.findViewHolderForAdapterPosition(i)
+                        if (holder != null && holder.itemView.isFocusable) {
+                            holder.itemView.requestFocus()
+                            return@post
+                        }
+                    }
+                    // Fallback
+                    binding.recyclerSearchResults.findViewHolderForAdapterPosition(1)?.itemView?.requestFocus()
+                        ?: binding.recyclerSearchResults.findViewHolderForAdapterPosition(0)?.itemView?.requestFocus()
+                        ?: binding.recyclerSearchResults.requestFocus()
+                }
+            }
+        } else if (binding.layoutTabs.visibility == View.VISIBLE) {
+            binding.btnTabAll.requestFocus()
+        } else if (binding.layoutSearchHistory.visibility == View.VISIBLE) {
+            val holder = binding.recyclerSearchHistory.findViewHolderForAdapterPosition(0)
+            holder?.itemView?.requestFocus() ?: binding.recyclerSearchHistory.requestFocus()
         }
     }
 
@@ -173,8 +188,7 @@ class SearchActivity : AppCompatActivity() {
                     binding.editSearchQuery.requestFocus()
                     true
                 } else if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
-                    val holder = binding.recyclerSearchResults.findViewHolderForAdapterPosition(0)
-                    holder?.itemView?.requestFocus() ?: binding.recyclerSearchResults.requestFocus()
+                    focusFirstSearchResult()
                     true
                 } else false
             } else false
@@ -218,7 +232,7 @@ class SearchActivity : AppCompatActivity() {
         imm.hideSoftInputFromWindow(binding.editSearchQuery.windowToken, 0)
     }
 
-    // 3. DUAL-SUCHE: SENDER-TREFFER & LIVE-EPG (AKTUELL LAUFENDE SENDUNGEN)
+    // 5. DUAL-SUCHE: SENDER-TREFFER & LIVE-EPG (AKTUELL LAUFENDE SENDUNGEN)
     private fun performDualSearch(query: String) {
         if (query.isEmpty()) return
 
@@ -231,7 +245,7 @@ class SearchActivity : AppCompatActivity() {
             val channelMatches = allLiveStreams.filter { it.name.contains(query, ignoreCase = true) }
             foundChannels = channelMatches
 
-            // 2. Live-Programm Treffer (aktuell laufende Sendungen aus dem EPG-Cache)
+            // 2. Live-Programm Treffer (aktuell laufende Sendungen aus dem EPG)
             val programMatches = mutableListOf<Pair<EpgProgram, LiveStream>>()
 
             // A) Aus categoryChannelMap (bereits geöffnete/geladene Sender)
@@ -246,7 +260,7 @@ class SearchActivity : AppCompatActivity() {
                 }
             }
 
-            // B) Für die ersten 12 Kanal-Treffer (falls noch nicht im EPG-Cache vorhanden) EPG live nachladen
+            // B) Für die ersten 12 Kanal-Treffer (falls noch nicht im EPG-Cache) live nachladen
             val channelsToCheck = channelMatches.take(12)
             for (stream in channelsToCheck) {
                 val isAlreadyChecked = cachedChannels.any { it.stream.streamId == stream.streamId }
@@ -465,11 +479,14 @@ class SearchActivity : AppCompatActivity() {
                     val vh = holder as HeaderViewHolder
                     vh.txt.text = item.title
                     vh.itemView.isFocusable = false
+                    vh.itemView.isClickable = false
                 }
                 is SearchResultItem.ChannelItem -> {
                     val vh = holder as ChannelViewHolder
                     vh.name.text = item.stream.name
                     vh.category.text = "Live TV"
+                    vh.itemView.isFocusable = true
+                    vh.itemView.isClickable = true
 
                     if (!item.stream.streamIcon.isNullOrEmpty()) {
                         Glide.with(vh.itemView).load(item.stream.streamIcon).override(36, 36).into(vh.logo)
@@ -480,17 +497,29 @@ class SearchActivity : AppCompatActivity() {
                     vh.itemView.setOnClickListener {
                         onSelect(item.stream)
                     }
+                    // 4. Fokus-Verkettung: DPAD_UP vom ersten Treffer springt zurück ins Suchfeld
                     vh.itemView.setOnKeyListener { _, keyCode, event ->
-                        if (event.action == KeyEvent.ACTION_DOWN && (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER)) {
-                            onSelect(item.stream)
-                            true
-                        } else false
+                        if (event.action == KeyEvent.ACTION_DOWN) {
+                            if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) {
+                                onSelect(item.stream)
+                                return@setOnKeyListener true
+                            } else if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
+                                if (position <= 1) {
+                                    binding.editSearchQuery.requestFocus()
+                                    return@setOnKeyListener true
+                                }
+                            }
+                        }
+                        false
                     }
                 }
                 is SearchResultItem.ProgramItem -> {
                     val vh = holder as ProgramViewHolder
                     vh.title.text = item.program.title
                     vh.channel.text = item.stream.name
+                    vh.itemView.isFocusable = true
+                    vh.itemView.isClickable = true
+
                     val timeStr = "${item.program.start} - ${item.program.end}"
                     val desc = if (item.program.description.isNotEmpty()) " • ${item.program.description}" else ""
                     vh.timeAndDesc.text = "$timeStr$desc"
@@ -498,11 +527,20 @@ class SearchActivity : AppCompatActivity() {
                     vh.itemView.setOnClickListener {
                         onSelect(item.stream)
                     }
+                    // 4. Fokus-Verkettung: DPAD_UP vom ersten Treffer springt zurück ins Suchfeld
                     vh.itemView.setOnKeyListener { _, keyCode, event ->
-                        if (event.action == KeyEvent.ACTION_DOWN && (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER)) {
-                            onSelect(item.stream)
-                            true
-                        } else false
+                        if (event.action == KeyEvent.ACTION_DOWN) {
+                            if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) {
+                                onSelect(item.stream)
+                                return@setOnKeyListener true
+                            } else if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
+                                if (position <= 1) {
+                                    binding.editSearchQuery.requestFocus()
+                                    return@setOnKeyListener true
+                                }
+                            }
+                        }
+                        false
                     }
                 }
             }

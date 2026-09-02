@@ -13,6 +13,7 @@ drawable card_focus_border_red
 drawable card_focus_selector
 drawable category_item_bg
 drawable pip_focus_border
+drawable red_circle_badge
 drawable tv_banner
 id badgeAudio
 id badgeQuality
@@ -36,6 +37,8 @@ id btnTabAll
 id btnTabChannels
 id btnTabPrograms
 id channelHeader
+id dotChannelIndicator
+id dotIndicator
 id editPassword
 id editSearchQuery
 id editServerUrl
