@@ -7,7 +7,7 @@
     android:gravity="center_vertical"
     android:orientation="horizontal">
 
-    <!-- Schlanker Senderkopf mit striktem Fokus-Einschluss -->
+    <!-- Schlanker Senderkopf -->
     <LinearLayout
         android:id="@+id/channelHeader"
         android:layout_width="280dp"
@@ -15,12 +15,9 @@
         android:background="@drawable/card_focus_selector"
         android:clickable="true"
         android:focusable="true"
-        android:focusableInTouchMode="true"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingHorizontal="8dp"
-        android:nextFocusLeft="@+id/channelHeader"
-        android:nextFocusRight="@+id/recyclerChannelPrograms"
         android:layout_marginEnd="4dp">
 
         <TextView

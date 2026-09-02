@@ -44,11 +44,15 @@ class LiveTvActivity : AppCompatActivity() {
     private lateinit var historyManager: HistoryManager
 
     private var allCategories: List<Category> = emptyList()
+    private var displayedCategories: List<Category> = emptyList()
     private var currentFilter = LangFilter.AUTO_DE_RU_ADULT
     private var currentStreams: List<LiveStream> = emptyList()
+    private var allLiveStreamsGlobal: List<LiveStream> = emptyList()
     private var selectedCategoryId: String? = null
     private val channelCategoryCache = HashMap<String, List<LiveStream>>()
     private val epgCache = HashMap<Int, List<EpgProgram>>()
+
+    private var isInitialLoad = true
 
     // PIP Mini-Player
     private var pipPlayer: ExoPlayer? = null
@@ -82,6 +86,17 @@ class LiveTvActivity : AppCompatActivity() {
         setupFilterButtons()
         setupSearch()
         loadCategories()
+        preloadGlobalChannels()
+    }
+
+    private fun preloadGlobalChannels() {
+        lifecycleScope.launch {
+            try {
+                allLiveStreamsGlobal = client.getAllLiveStreams()
+            } catch (e: Exception) {
+                // Fallback
+            }
+        }
     }
 
     private fun setupPipPlayer() {
@@ -91,6 +106,7 @@ class LiveTvActivity : AppCompatActivity() {
         }
     }
 
+    // In-Memory Cache beim Rücksprung aus dem Player: Kein Neuladen der Senderliste / kein Flackern
     override fun onResume() {
         super.onResume()
         val lastWatched = historyManager.getRecentLiveChannels().firstOrNull()
@@ -128,58 +144,102 @@ class LiveTvActivity : AppCompatActivity() {
     }
 
     private fun setupSearch() {
-        // Tastatur schließen bei Bestätigung
+        binding.editLiveSearch.isFocusable = true
+        binding.editLiveSearch.isFocusableInTouchMode = false
+
+        binding.editLiveSearch.setOnClickListener {
+            binding.editLiveSearch.isFocusableInTouchMode = true
+            binding.editLiveSearch.requestFocus()
+            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+            imm.showSoftInput(binding.editLiveSearch, InputMethodManager.SHOW_IMPLICIT)
+        }
+
+        binding.editLiveSearch.setOnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus) {
+                hideKeyboard()
+            }
+        }
+
         binding.editLiveSearch.setOnEditorActionListener { _, actionId, event ->
             if (actionId == EditorInfo.IME_ACTION_SEARCH || actionId == EditorInfo.IME_ACTION_DONE || actionId == EditorInfo.IME_ACTION_GO ||
                 (event != null && event.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN)) {
-                val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-                imm.hideSoftInputFromWindow(binding.editLiveSearch.windowToken, 0)
-                binding.editLiveSearch.clearFocus()
-                binding.recyclerChannels.requestFocus()
+                hideKeyboard()
+                focusFirstChannel()
                 true
             } else false
         }
 
+        // 1. TYPEN-ISOLIERTE GLOBALE SUCHE (ENTHÄLT / SUBSTRING):
+        // Durchsucht ausnahmslos ALLE Live-TV-Sender (über alle Kategorien hinweg) mit contains()
         binding.editLiveSearch.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
                 searchJob?.cancel()
-                val q = s?.toString()?.trim()?.lowercase() ?: ""
+                val q = s?.toString()?.trim() ?: ""
                 searchJob = lifecycleScope.launch {
-                    delay(300) // Debounce
-                    val filtered = if (q.isEmpty()) currentStreams else currentStreams.filter { it.name.lowercase().contains(q) }
-                    binding.recyclerChannels.adapter = ChannelAdapter(filtered)
+                    delay(300)
+                    if (q.isEmpty()) {
+                        binding.recyclerChannels.adapter = ChannelAdapter(currentStreams)
+                    } else {
+                        val pool = if (allLiveStreamsGlobal.isNotEmpty()) allLiveStreamsGlobal else currentStreams
+                        val filtered = pool.filter { it.name.contains(q, ignoreCase = true) }
+                        binding.recyclerChannels.adapter = ChannelAdapter(filtered)
+                    }
                 }
             }
             override fun afterTextChanged(s: Editable?) {}
         })
     }
 
+    private fun hideKeyboard() {
+        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+        imm.hideSoftInputFromWindow(binding.editLiveSearch.windowToken, 0)
+        binding.editLiveSearch.isFocusableInTouchMode = false
+        binding.editLiveSearch.clearFocus()
+    }
+
+    // 2. Fokus-Erhalt beim Klick auf Filter (DE / RU / ALLE bleibt auf dem Filter-Button)
     private fun setupFilterButtons() {
-        binding.btnLiveFilterDe.setOnClickListener { applyFilter(LangFilter.DE) }
-        binding.btnLiveFilterRu.setOnClickListener { applyFilter(LangFilter.RU) }
-        binding.btnLiveFilterAll.setOnClickListener { applyFilter(LangFilter.ALL) }
+        binding.btnLiveFilterDe.setOnClickListener {
+            applyFilter(LangFilter.DE)
+            binding.btnLiveFilterDe.requestFocus()
+        }
+        binding.btnLiveFilterRu.setOnClickListener {
+            applyFilter(LangFilter.RU)
+            binding.btnLiveFilterRu.requestFocus()
+        }
+        binding.btnLiveFilterAll.setOnClickListener {
+            applyFilter(LangFilter.ALL)
+            binding.btnLiveFilterAll.requestFocus()
+        }
     }
 
     private fun applyFilter(filter: LangFilter) {
         currentFilter = filter
         val filtered = client.filterCategories(allCategories, filter)
+        displayedCategories = filtered
         binding.recyclerCategories.adapter = CategoryAdapter(filtered) { category ->
             loadChannels(category)
         }
 
-        // Vorauswahl: Zuletzt gesehener Sender
-        val lastWatched = historyManager.getRecentLiveChannels().firstOrNull()
-        if (lastWatched != null && !lastWatched.categoryId.isNullOrEmpty()) {
-            val matchingCat = filtered.firstOrNull { it.id == lastWatched.categoryId }
-            if (matchingCat != null) {
-                loadChannels(matchingCat, preselectedStreamId = lastWatched.streamId)
-                return
+        if (isInitialLoad) {
+            val lastWatched = historyManager.getRecentLiveChannels().firstOrNull()
+            if (lastWatched != null && !lastWatched.categoryId.isNullOrEmpty()) {
+                val matchingCat = filtered.firstOrNull { it.id == lastWatched.categoryId }
+                if (matchingCat != null) {
+                    loadChannels(matchingCat, preselectedStreamId = lastWatched.streamId)
+                    return
+                }
             }
         }
 
-        if (filtered.isNotEmpty() && selectedCategoryId == null) {
-            loadChannels(filtered[0])
+        if (filtered.isNotEmpty()) {
+            val catToLoad = if (selectedCategoryId != null) {
+                filtered.firstOrNull { it.id == selectedCategoryId } ?: filtered[0]
+            } else {
+                filtered[0]
+            }
+            loadChannels(catToLoad)
         }
     }
 
@@ -201,11 +261,21 @@ class LiveTvActivity : AppCompatActivity() {
         if (selectedCategoryId == category.id && preselectedStreamId == null && currentStreams.isNotEmpty()) return
         selectedCategoryId = category.id
 
+        binding.recyclerCategories.adapter?.notifyDataSetChanged()
+
         val cached = channelCategoryCache[category.id]
         if (cached != null && preselectedStreamId == null) {
             currentStreams = cached
             binding.progressChannels.visibility = View.GONE
             binding.recyclerChannels.adapter = ChannelAdapter(cached)
+            if (cached.isNotEmpty()) {
+                showChannelPreview(cached[0], null)
+                playPipStream(cached[0])
+                if (isInitialLoad) {
+                    isInitialLoad = false
+                    focusTargetChannel(0)
+                }
+            }
             return
         }
 
@@ -229,18 +299,37 @@ class LiveTvActivity : AppCompatActivity() {
                     playPipStream(targetStream)
 
                     val targetPos = currentStreams.indexOf(targetStream).coerceAtLeast(0)
-                    if (targetPos > 0) {
-                        binding.recyclerChannels.scrollToPosition(targetPos)
-                        binding.recyclerChannels.post {
-                            val holder = binding.recyclerChannels.findViewHolderForAdapterPosition(targetPos) as? ChannelAdapter.ViewHolder
-                            holder?.header?.requestFocus()
-                        }
+                    if (isInitialLoad) {
+                        isInitialLoad = false
+                        focusTargetChannel(targetPos)
                     }
                 }
             } catch (e: Exception) {
                 binding.progressChannels.visibility = View.GONE
                 Toast.makeText(this@LiveTvActivity, "Fehler beim Laden: ${e.message}", Toast.LENGTH_SHORT).show()
             }
+        }
+    }
+
+    private fun focusTargetChannel(position: Int) {
+        binding.recyclerChannels.scrollToPosition(position)
+        binding.recyclerChannels.post {
+            val holder = binding.recyclerChannels.findViewHolderForAdapterPosition(position) as? ChannelAdapter.ViewHolder
+            holder?.header?.requestFocus()
+        }
+    }
+
+    private fun focusFirstChannel() {
+        focusTargetChannel(0)
+    }
+
+    // Zurück zur AKTIV ausgewählten Kategorie (Position bleibt erhalten)
+    private fun focusCurrentCategory() {
+        val catIndex = displayedCategories.indexOfFirst { it.id == selectedCategoryId }.coerceAtLeast(0)
+        binding.recyclerCategories.scrollToPosition(catIndex)
+        binding.recyclerCategories.post {
+            val holder = binding.recyclerCategories.findViewHolderForAdapterPosition(catIndex)
+            holder?.itemView?.requestFocus() ?: binding.recyclerCategories.requestFocus()
         }
     }
 
@@ -282,52 +371,124 @@ class LiveTvActivity : AppCompatActivity() {
         if (keyCode == KeyEvent.KEYCODE_BACK) {
             val focused = currentFocus
             if (isViewInRecyclerView(focused, binding.recyclerChannels)) {
-                val catHolder = binding.recyclerCategories.findViewHolderForAdapterPosition(0)
-                catHolder?.itemView?.requestFocus() ?: binding.recyclerCategories.requestFocus()
+                focusCurrentCategory()
                 return true
             }
         }
         return super.onKeyDown(keyCode, event)
     }
 
-    // --- Absolute Hardware D-Pad Sperre: Fokus kann die Senderliste NIEMALS ungewollt verlassen ---
+    // STRIKTE HARD LOCKS: DPAD_UP/DPAD_DOWN bricht niemals horizontal in eine andere Spalte aus!
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.action == KeyEvent.ACTION_DOWN) {
             val focused = currentFocus
             val channelPos = getFocusedChannelPosition(focused)
 
             if (channelPos != -1) {
+                val onHeader = isChannelHeader(focused)
+                val onEpg = isEpgView(focused)
+
                 when (event.keyCode) {
+                    KeyEvent.KEYCODE_DPAD_LEFT -> {
+                        if (onHeader) {
+                            focusCurrentCategory()
+                            return true
+                        } else if (onEpg) {
+                            val epgPos = getFocusedEpgPosition(focused)
+                            if (epgPos <= 0) {
+                                val holder = binding.recyclerChannels.findViewHolderForAdapterPosition(channelPos) as? ChannelAdapter.ViewHolder
+                                holder?.header?.requestFocus()
+                                return true
+                            }
+                        }
+                    }
+                    KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                        if (onHeader) {
+                            val holder = binding.recyclerChannels.findViewHolderForAdapterPosition(channelPos) as? ChannelAdapter.ViewHolder
+                            val epgView = holder?.recyclerPrograms?.findViewHolderForAdapterPosition(0)?.itemView
+                            if (epgView != null) {
+                                epgView.requestFocus()
+                            } else {
+                                holder?.recyclerPrograms?.requestFocus()
+                            }
+                            return true
+                        }
+                    }
                     KeyEvent.KEYCODE_DPAD_DOWN -> {
+                        // Strikter Hard Lock am unteren Ende der Senderliste
                         if (channelPos < currentStreams.size - 1) {
                             val nextPos = channelPos + 1
                             binding.recyclerChannels.scrollToPosition(nextPos)
                             binding.recyclerChannels.post {
                                 val holder = binding.recyclerChannels.findViewHolderForAdapterPosition(nextPos) as? ChannelAdapter.ViewHolder
-                                holder?.header?.requestFocus()
+                                if (onEpg) {
+                                    val epgPos = getFocusedEpgPosition(focused).coerceAtLeast(0)
+                                    holder?.recyclerPrograms?.findViewHolderForAdapterPosition(epgPos)?.itemView?.requestFocus()
+                                        ?: holder?.header?.requestFocus()
+                                } else {
+                                    holder?.header?.requestFocus()
+                                }
                             }
                         }
-                        return true
+                        return true // Konsumiert: Bricht niemals nach unten/rechts/links aus
                     }
                     KeyEvent.KEYCODE_DPAD_UP -> {
+                        // Strikter Hard Lock am oberen Ende der Senderliste
                         if (channelPos > 0) {
                             val prevPos = channelPos - 1
                             binding.recyclerChannels.scrollToPosition(prevPos)
                             binding.recyclerChannels.post {
                                 val holder = binding.recyclerChannels.findViewHolderForAdapterPosition(prevPos) as? ChannelAdapter.ViewHolder
-                                holder?.header?.requestFocus()
+                                if (onEpg) {
+                                    val epgPos = getFocusedEpgPosition(focused).coerceAtLeast(0)
+                                    holder?.recyclerPrograms?.findViewHolderForAdapterPosition(epgPos)?.itemView?.requestFocus()
+                                        ?: holder?.header?.requestFocus()
+                                } else {
+                                    holder?.header?.requestFocus()
+                                }
                             }
                         }
-                        return true
-                    }
-                    KeyEvent.KEYCODE_DPAD_LEFT -> {
-                        // Links blockieren (Wechsel zurück zu Kategorien nur über BACK-Taste)
-                        return true
+                        return true // Konsumiert: Bricht niemals nach oben/rechts/links aus
                     }
                 }
             }
         }
         return super.dispatchKeyEvent(event)
+    }
+
+    private fun isChannelHeader(view: View?): Boolean {
+        var cur = view
+        while (cur != null && cur != binding.recyclerChannels) {
+            if (cur.id == R.id.channelHeader) return true
+            cur = cur.parent as? View
+        }
+        return false
+    }
+
+    private fun isEpgView(view: View?): Boolean {
+        var cur = view
+        while (cur != null && cur != binding.recyclerChannels) {
+            if (cur.id == R.id.recyclerChannelPrograms) return true
+            cur = cur.parent as? View
+        }
+        return false
+    }
+
+    private fun getFocusedEpgPosition(view: View?): Int {
+        var cur = view
+        var parentRv: RecyclerView? = null
+        while (cur != null && cur != binding.recyclerChannels) {
+            val p = cur.parent as? View
+            if (p?.id == R.id.recyclerChannelPrograms && p is RecyclerView) {
+                parentRv = p
+                break
+            }
+            cur = p
+        }
+        if (parentRv != null && cur != null) {
+            return parentRv.getChildAdapterPosition(cur)
+        }
+        return -1
     }
 
     private fun isViewInRecyclerView(view: View?, rv: RecyclerView): Boolean {
@@ -372,11 +533,39 @@ class LiveTvActivity : AppCompatActivity() {
             holder.txtName.text = cat.name
             holder.itemView.isSelected = (cat.id == selectedCategoryId)
 
-            // Kategorie wird AUSSCHLIESSLICH bei Klick mit OK gewechselt!
             holder.itemView.setOnClickListener {
-                selectedCategoryId = cat.id
-                holder.itemView.requestFocus()
                 onSelect(cat)
+            }
+
+            holder.itemView.setOnKeyListener { _, keyCode, event ->
+                if (event.action == KeyEvent.ACTION_DOWN) {
+                    when (keyCode) {
+                        KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
+                            onSelect(cat)
+                            return@setOnKeyListener true
+                        }
+                        KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                            focusFirstChannel()
+                            return@setOnKeyListener true
+                        }
+                        KeyEvent.KEYCODE_DPAD_LEFT -> {
+                            return@setOnKeyListener true // Nichts links von Kategorien
+                        }
+                        KeyEvent.KEYCODE_DPAD_UP -> {
+                            if (position == 0) {
+                                binding.btnLiveFilterDe.requestFocus()
+                                return@setOnKeyListener true
+                            }
+                        }
+                        KeyEvent.KEYCODE_DPAD_DOWN -> {
+                            // Hard-Lock am unteren Ende der Kategorienliste
+                            if (position == items.size - 1) {
+                                return@setOnKeyListener true
+                            }
+                        }
+                    }
+                }
+                false
             }
         }
 

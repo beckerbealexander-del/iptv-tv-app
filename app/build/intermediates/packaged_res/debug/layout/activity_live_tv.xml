@@ -36,6 +36,8 @@
             android:paddingHorizontal="10dp"
             android:singleLine="true"
             android:imeOptions="actionSearch"
+            android:focusable="true"
+            android:focusableInTouchMode="false"
             android:layout_marginBottom="6dp" />
 
         <!-- 2. Schnellauswahl Filter-Buttons (DE, RU, Alle) -->

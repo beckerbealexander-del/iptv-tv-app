@@ -43,7 +43,8 @@
         <activity
             android:name=".ui.LiveTvActivity"
             android:exported="false"
-            android:screenOrientation="landscape" />
+            android:screenOrientation="landscape"
+            android:windowSoftInputMode="stateAlwaysHidden" />
 
         <activity
             android:name=".ui.VodActivity"

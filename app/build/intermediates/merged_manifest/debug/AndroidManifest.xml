@@ -57,7 +57,8 @@
         <activity
             android:name="com.alex.iptvplayer.ui.LiveTvActivity"
             android:exported="false"
-            android:screenOrientation="landscape" />
+            android:screenOrientation="landscape"
+            android:windowSoftInputMode="stateAlwaysHidden" />
         <activity
             android:name="com.alex.iptvplayer.ui.VodActivity"
             android:exported="false"

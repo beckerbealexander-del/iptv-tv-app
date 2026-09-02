@@ -107,11 +107,26 @@ class XtreamClient(context: Context) {
     }
 
     suspend fun getLiveStreams(categoryId: String? = null): List<LiveStream> = withContext(Dispatchers.IO) {
-        val extra = if (categoryId != null && categoryId != "ALL_CHANNELS") "&category_id=$categoryId" else ""
+        if (categoryId == null || categoryId == "ALL_CHANNELS") {
+            return@withContext getAllLiveStreams()
+        }
+        val extra = "&category_id=$categoryId"
         val url = buildApiUrl("get_live_streams", extra)
         val json = executeGet(url)
         val type = object : TypeToken<List<LiveStream>>() {}.type
         gson.fromJson(json, type) ?: emptyList()
+    }
+
+    private var cachedAllLiveStreams: List<LiveStream>? = null
+
+    suspend fun getAllLiveStreams(): List<LiveStream> = withContext(Dispatchers.IO) {
+        if (!cachedAllLiveStreams.isNullOrEmpty()) return@withContext cachedAllLiveStreams!!
+        val url = buildApiUrl("get_live_streams")
+        val json = executeGet(url)
+        val type = object : TypeToken<List<LiveStream>>() {}.type
+        val list: List<LiveStream> = gson.fromJson(json, type) ?: emptyList()
+        cachedAllLiveStreams = list
+        list
     }
 
     // EPG
