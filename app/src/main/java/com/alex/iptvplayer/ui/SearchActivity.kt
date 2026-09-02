@@ -41,6 +41,15 @@ sealed class SearchResultItem {
 
 class SearchActivity : AppCompatActivity() {
 
+    companion object {
+        var cachedQuery: String = ""
+        var cachedChannels: List<LiveStream> = emptyList()
+        var cachedPrograms: List<Pair<EpgProgram, LiveStream>> = emptyList()
+        var cachedTab: String = "CHANNELS"
+        var lastSelectedStreamId: Int? = null
+        var isReturningFromPlayer: Boolean = false
+    }
+
     private lateinit var binding: ActivitySearchBinding
     private lateinit var historyManager: HistoryManager
     private lateinit var client: XtreamClient
@@ -51,7 +60,7 @@ class SearchActivity : AppCompatActivity() {
     private var foundChannels: List<LiveStream> = emptyList()
     private var foundPrograms: List<Pair<EpgProgram, LiveStream>> = emptyList()
 
-    private var activeFilterTab: String = "CHANNELS" // CHANNELS oder PROGRAMS ("Alle" entfernt)
+    private var activeFilterTab: String = "CHANNELS"
     private var searchJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -76,11 +85,33 @@ class SearchActivity : AppCompatActivity() {
         binding.recyclerSearchResults.layoutManager =
             LinearLayoutManager(this, LinearLayoutManager.VERTICAL, false)
 
-        loadSearchHistory()
         setupTabs()
 
         if (searchType == "LIVE") {
             loadGlobalStreams()
+        }
+
+        // Falls Cache existiert (nach Rückkehr oder Recreation): Treffer sofort wiederherstellen!
+        if (cachedQuery.isNotEmpty() && (cachedChannels.isNotEmpty() || cachedPrograms.isNotEmpty())) {
+            foundChannels = cachedChannels
+            foundPrograms = cachedPrograms
+            activeFilterTab = cachedTab
+            binding.editSearchQuery.setText(cachedQuery)
+            binding.editSearchQuery.setSelection(cachedQuery.length)
+            updateTabStyles()
+            renderSearchResults()
+            if (isReturningFromPlayer) {
+                isReturningFromPlayer = false
+                hideKeyboard()
+                focusSearchResultItem(lastSelectedStreamId)
+            }
+        } else {
+            loadSearchHistory()
+            binding.editSearchQuery.post {
+                binding.editSearchQuery.requestFocus()
+                val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+                imm.showSoftInput(binding.editSearchQuery, InputMethodManager.SHOW_IMPLICIT)
+            }
         }
 
         // Live-Suche während der Eingabe (Debounce 300ms)
@@ -89,8 +120,15 @@ class SearchActivity : AppCompatActivity() {
             override fun onTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {
                 val query = s?.toString()?.trim() ?: ""
                 if (query.isEmpty()) {
+                    cachedQuery = ""
+                    cachedChannels = emptyList()
+                    cachedPrograms = emptyList()
                     showHistoryView()
                 } else if (searchType == "LIVE") {
+                    // Verhindert Re-Triggering beim Wiederherstellen des Query-Texts
+                    if (query == cachedQuery && (foundChannels.isNotEmpty() || foundPrograms.isNotEmpty())) {
+                        return
+                    }
                     searchJob?.cancel()
                     searchJob = lifecycleScope.launch {
                         delay(300)
@@ -118,7 +156,7 @@ class SearchActivity : AppCompatActivity() {
             } else false
         }
 
-        // 1. FOKUS-KORREKTUR: Aus der Suchleiste nach UNTEN springt ZWINGEND in den Filter-Tab (nicht direkt in die Liste!)
+        // Navigation aus der Suchleiste nach UNTEN -> Fokus auf aktiven Filter-Tab
         binding.editSearchQuery.setOnKeyListener { _, keyCode, event ->
             if (event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
                 if (binding.layoutTabs.visibility == View.VISIBLE) {
@@ -136,30 +174,75 @@ class SearchActivity : AppCompatActivity() {
             }
             false
         }
+    }
 
-        binding.editSearchQuery.post {
-            binding.editSearchQuery.requestFocus()
-            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-            imm.showSoftInput(binding.editSearchQuery, InputMethodManager.SHOW_IMPLICIT)
+    override fun onResume() {
+        super.onResume()
+
+        // Wenn aus dem Player zurückgekehrt wird: Suchergebnisse erhalten und Fokus auf das Ergebnis setzen!
+        if (isReturningFromPlayer) {
+            isReturningFromPlayer = false
+            hideKeyboard()
+
+            // Falls im Player gezappt wurde, den zuletzt gespielten Sender ermitteln
+            val recent = historyManager.getRecentLiveChannels().firstOrNull()
+            if (recent != null) {
+                lastSelectedStreamId = recent.streamId
+            }
+
+            if (cachedChannels.isNotEmpty() || cachedPrograms.isNotEmpty()) {
+                foundChannels = cachedChannels
+                foundPrograms = cachedPrograms
+                activeFilterTab = cachedTab
+                updateTabStyles()
+                renderSearchResults()
+                focusSearchResultItem(lastSelectedStreamId)
+            }
+        }
+    }
+
+    // Fokus direkt in die Ergebnisliste auf den entsprechenden Sender/das Programm setzen
+    private fun focusSearchResultItem(streamId: Int?) {
+        val adapter = binding.recyclerSearchResults.adapter as? SearchResultsAdapter ?: return
+        val items = adapter.items
+        if (items.isEmpty()) return
+
+        val targetPos = if (streamId != null) {
+            val idx = items.indexOfFirst {
+                when (it) {
+                    is SearchResultItem.ChannelItem -> it.stream.streamId == streamId
+                    is SearchResultItem.ProgramItem -> it.stream.streamId == streamId
+                }
+            }
+            if (idx != -1) idx else 0
+        } else 0
+
+        binding.recyclerSearchResults.post {
+            (binding.recyclerSearchResults.layoutManager as? LinearLayoutManager)
+                ?.scrollToPositionWithOffset(targetPos, 40)
+                ?: binding.recyclerSearchResults.scrollToPosition(targetPos)
+
+            binding.recyclerSearchResults.postDelayed({
+                val vh = binding.recyclerSearchResults.findViewHolderForAdapterPosition(targetPos)
+                vh?.itemView?.requestFocus() ?: binding.recyclerSearchResults.requestFocus()
+            }, 80)
         }
     }
 
     private fun setupTabs() {
         binding.btnTabChannels.setOnClickListener {
             activeFilterTab = "CHANNELS"
+            cachedTab = "CHANNELS"
             updateTabStyles()
             renderSearchResults()
         }
         binding.btnTabPrograms.setOnClickListener {
             activeFilterTab = "PROGRAMS"
+            cachedTab = "PROGRAMS"
             updateTabStyles()
             renderSearchResults()
         }
 
-        // DPAD-Navigation der Filter-Tabs:
-        // UP -> zurück zur Suchleiste
-        // DOWN -> in die Ergebnisliste
-        // LEFT/RIGHT -> zwischen den beiden Tabs wechseln
         binding.btnTabChannels.setOnKeyListener { _, keyCode, event ->
             if (event.action == KeyEvent.ACTION_DOWN) {
                 when (keyCode) {
@@ -202,6 +285,9 @@ class SearchActivity : AppCompatActivity() {
     }
 
     private fun updateTabStyles() {
+        binding.btnTabChannels.text = "📺 Sender (${foundChannels.size})"
+        binding.btnTabPrograms.text = "🔴 Live-Programm (${foundPrograms.size})"
+        binding.layoutTabs.visibility = View.VISIBLE
         binding.btnTabChannels.setBackgroundResource(if (activeFilterTab == "CHANNELS") R.drawable.card_focus_border_red else R.drawable.card_focus_selector)
         binding.btnTabPrograms.setBackgroundResource(if (activeFilterTab == "PROGRAMS") R.drawable.card_focus_border_red else R.drawable.card_focus_selector)
     }
@@ -258,11 +344,11 @@ class SearchActivity : AppCompatActivity() {
             val channelMatches = allLiveStreams.filter { it.name.contains(query, ignoreCase = true) }
             foundChannels = channelMatches
 
-            // 2. Live-Programm Treffer (aktuell laufende Sendungen aus dem EPG)
+            // 2. Live-Programm Treffer
             val programMatches = mutableListOf<Pair<EpgProgram, LiveStream>>()
 
-            val cachedChannels = LiveTvActivity.categoryChannelMap.values.flatten()
-            for (item in cachedChannels) {
+            val cachedChannelsList = LiveTvActivity.categoryChannelMap.values.flatten()
+            for (item in cachedChannelsList) {
                 for (epg in item.epgList) {
                     if (isProgramNowPlaying(epg)) {
                         if (epg.title.contains(query, ignoreCase = true) || epg.description.contains(query, ignoreCase = true)) {
@@ -274,7 +360,7 @@ class SearchActivity : AppCompatActivity() {
 
             val channelsToCheck = channelMatches.take(12)
             for (stream in channelsToCheck) {
-                val isAlreadyChecked = cachedChannels.any { it.stream.streamId == stream.streamId }
+                val isAlreadyChecked = cachedChannelsList.any { it.stream.streamId == stream.streamId }
                 if (!isAlreadyChecked) {
                     try {
                         val epgList = client.getEpg(stream.streamId)
@@ -296,18 +382,20 @@ class SearchActivity : AppCompatActivity() {
             foundPrograms = programMatches
             binding.progressSearch.visibility = View.GONE
 
-            binding.btnTabChannels.text = "📺 Sender (${foundChannels.size})"
-            binding.btnTabPrograms.text = "🔴 Live-Programm (${foundPrograms.size})"
-            binding.layoutTabs.visibility = View.VISIBLE
-
             // Falls Sender leer, aber Programme da sind, wechsle auf Programme
             if (foundChannels.isEmpty() && foundPrograms.isNotEmpty()) {
                 activeFilterTab = "PROGRAMS"
             } else if (foundChannels.isNotEmpty()) {
                 activeFilterTab = "CHANNELS"
             }
-            updateTabStyles()
 
+            // Cache sichern
+            cachedQuery = query
+            cachedChannels = foundChannels
+            cachedPrograms = foundPrograms
+            cachedTab = activeFilterTab
+
+            updateTabStyles()
             renderSearchResults()
         }
     }
@@ -367,7 +455,15 @@ class SearchActivity : AppCompatActivity() {
             historyManager.addSearchQuery("LIVE", query)
         }
 
-        // Such-Playlist für das Zappen im Player aufbauen (entweder gefundene Sender oder Sender der Live-Programme)
+        // Cache sichern vor Player-Start
+        cachedQuery = query
+        cachedChannels = foundChannels
+        cachedPrograms = foundPrograms
+        cachedTab = activeFilterTab
+        lastSelectedStreamId = stream.streamId
+        isReturningFromPlayer = true
+
+        // Such-Playlist für das Zappen im Player aufbauen
         val playlist: ArrayList<LiveStream> = if (activeFilterTab == "CHANNELS") {
             ArrayList(foundChannels)
         } else {
@@ -457,7 +553,7 @@ class SearchActivity : AppCompatActivity() {
     }
 
     inner class SearchResultsAdapter(
-        private val items: List<SearchResultItem>,
+        val items: List<SearchResultItem>,
         private val onSelect: (LiveStream) -> Unit
     ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
@@ -512,7 +608,6 @@ class SearchActivity : AppCompatActivity() {
                                 onSelect(item.stream)
                                 return@setOnKeyListener true
                             } else if (keyCode == KeyEvent.KEYCODE_DPAD_UP && position == 0) {
-                                // Springt zurück in den aktiven Tab!
                                 if (activeFilterTab == "PROGRAMS") binding.btnTabPrograms.requestFocus()
                                 else binding.btnTabChannels.requestFocus()
                                 return@setOnKeyListener true
@@ -540,7 +635,6 @@ class SearchActivity : AppCompatActivity() {
                                 onSelect(item.stream)
                                 return@setOnKeyListener true
                             } else if (keyCode == KeyEvent.KEYCODE_DPAD_UP && position == 0) {
-                                // Springt zurück in den aktiven Tab!
                                 if (activeFilterTab == "PROGRAMS") binding.btnTabPrograms.requestFocus()
                                 else binding.btnTabChannels.requestFocus()
                                 return@setOnKeyListener true
