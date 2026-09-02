@@ -193,7 +193,6 @@
         android:id="@+id/livePlayerContainer"
         android:layout_width="190dp"
         android:layout_height="103dp"
-        android:background="@drawable/card_focus_selector"
         android:clickable="true"
         android:focusable="true">
 
@@ -203,6 +202,14 @@
             android:layout_height="match_parent"
             app:use_controller="false"
             app:resize_mode="zoom" />
+
+        <!-- Visueller Fokus-Rahmen ÜBER der SurfaceView -->
+        <View
+            android:id="@+id/pipFocusBorder"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/pip_focus_border"
+            android:visibility="gone" />
     </FrameLayout>
 
 </FrameLayout>

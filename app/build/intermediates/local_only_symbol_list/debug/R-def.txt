@@ -10,6 +10,7 @@ color netflix_red
 color text_primary
 color text_secondary
 drawable card_focus_selector
+drawable pip_focus_border
 drawable tv_banner
 id badgeAudio
 id badgeQuality
@@ -60,6 +61,7 @@ id osdBottom
 id osdScrubBubble
 id osdTop
 id pipAnchor
+id pipFocusBorder
 id playerLoading
 id playerRoot
 id playerSeekBar

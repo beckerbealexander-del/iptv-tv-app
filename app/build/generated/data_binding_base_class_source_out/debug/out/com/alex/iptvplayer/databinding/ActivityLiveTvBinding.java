@@ -39,6 +39,9 @@ public final class ActivityLiveTvBinding implements ViewBinding {
   public final FrameLayout pipAnchor;
 
   @NonNull
+  public final View pipFocusBorder;
+
+  @NonNull
   public final ProgressBar progressCategories;
 
   @NonNull
@@ -68,17 +71,18 @@ public final class ActivityLiveTvBinding implements ViewBinding {
   private ActivityLiveTvBinding(@NonNull FrameLayout rootView, @NonNull TextView btnOpenLiveSearch,
       @NonNull LinearLayout layoutOverview, @NonNull FrameLayout livePlayerContainer,
       @NonNull PlayerView livePlayerView, @NonNull FrameLayout pipAnchor,
-      @NonNull ProgressBar progressCategories, @NonNull ProgressBar progressChannels,
-      @NonNull RecyclerView recyclerCategories, @NonNull RecyclerView recyclerChannels,
-      @NonNull FrameLayout rootLiveTv, @NonNull TextView txtCurrentLiveTime,
-      @NonNull TextView txtPreviewDesc, @NonNull TextView txtPreviewTime,
-      @NonNull TextView txtPreviewTitle) {
+      @NonNull View pipFocusBorder, @NonNull ProgressBar progressCategories,
+      @NonNull ProgressBar progressChannels, @NonNull RecyclerView recyclerCategories,
+      @NonNull RecyclerView recyclerChannels, @NonNull FrameLayout rootLiveTv,
+      @NonNull TextView txtCurrentLiveTime, @NonNull TextView txtPreviewDesc,
+      @NonNull TextView txtPreviewTime, @NonNull TextView txtPreviewTitle) {
     this.rootView = rootView;
     this.btnOpenLiveSearch = btnOpenLiveSearch;
     this.layoutOverview = layoutOverview;
     this.livePlayerContainer = livePlayerContainer;
     this.livePlayerView = livePlayerView;
     this.pipAnchor = pipAnchor;
+    this.pipFocusBorder = pipFocusBorder;
     this.progressCategories = progressCategories;
     this.progressChannels = progressChannels;
     this.recyclerCategories = recyclerCategories;
@@ -147,6 +151,12 @@ public final class ActivityLiveTvBinding implements ViewBinding {
         break missingId;
       }
 
+      id = R.id.pipFocusBorder;
+      View pipFocusBorder = ViewBindings.findChildViewById(rootView, id);
+      if (pipFocusBorder == null) {
+        break missingId;
+      }
+
       id = R.id.progressCategories;
       ProgressBar progressCategories = ViewBindings.findChildViewById(rootView, id);
       if (progressCategories == null) {
@@ -198,9 +208,9 @@ public final class ActivityLiveTvBinding implements ViewBinding {
       }
 
       return new ActivityLiveTvBinding((FrameLayout) rootView, btnOpenLiveSearch, layoutOverview,
-          livePlayerContainer, livePlayerView, pipAnchor, progressCategories, progressChannels,
-          recyclerCategories, recyclerChannels, rootLiveTv, txtCurrentLiveTime, txtPreviewDesc,
-          txtPreviewTime, txtPreviewTitle);
+          livePlayerContainer, livePlayerView, pipAnchor, pipFocusBorder, progressCategories,
+          progressChannels, recyclerCategories, recyclerChannels, rootLiveTv, txtCurrentLiveTime,
+          txtPreviewDesc, txtPreviewTime, txtPreviewTitle);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));
