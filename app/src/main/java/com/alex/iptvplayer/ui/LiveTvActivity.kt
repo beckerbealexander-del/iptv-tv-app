@@ -252,7 +252,18 @@ class LiveTvActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (livePlayer != null && activeStream != null && !livePlayer!!.isPlaying) {
+        // Falls in der Suche oder im Player ein anderer Sender gestartet wurde, synchronisieren:
+        val lastWatched = historyManager.getRecentLiveChannels().firstOrNull()
+        if (lastWatched != null && lastWatched.streamId != nowPlayingStreamId) {
+            val cat = displayedCategories.firstOrNull { it.id == lastWatched.categoryId }
+            if (cat != null) {
+                browsingCategoryId = cat.id
+                playingCategoryId = cat.id
+                categoryAdapter?.updateCategoryStates(playingCategoryId, browsingCategoryId)
+                loadChannels(cat, preselectedStreamId = lastWatched.streamId)
+            }
+            playLiveStream(lastWatched)
+        } else if (livePlayer != null && activeStream != null && !livePlayer!!.isPlaying) {
             livePlayer?.play()
         }
         binding.root.post {
@@ -262,16 +273,12 @@ class LiveTvActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
-        if (isFinishing) {
-            livePlayer?.pause()
-        }
+        livePlayer?.pause()
     }
 
     override fun onStop() {
         super.onStop()
-        if (isFinishing) {
-            livePlayer?.pause()
-        }
+        livePlayer?.pause()
     }
 
     override fun onDestroy() {

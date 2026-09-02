@@ -366,13 +366,24 @@ class SearchActivity : AppCompatActivity() {
         if (query.isNotEmpty()) {
             historyManager.addSearchQuery("LIVE", query)
         }
-        val data = Intent().apply {
-            putExtra("SELECTED_STREAM_ID", stream.streamId)
-            putExtra("SELECTED_STREAM_NAME", stream.name)
-            putExtra("START_FULLSCREEN", true)
+
+        // Such-Playlist für das Zappen im Player aufbauen (entweder gefundene Sender oder Sender der Live-Programme)
+        val playlist: ArrayList<LiveStream> = if (activeFilterTab == "CHANNELS") {
+            ArrayList(foundChannels)
+        } else {
+            ArrayList(foundPrograms.map { it.second })
         }
-        setResult(RESULT_OK, data)
-        finish()
+        val index = playlist.indexOfFirst { it.streamId == stream.streamId }.coerceAtLeast(0)
+
+        val intent = Intent(this, PlayerActivity::class.java).apply {
+            putExtra("STREAM_URL", client.getLiveStreamUrl(stream.streamId))
+            putExtra("STREAM_NAME", stream.name)
+            putExtra("STREAM_ID", stream.streamId)
+            putExtra("STREAM_TYPE", "LIVE")
+            putExtra("STREAM_LIST", playlist)
+            putExtra("CURRENT_INDEX", index)
+        }
+        startActivity(intent)
     }
 
     private fun submitVodOrSeriesSearch(query: String) {

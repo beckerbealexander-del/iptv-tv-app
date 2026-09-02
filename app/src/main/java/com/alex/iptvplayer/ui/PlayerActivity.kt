@@ -93,6 +93,11 @@ class PlayerActivity : AppCompatActivity() {
         // Vor dem Start den neuesten Stand synchronisieren
         historyManager.syncWithCloud(client.username)
 
+        if (isLive && currentStreamId > 0) {
+            val s = streamList.getOrNull(currentIndex) ?: LiveStream(name = currentStreamName, streamId = currentStreamId)
+            historyManager.saveLiveChannel(s)
+        }
+
         setupUI()
         setupPlayer(currentStreamUrl, currentStreamName, currentStreamId)
     }
@@ -626,6 +631,7 @@ class PlayerActivity : AppCompatActivity() {
         currentStreamName = stream.name
         currentStreamUrl = client.getLiveStreamUrl(stream.streamId)
         retryCount = 0
+        historyManager.saveLiveChannel(stream)
         showOsd(stream.name, stream.streamId)
         val mediaItem = MediaItem.fromUri(currentStreamUrl)
         exoPlayer?.setMediaItem(mediaItem)
