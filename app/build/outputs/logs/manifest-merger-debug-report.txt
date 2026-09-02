@@ -177,7 +177,7 @@ ADDED from C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\A
 	android:screenOrientation
 		ADDED from C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:47:13-50
 	android:windowSoftInputMode
-		ADDED from C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:48:13-60
+		ADDED from C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:48:13-74
 	android:exported
 		ADDED from C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:46:13-37
 	android:configChanges

@@ -108,8 +108,8 @@
 61-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:46:13-37
 62            android:screenOrientation="landscape"
 62-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:47:13-50
-63            android:windowSoftInputMode="stateAlwaysHidden" />
-63-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:48:13-60
+63            android:windowSoftInputMode="adjustNothing|stateAlwaysHidden" />
+63-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:48:13-74
 64        <activity
 64-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:51:9-56:136
 65            android:name="com.alex.iptvplayer.ui.VodActivity"

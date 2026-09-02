@@ -1,7 +1,8 @@
 package com.alex.iptvplayer.ui
 
 import android.content.Context
-import android.content.Intent
+import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -56,7 +57,11 @@ class LiveTvActivity : AppCompatActivity() {
     private var displayedCategories: List<Category> = emptyList()
     private var currentChannelItems: List<ChannelWithEpg> = emptyList()
     private var allLiveStreamsGlobal: List<LiveStream> = emptyList()
-    private var selectedCategoryId: String? = null
+
+    // 1. Dreistufiges Status-System
+    private var nowPlayingStreamId: Int? = null
+    private var nowPlayingCategoryId: String? = null
+    private var inspectedCategoryId: String? = null
 
     // 5. Aktiver Playlisten-Kontext (z. B. Suchergebnisse vs. Kategorie)
     private var activePlaylist: List<ChannelWithEpg> = emptyList()
@@ -125,7 +130,7 @@ class LiveTvActivity : AppCompatActivity() {
                 binding.pipFocusBorder.visibility = if (hasFocus) View.VISIBLE else View.GONE
                 if (hasFocus) {
                     binding.livePlayerContainer.animate().scaleX(1.05f).scaleY(1.05f).setDuration(150).start()
-                    // 3. Wenn PiP fokussiert wird, zeige sofort die Details des laufenden Streams!
+                    // Zeige sofort die Details des laufenden Streams!
                     if (activeStream != null) {
                         updatePipProgramInfo(activeStream!!, activeStreamEpg)
                     }
@@ -140,7 +145,7 @@ class LiveTvActivity : AppCompatActivity() {
         }
     }
 
-    // 2. Integrierter Such-Overlay (PIP läuft oben rechts unterbrechungsfrei weiter!)
+    // 2. Integrierter Such-Overlay (PIP läuft oben rechts unterbrechungsfrei sichtbar weiter!)
     private fun setupSearchOverlay() {
         binding.btnOpenLiveSearch.setOnClickListener {
             openSearchOverlay()
@@ -175,6 +180,15 @@ class LiveTvActivity : AppCompatActivity() {
     private fun openSearchOverlay() {
         isSearchOverlayOpen = true
         binding.layoutSearchOverlay.visibility = View.VISIBLE
+        binding.livePlayerContainer.bringToFront()
+        updatePipPosition()
+
+        // 2. Bild und Ton laufen aktiv weiter!
+        livePlayer?.playWhenReady = true
+        if (livePlayer?.isPlaying == false) {
+            livePlayer?.play()
+        }
+
         binding.editSearchOverlayQuery.setText("")
         loadSearchHistory()
 
@@ -286,9 +300,19 @@ class LiveTvActivity : AppCompatActivity() {
         }
     }
 
+    // 2. WICHTIG: Nicht pausieren bei Tastatur/Overlay, nur wenn die Activity wirklich beendet wird!
     override fun onPause() {
         super.onPause()
-        livePlayer?.pause()
+        if (isFinishing) {
+            livePlayer?.pause()
+        }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        if (isFinishing) {
+            livePlayer?.pause()
+        }
     }
 
     override fun onDestroy() {
@@ -298,13 +322,17 @@ class LiveTvActivity : AppCompatActivity() {
         livePlayer = null
     }
 
+    // D) UMSTELLUNG BEI SENDERWECHSEL:
+    // Now-Playing wandert komplett auf den neuen Sender und die zugehörige Kategorie um.
     private fun playLiveStream(stream: LiveStream) {
-        if (activeStream?.streamId == stream.streamId && livePlayer?.isPlaying == true) {
-            updatePipProgramInfo(stream, activeStreamEpg)
-            return
-        }
+        nowPlayingStreamId = stream.streamId
+        nowPlayingCategoryId = inspectedCategoryId
+
         activeStream = stream
         historyManager.saveLiveChannel(stream)
+
+        channelAdapter?.updateNowPlaying(nowPlayingStreamId)
+        categoryAdapter?.updateStates(nowPlayingCategoryId, inspectedCategoryId)
 
         val url = client.getLiveStreamUrl(stream.streamId)
         val mediaItem = MediaItem.fromUri(url)
@@ -493,12 +521,13 @@ class LiveTvActivity : AppCompatActivity() {
         val newCategories = mutableListOf(searchCategory)
         newCategories.addAll(allCategories)
         displayedCategories = newCategories
-        selectedCategoryId = "CURRENT_SEARCH"
+        inspectedCategoryId = "CURRENT_SEARCH"
 
         categoryAdapter = CategoryAdapter(newCategories) { cat ->
             loadChannels(cat)
         }
         binding.recyclerCategories.adapter = categoryAdapter
+        categoryAdapter?.updateStates(nowPlayingCategoryId, inspectedCategoryId)
 
         val pool = if (allLiveStreamsGlobal.isNotEmpty()) allLiveStreamsGlobal else currentChannelItems.map { it.stream }
         val filtered = pool.filter { it.name.contains(query, ignoreCase = true) }
@@ -549,21 +578,21 @@ class LiveTvActivity : AppCompatActivity() {
         }
     }
 
-    // 3. KATEGORIEWECHSEL & EPG-IN-MEMORY-CACHE:
+    // B) ZUSTAND "AKTIV DURCHSTÖBERT" (BROWSING / INSPECTED):
+    // Nur diese Kategorie wird als "durchstöbert" markiert. Die Now-Playing-Kategorie bleibt fest erhalten.
     private fun loadChannels(category: Category, preselectedStreamId: Int? = null) {
         if (category.id == "CURRENT_SEARCH" && currentSearchQuery != null) {
             applySearchQuery(currentSearchQuery!!)
             return
         }
 
-        if (selectedCategoryId == category.id && preselectedStreamId == null && currentChannelItems.isNotEmpty()) {
+        if (inspectedCategoryId == category.id && preselectedStreamId == null && currentChannelItems.isNotEmpty()) {
             focusFirstChannel()
             return
         }
 
-        selectedCategoryId = category.id
-        // 1. Visuelles Highlighting: Immer nur GENAU EINE Kategorie als ausgewählt markieren
-        categoryAdapter?.setSelectedCategoryId(category.id)
+        inspectedCategoryId = category.id
+        categoryAdapter?.updateStates(nowPlayingCategoryId, inspectedCategoryId)
 
         // Cache-Check
         val cached = categoryChannelMap[category.id]
@@ -627,7 +656,7 @@ class LiveTvActivity : AppCompatActivity() {
     }
 
     private fun focusCurrentCategory() {
-        val catIndex = displayedCategories.indexOfFirst { it.id == selectedCategoryId }.coerceAtLeast(0)
+        val catIndex = displayedCategories.indexOfFirst { it.id == inspectedCategoryId }.coerceAtLeast(0)
         binding.recyclerCategories.scrollToPosition(catIndex)
         binding.recyclerCategories.post {
             val holder = binding.recyclerCategories.findViewHolderForAdapterPosition(catIndex)
@@ -855,7 +884,7 @@ class LiveTvActivity : AppCompatActivity() {
         return -1
     }
 
-    // --- Adapter 1: Kategorien mit strikter 1-Element-Selektion und Skalierung ---
+    // --- Adapter 1: Kategorien mit DREISTUFIGEM Highlight-System ---
     inner class CategoryAdapter(
         private val items: List<Category>,
         private val onSelect: (Category) -> Unit
@@ -865,14 +894,10 @@ class LiveTvActivity : AppCompatActivity() {
             val txtName: TextView = view.findViewById(R.id.txtCategoryName)
         }
 
-        // 1. Strikt nur genau EINE Kategorie selektieren
-        fun setSelectedCategoryId(newId: String?) {
-            val prevId = selectedCategoryId
-            selectedCategoryId = newId
-            val prevPos = items.indexOfFirst { it.id == prevId }
-            val newPos = items.indexOfFirst { it.id == newId }
-            if (prevPos != -1) notifyItemChanged(prevPos)
-            if (newPos != -1) notifyItemChanged(newPos)
+        fun updateStates(nowPlayingId: String?, inspectedId: String?) {
+            nowPlayingCategoryId = nowPlayingId
+            inspectedCategoryId = inspectedId
+            notifyDataSetChanged()
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -882,15 +907,12 @@ class LiveTvActivity : AppCompatActivity() {
 
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val cat = items[position]
-            holder.txtName.text = cat.name
-            holder.itemView.isSelected = (cat.id == selectedCategoryId)
+            applyCategoryStyle(holder, cat)
 
-            // 1. Fokus-Animation (leichtes Vergrößern)
             holder.itemView.setOnFocusChangeListener { _, hasFocus ->
-                if (hasFocus) {
-                    holder.itemView.animate().scaleX(1.03f).scaleY(1.03f).setDuration(120).start()
-                } else {
-                    holder.itemView.animate().scaleX(1.0f).scaleY(1.0f).setDuration(120).start()
+                applyCategoryStyle(holder, cat)
+                if (!hasFocus && activeStream != null) {
+                    updatePipProgramInfo(activeStream!!, activeStreamEpg)
                 }
             }
 
@@ -915,7 +937,6 @@ class LiveTvActivity : AppCompatActivity() {
                             return@setOnKeyListener true
                         }
                         KeyEvent.KEYCODE_DPAD_UP -> {
-                            // 2. Aus der obersten Kategorie MUSS DPAD_UP zwingend auf das Suchfeld springen!
                             if (position == 0) {
                                 binding.btnOpenLiveSearch.requestFocus()
                                 return@setOnKeyListener true
@@ -929,6 +950,63 @@ class LiveTvActivity : AppCompatActivity() {
                     }
                 }
                 false
+            }
+        }
+
+        private fun applyCategoryStyle(holder: ViewHolder, cat: Category) {
+            val isNowPlaying = (cat.id == nowPlayingCategoryId)
+            val isInspected = (cat.id == inspectedCategoryId)
+            val isFocused = holder.itemView.isFocused
+
+            // A) Icon / Text
+            if (isNowPlaying) {
+                holder.txtName.text = "▶  ${cat.name}"
+                holder.txtName.setTextColor(Color.parseColor("#FFFFFF"))
+            } else {
+                holder.txtName.text = cat.name
+                holder.txtName.setTextColor(if (isFocused) Color.parseColor("#FFFFFF") else Color.parseColor("#C8C8C8"))
+            }
+
+            // B & C) Hintergrund und Rahmenlogik
+            val drawable = GradientDrawable().apply {
+                cornerRadius = dpToPx(6).toFloat()
+                when {
+                    // C) D-Pad Cursor steht drauf: Dominanter roter Leuchtrahmen
+                    isFocused -> {
+                        setColor(Color.parseColor("#2E2E2E"))
+                        setStroke(dpToPx(3), Color.parseColor("#E50914"))
+                    }
+                    // Now-Playing UND gleichzeitig durchstöbert
+                    isNowPlaying && isInspected -> {
+                        setColor(Color.parseColor("#3D1418"))
+                        setStroke(dpToPx(2), Color.parseColor("#E50914"))
+                    }
+                    // B) Aktiv durchstöbert (anderes Programm läuft im PiP): Edler blauer Akzentrahmen
+                    isInspected -> {
+                        setColor(Color.parseColor("#182333"))
+                        setStroke(dpToPx(2), Color.parseColor("#4A72B2"))
+                    }
+                    // A) Now-Playing (Ursprung des PiP-Programms, während man woanders stöbert)
+                    isNowPlaying -> {
+                        setColor(Color.parseColor("#281114"))
+                        setStroke(dpToPx(1), Color.parseColor("#802026"))
+                    }
+                    // Inaktiv
+                    else -> {
+                        setColor(Color.parseColor("#141414"))
+                        setStroke(dpToPx(1), Color.parseColor("#222222"))
+                    }
+                }
+            }
+            holder.itemView.background = drawable
+
+            // Skalierung bei Fokus
+            if (isFocused) {
+                holder.itemView.scaleX = 1.03f
+                holder.itemView.scaleY = 1.03f
+            } else {
+                holder.itemView.scaleX = 1.0f
+                holder.itemView.scaleY = 1.0f
             }
         }
 
@@ -953,6 +1031,11 @@ class LiveTvActivity : AppCompatActivity() {
             notifyDataSetChanged()
         }
 
+        fun updateNowPlaying(streamId: Int?) {
+            nowPlayingStreamId = streamId
+            notifyDataSetChanged()
+        }
+
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
             val view = LayoutInflater.from(parent.context).inflate(R.layout.item_epg_channel_row, parent, false)
             return ViewHolder(view)
@@ -961,13 +1044,35 @@ class LiveTvActivity : AppCompatActivity() {
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val item = items[position]
             val s = item.stream
-            holder.txtNum.text = "${position + 1}"
-            holder.txtName.text = s.name
+            val isPlaying = (s.streamId == nowPlayingStreamId)
+
+            // A) Sender-Nummer oder Now-Playing Icon
+            if (isPlaying) {
+                holder.txtNum.text = "▶"
+                holder.txtNum.setTextColor(Color.parseColor("#E50914"))
+                holder.txtName.setTextColor(Color.parseColor("#E50914"))
+            } else {
+                holder.txtNum.text = "${position + 1}"
+                holder.txtNum.setTextColor(Color.parseColor("#888888"))
+                holder.txtName.setTextColor(Color.parseColor("#FFFFFF"))
+            }
 
             if (!s.streamIcon.isNullOrEmpty()) {
                 Glide.with(holder.itemView).load(s.streamIcon).override(36, 36).into(holder.imgLogo)
             } else {
                 holder.imgLogo.setImageResource(R.drawable.tv_banner)
+            }
+
+            applyChannelHeaderStyle(holder, isPlaying)
+
+            holder.header.setOnFocusChangeListener { _, hasFocus ->
+                applyChannelHeaderStyle(holder, isPlaying)
+                if (hasFocus) {
+                    activePlaylistIndex = position
+                    showChannelPreview(s, item.epgList.firstOrNull())
+                } else if (activeStream != null) {
+                    updatePipProgramInfo(activeStream!!, activeStreamEpg)
+                }
             }
 
             holder.header.setOnClickListener {
@@ -977,19 +1082,12 @@ class LiveTvActivity : AppCompatActivity() {
                 setFullscreenMode()
             }
 
-            holder.header.setOnFocusChangeListener { _, hasFocus ->
-                if (hasFocus) {
-                    activePlaylistIndex = position
-                    showChannelPreview(s, item.epgList.firstOrNull())
-                }
-            }
-
             holder.recyclerPrograms.apply {
                 layoutManager = LinearLayoutManager(holder.itemView.context, LinearLayoutManager.HORIZONTAL, false)
                 setHasFixedSize(true)
             }
 
-            // 3. EPG-Cache: Wenn bereits im ChannelWithEpg gecached, sofort und ohne Delay anzeigen!
+            // EPG-Cache
             if (item.epgList.isNotEmpty()) {
                 holder.recyclerPrograms.adapter = ProgramTimelineAdapter(s, position, item.epgList, holder)
             } else {
@@ -1004,6 +1102,28 @@ class LiveTvActivity : AppCompatActivity() {
                     }
                 }
             }
+        }
+
+        private fun applyChannelHeaderStyle(holder: ViewHolder, isPlaying: Boolean) {
+            val isFocused = holder.header.isFocused
+            val drawable = GradientDrawable().apply {
+                cornerRadius = dpToPx(6).toFloat()
+                when {
+                    isFocused -> {
+                        setColor(Color.parseColor("#2E2E2E"))
+                        setStroke(dpToPx(3), Color.parseColor("#E50914"))
+                    }
+                    isPlaying -> {
+                        setColor(Color.parseColor("#2C1215"))
+                        setStroke(dpToPx(1.5f.toInt()), Color.parseColor("#8A2028"))
+                    }
+                    else -> {
+                        setColor(Color.parseColor("#141414"))
+                        setStroke(dpToPx(1), Color.parseColor("#222222"))
+                    }
+                }
+            }
+            holder.header.background = drawable
         }
 
         override fun getItemCount() = items.size
