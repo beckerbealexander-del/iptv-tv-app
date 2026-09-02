@@ -133,6 +133,26 @@ class HistoryManager(context: Context) {
         prefs.edit().putString("history_items", json).apply()
     }
 
+    fun getSearchHistory(type: String): List<String> {
+        val json = prefs.getString("search_history_$type", null) ?: return emptyList()
+        return try {
+            val listType = object : TypeToken<List<String>>() {}.type
+            gson.fromJson(json, listType) ?: emptyList()
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    fun addSearchQuery(type: String, query: String) {
+        val q = query.trim()
+        if (q.isEmpty()) return
+        val list = getSearchHistory(type).toMutableList()
+        list.remove(q)
+        list.add(0, q)
+        val trimmed = if (list.size > 20) list.take(20) else list
+        prefs.edit().putString("search_history_$type", gson.toJson(trimmed)).apply()
+    }
+
     // Bidirektionale Synchronisation mit der Cloud
     fun syncWithCloud(user: String, onComplete: (() -> Unit)? = null) {
         CoroutineScope(Dispatchers.IO).launch {

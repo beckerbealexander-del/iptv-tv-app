@@ -4,138 +4,97 @@
     android:layout_height="match_parent"
     android:background="@color/bg_dark"
     android:orientation="vertical"
-    android:padding="24dp">
+    android:padding="32dp">
 
-    <!-- Header & Search Input -->
+    <!-- Titel -->
+    <TextView
+        android:id="@+id/txtSearchTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="🔍 Suche"
+        android:textColor="@color/text_primary"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="16dp" />
+
+    <!-- Suchleiste mit Eingabe, Bestätigen und Löschen -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:layout_marginBottom="20dp">
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="🔍"
-            android:textSize="28sp"
-            android:layout_marginEnd="14dp" />
+        android:layout_marginBottom="24dp">
 
         <EditText
             android:id="@+id/editSearchQuery"
             android:layout_width="0dp"
-            android:layout_height="52dp"
+            android:layout_height="48dp"
             android:layout_weight="1"
             android:background="@drawable/card_focus_selector"
-            android:hint="Film, Serie oder Sender suchen (z.B. Sky, ZDF, Avatar, Breaking Bad)..."
+            android:hint="Suchbegriff eingeben (z. B. Sky, Pro7, Harry Potter, Lost)..."
             android:textColor="@color/text_primary"
             android:textColorHint="@color/text_secondary"
-            android:textSize="18sp"
-            android:paddingHorizontal="20dp"
+            android:textSize="15sp"
+            android:paddingHorizontal="16dp"
             android:inputType="text"
             android:imeOptions="actionSearch" />
 
         <Button
-            android:id="@+id/btnSearchClear"
+            android:id="@+id/btnSearchSubmit"
             android:layout_width="wrap_content"
-            android:layout_height="52dp"
+            android:layout_height="48dp"
             android:background="@drawable/card_focus_selector"
-            android:text="Löschen"
+            android:text="🔍 Suchen"
             android:textColor="@color/text_primary"
             android:textSize="14sp"
-            android:paddingHorizontal="16dp"
+            android:textStyle="bold"
+            android:paddingHorizontal="20dp"
             android:layout_marginStart="12dp" />
+
+        <Button
+            android:id="@+id/btnSearchClear"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:background="@drawable/card_focus_selector"
+            android:text="✖ Löschen"
+            android:textColor="@color/text_secondary"
+            android:textSize="14sp"
+            android:paddingHorizontal="16dp"
+            android:layout_marginStart="8dp" />
     </LinearLayout>
 
-    <ProgressBar
-        android:id="@+id/progressSearch"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="center"
-        android:visibility="gone" />
-
-    <!-- Resultate: Horizontal / Scrollbare Listen -->
-    <ScrollView
+    <!-- Such-Historie Sektion -->
+    <LinearLayout
+        android:id="@+id/layoutSearchHistory"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1">
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginBottom="20dp">
 
-        <LinearLayout
+        <TextView
+            android:id="@+id/txtHistoryHeader"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="🕒 Letzte Suchen:"
+            android:textColor="@color/accent_gold"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="10dp" />
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recyclerSearchHistory"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical">
+            android:orientation="horizontal" />
+    </LinearLayout>
 
-            <!-- 1. Live Sender -->
-            <TextView
-                android:id="@+id/headerChannels"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="📺 Gefundene TV-Sender"
-                android:textColor="@color/accent_blue"
-                android:textSize="18sp"
-                android:textStyle="bold"
-                android:layout_marginBottom="8dp"
-                android:visibility="gone" />
-
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/recyclerSearchChannels"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:layout_marginBottom="24dp"
-                android:visibility="gone" />
-
-            <!-- 2. Filme (VOD) -->
-            <TextView
-                android:id="@+id/headerMovies"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="🎬 Gefundene Filme"
-                android:textColor="@color/accent_gold"
-                android:textSize="18sp"
-                android:textStyle="bold"
-                android:layout_marginBottom="8dp"
-                android:visibility="gone" />
-
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/recyclerSearchMovies"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:layout_marginBottom="24dp"
-                android:visibility="gone" />
-
-            <!-- 3. Serien -->
-            <TextView
-                android:id="@+id/headerSeries"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="🍿 Gefundene Serien"
-                android:textColor="@color/text_primary"
-                android:textSize="18sp"
-                android:textStyle="bold"
-                android:layout_marginBottom="8dp"
-                android:visibility="gone" />
-
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/recyclerSearchSeries"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:layout_marginBottom="24dp"
-                android:visibility="gone" />
-
-            <TextView
-                android:id="@+id/txtNoResults"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="center"
-                android:padding="32dp"
-                android:text="Tippe oben einen Suchbegriff ein"
-                android:textColor="@color/text_secondary"
-                android:textSize="16sp" />
-
-        </LinearLayout>
-    </ScrollView>
+    <TextView
+        android:id="@+id/txtSearchHint"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="💡 Bestätige die Suche mit 'Suchen' oder wähle einen Begriff aus der Historie, um die gefilterte Liste in der Übersicht anzuzeigen."
+        android:textColor="@color/text_secondary"
+        android:textSize="13sp"
+        android:layout_marginTop="16dp" />
 
 </LinearLayout>

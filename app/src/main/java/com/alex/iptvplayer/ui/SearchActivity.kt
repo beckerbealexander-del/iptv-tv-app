@@ -1,264 +1,131 @@
 package com.alex.iptvplayer.ui
 
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
-import android.text.Editable
-import android.text.TextWatcher
+import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.ImageView
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.alex.iptvplayer.R
-import com.alex.iptvplayer.data.LiveStream
-import com.alex.iptvplayer.data.SeriesItem
-import com.alex.iptvplayer.data.VodStream
-import com.alex.iptvplayer.data.XtreamClient
+import com.alex.iptvplayer.data.HistoryManager
 import com.alex.iptvplayer.databinding.ActivitySearchBinding
-import com.bumptech.glide.Glide
-import com.bumptech.glide.load.engine.DiskCacheStrategy
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 class SearchActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivitySearchBinding
-    private lateinit var client: XtreamClient
-    private var searchJob: Job? = null
-
-    // Cache aller Einträge für blitzschnelle Suche
-    private var allLiveStreams = mutableListOf<LiveStream>()
-    private var allVodStreams = mutableListOf<VodStream>()
-    private var allSeries = mutableListOf<SeriesItem>()
-    private var isDataLoaded = false
+    private lateinit var historyManager: HistoryManager
+    private var searchType: String = "LIVE"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivitySearchBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        client = XtreamClient(this)
+        historyManager = HistoryManager(this)
+        searchType = intent.getStringExtra("SEARCH_TYPE") ?: "LIVE"
 
-        binding.recyclerSearchChannels.layoutManager =
+        val title = when (searchType) {
+            "VOD" -> "🎬 Filme durchsuchen"
+            "SERIES" -> "🍿 Serien durchsuchen"
+            else -> "📺 Live TV Sender durchsuchen"
+        }
+        binding.txtSearchTitle.text = title
+
+        binding.recyclerSearchHistory.layoutManager =
             LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
-        binding.recyclerSearchMovies.layoutManager =
-            LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
-        binding.recyclerSearchSeries.layoutManager =
-            LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
+
+        loadSearchHistory()
 
         binding.btnSearchClear.setOnClickListener {
             binding.editSearchQuery.setText("")
         }
 
-        binding.editSearchQuery.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                val query = s?.toString()?.trim() ?: ""
-                performSearch(query)
+        binding.btnSearchSubmit.setOnClickListener {
+            val q = binding.editSearchQuery.text.toString().trim()
+            if (q.isNotEmpty()) {
+                submitSearch(q)
             }
-            override fun afterTextChanged(s: Editable?) {}
-        })
+        }
 
-        loadAllDataForSearch()
-    }
-
-    private fun loadAllDataForSearch() {
-        binding.progressSearch.visibility = View.VISIBLE
-        lifecycleScope.launch {
-            try {
-                // Lade Live Streams, Movies und Series parallel
-                val live = client.getLiveStreams()
-                val vod = client.getVodStreams()
-                val series = client.getSeries()
-
-                allLiveStreams.addAll(live)
-                allVodStreams.addAll(vod)
-                allSeries.addAll(series)
-                isDataLoaded = true
-                binding.progressSearch.visibility = View.GONE
-
-                val currentQuery = binding.editSearchQuery.text.toString().trim()
-                if (currentQuery.isNotEmpty()) {
-                    performSearch(currentQuery)
+        binding.editSearchQuery.setOnEditorActionListener { _, actionId, event ->
+            if (actionId == EditorInfo.IME_ACTION_SEARCH || actionId == EditorInfo.IME_ACTION_DONE || actionId == EditorInfo.IME_ACTION_GO ||
+                (event != null && event.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN)) {
+                val q = binding.editSearchQuery.text.toString().trim()
+                if (q.isNotEmpty()) {
+                    submitSearch(q)
                 }
-            } catch (e: Exception) {
-                binding.progressSearch.visibility = View.GONE
+                true
+            } else false
+        }
+
+        binding.editSearchQuery.post {
+            binding.editSearchQuery.requestFocus()
+            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+            imm.showSoftInput(binding.editSearchQuery, InputMethodManager.SHOW_IMPLICIT)
+        }
+    }
+
+    private fun loadSearchHistory() {
+        val history = historyManager.getSearchHistory(searchType)
+        if (history.isEmpty()) {
+            binding.layoutSearchHistory.visibility = View.GONE
+        } else {
+            binding.layoutSearchHistory.visibility = View.VISIBLE
+            binding.recyclerSearchHistory.adapter = HistoryChipAdapter(history) { query ->
+                submitSearch(query)
             }
         }
     }
 
-    private fun performSearch(query: String) {
-        searchJob?.cancel()
-        if (query.length < 2) {
-            binding.headerChannels.visibility = View.GONE
-            binding.recyclerSearchChannels.visibility = View.GONE
-            binding.headerMovies.visibility = View.GONE
-            binding.recyclerSearchMovies.visibility = View.GONE
-            binding.headerSeries.visibility = View.GONE
-            binding.recyclerSearchSeries.visibility = View.GONE
-            binding.txtNoResults.text = "Tippe mindestens 2 Buchstaben ein"
-            binding.txtNoResults.visibility = View.VISIBLE
-            return
+    private fun submitSearch(query: String) {
+        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+        imm.hideSoftInputFromWindow(binding.editSearchQuery.windowToken, 0)
+
+        historyManager.addSearchQuery(searchType, query)
+        val data = Intent().apply {
+            putExtra("SEARCH_QUERY", query)
+            putExtra("SEARCH_TYPE", searchType)
         }
-
-        searchJob = lifecycleScope.launch {
-            delay(250) // 250ms Debounce für flüssiges Tippen
-
-            val q = query.lowercase()
-            val matchedChannels = allLiveStreams.filter { it.name.lowercase().contains(q) }.take(30)
-            val matchedMovies = allVodStreams.filter { it.name.lowercase().contains(q) }.take(30)
-            val matchedSeries = allSeries.filter { it.name.lowercase().contains(q) }.take(30)
-
-            val hasResults = matchedChannels.isNotEmpty() || matchedMovies.isNotEmpty() || matchedSeries.isNotEmpty()
-            binding.txtNoResults.visibility = if (hasResults) View.GONE else View.VISIBLE
-            if (!hasResults) {
-                binding.txtNoResults.text = "Keine Treffer für „$query“ gefunden."
-            }
-
-            // 1. Channels
-            if (matchedChannels.isNotEmpty()) {
-                binding.headerChannels.visibility = View.VISIBLE
-                binding.recyclerSearchChannels.visibility = View.VISIBLE
-                binding.recyclerSearchChannels.adapter = ChannelSearchAdapter(matchedChannels)
-            } else {
-                binding.headerChannels.visibility = View.GONE
-                binding.recyclerSearchChannels.visibility = View.GONE
-            }
-
-            // 2. Movies
-            if (matchedMovies.isNotEmpty()) {
-                binding.headerMovies.visibility = View.VISIBLE
-                binding.recyclerSearchMovies.visibility = View.VISIBLE
-                binding.recyclerSearchMovies.adapter = MovieSearchAdapter(matchedMovies)
-            } else {
-                binding.headerMovies.visibility = View.GONE
-                binding.recyclerSearchMovies.visibility = View.GONE
-            }
-
-            // 3. Series
-            if (matchedSeries.isNotEmpty()) {
-                binding.headerSeries.visibility = View.VISIBLE
-                binding.recyclerSearchSeries.visibility = View.VISIBLE
-                binding.recyclerSearchSeries.adapter = SeriesSearchAdapter(matchedSeries)
-            } else {
-                binding.headerSeries.visibility = View.GONE
-                binding.recyclerSearchSeries.visibility = View.GONE
-            }
-        }
+        setResult(RESULT_OK, data)
+        finish()
     }
 
-    // --- Adapter für Gefundene Sender ---
-    inner class ChannelSearchAdapter(private val list: List<LiveStream>) :
-        RecyclerView.Adapter<ChannelSearchAdapter.ViewHolder>() {
+    inner class HistoryChipAdapter(
+        private val items: List<String>,
+        private val onClick: (String) -> Unit
+    ) : RecyclerView.Adapter<HistoryChipAdapter.ViewHolder>() {
 
         inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-            val img: ImageView = view.findViewById(R.id.imgChannelLogo)
-            val txt: TextView = view.findViewById(R.id.txtChannelName)
+            val txt: TextView = view.findViewById(R.id.txtHistoryQuery)
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-            val v = LayoutInflater.from(parent.context).inflate(R.layout.item_channel, parent, false)
-            return ViewHolder(v)
+            val view = LayoutInflater.from(parent.context).inflate(R.layout.item_search_history, parent, false)
+            return ViewHolder(view)
         }
 
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-            val item = list[position]
-            holder.txt.text = item.name
-            if (!item.streamIcon.isNullOrEmpty()) {
-                Glide.with(holder.itemView).load(item.streamIcon).override(80, 80).into(holder.img)
-            } else {
-                holder.img.setImageResource(R.drawable.tv_banner)
-            }
+            val q = items[position]
+            holder.txt.text = "🔍 $q"
             holder.itemView.setOnClickListener {
-                val intent = Intent(this@SearchActivity, PlayerActivity::class.java).apply {
-                    putExtra("STREAM_URL", client.getLiveStreamUrl(item.streamId))
-                    putExtra("STREAM_NAME", item.name)
-                    putExtra("STREAM_ID", item.streamId)
+                onClick(q)
+            }
+            holder.itemView.setOnKeyListener { _, keyCode, event ->
+                if (event.action == KeyEvent.ACTION_DOWN && (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER)) {
+                    onClick(q)
+                    return@setOnKeyListener true
                 }
-                startActivity(intent)
+                false
             }
         }
 
-        override fun getItemCount() = list.size
-    }
-
-    // --- Adapter für Gefundene Filme ---
-    inner class MovieSearchAdapter(private val list: List<VodStream>) :
-        RecyclerView.Adapter<MovieSearchAdapter.ViewHolder>() {
-
-        inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-            val img: ImageView = view.findViewById(R.id.imgPoster)
-            val txt: TextView = view.findViewById(R.id.txtPosterTitle)
-        }
-
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-            val v = LayoutInflater.from(parent.context).inflate(R.layout.item_poster, parent, false)
-            return ViewHolder(v)
-        }
-
-        override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-            val movie = list[position]
-            holder.txt.text = movie.name
-            if (!movie.streamIcon.isNullOrEmpty()) {
-                Glide.with(holder.itemView)
-                    .load(movie.streamIcon)
-                    .override(180, 260)
-                    .diskCacheStrategy(DiskCacheStrategy.ALL)
-                    .into(holder.img)
-            } else {
-                holder.img.setImageResource(R.drawable.tv_banner)
-            }
-            holder.itemView.setOnClickListener {
-                val intent = Intent(this@SearchActivity, PlayerActivity::class.java).apply {
-                    putExtra("STREAM_URL", client.getVodStreamUrl(movie.streamId, movie.containerExtension ?: "mp4"))
-                    putExtra("STREAM_NAME", movie.name)
-                }
-                startActivity(intent)
-            }
-        }
-
-        override fun getItemCount() = list.size
-    }
-
-    // --- Adapter für Gefundene Serien ---
-    inner class SeriesSearchAdapter(private val list: List<SeriesItem>) :
-        RecyclerView.Adapter<SeriesSearchAdapter.ViewHolder>() {
-
-        inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-            val img: ImageView = view.findViewById(R.id.imgPoster)
-            val txt: TextView = view.findViewById(R.id.txtPosterTitle)
-        }
-
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-            val v = LayoutInflater.from(parent.context).inflate(R.layout.item_poster, parent, false)
-            return ViewHolder(v)
-        }
-
-        override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-            val s = list[position]
-            holder.txt.text = s.name
-            if (!s.cover.isNullOrEmpty()) {
-                Glide.with(holder.itemView)
-                    .load(s.cover)
-                    .override(180, 260)
-                    .diskCacheStrategy(DiskCacheStrategy.ALL)
-                    .into(holder.img)
-            } else {
-                holder.img.setImageResource(R.drawable.tv_banner)
-            }
-            holder.itemView.setOnClickListener {
-                val intent = Intent(this@SearchActivity, SeriesDetailActivity::class.java).apply {
-                    putExtra("SERIES_ITEM", s)
-                }
-                startActivity(intent)
-            }
-        }
-
-        override fun getItemCount() = list.size
+        override fun getItemCount() = items.size
     }
 }

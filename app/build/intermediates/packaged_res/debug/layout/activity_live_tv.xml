@@ -23,62 +23,21 @@
             android:textStyle="bold"
             android:layout_marginBottom="6dp" />
 
-        <!-- 1. Suchleiste ÜBER den Filter-Buttons -->
-        <EditText
-            android:id="@+id/editLiveSearch"
+        <!-- Such-Button öffnet Vollbild-Suche mit Historie -->
+        <TextView
+            android:id="@+id/btnOpenLiveSearch"
             android:layout_width="match_parent"
-            android:layout_height="32dp"
+            android:layout_height="34dp"
             android:background="@drawable/card_focus_selector"
-            android:hint="🔍 Sender suchen..."
-            android:textColor="@color/text_primary"
-            android:textColorHint="@color/text_secondary"
-            android:textSize="11sp"
-            android:paddingHorizontal="10dp"
-            android:singleLine="true"
-            android:imeOptions="actionSearch"
+            android:clickable="true"
             android:focusable="true"
-            android:focusableInTouchMode="false"
-            android:layout_marginBottom="6dp" />
-
-        <!-- 2. Schnellauswahl Filter-Buttons (DE, RU, Alle) -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:layout_marginBottom="6dp">
-
-            <Button
-                android:id="@+id/btnLiveFilterDe"
-                android:layout_width="0dp"
-                android:layout_height="28dp"
-                android:layout_weight="1"
-                android:background="@drawable/card_focus_selector"
-                android:text="🇩🇪 DE"
-                android:textColor="@color/text_primary"
-                android:textSize="10.5sp"
-                android:layout_marginEnd="3dp" />
-
-            <Button
-                android:id="@+id/btnLiveFilterRu"
-                android:layout_width="0dp"
-                android:layout_height="28dp"
-                android:layout_weight="1"
-                android:background="@drawable/card_focus_selector"
-                android:text="🇷🇺 RU"
-                android:textColor="@color/text_primary"
-                android:textSize="10.5sp"
-                android:layout_marginEnd="3dp" />
-
-            <Button
-                android:id="@+id/btnLiveFilterAll"
-                android:layout_width="0dp"
-                android:layout_height="28dp"
-                android:layout_weight="1"
-                android:background="@drawable/card_focus_selector"
-                android:text="🌍 Alle"
-                android:textColor="@color/text_primary"
-                android:textSize="10.5sp" />
-        </LinearLayout>
+            android:gravity="center_vertical"
+            android:paddingHorizontal="10dp"
+            android:text="🔍 Sender suchen..."
+            android:textColor="@color/text_primary"
+            android:textSize="11.5sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
 
         <ProgressBar
             android:id="@+id/progressCategories"

@@ -2,10 +2,10 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#000000"
+    android:background="@color/bg_dark"
     android:orientation="horizontal">
 
-    <!-- Linke Spalte: Suche + Filter + Film-Kategorien -->
+    <!-- Linke Spalte: Kategorien (210dp) -->
     <LinearLayout
         android:layout_width="210dp"
         android:layout_height="match_parent"
@@ -22,60 +22,21 @@
             android:textStyle="bold"
             android:layout_marginBottom="6dp" />
 
-        <!-- 1. Suchleiste ÜBER den Filter-Buttons -->
-        <EditText
-            android:id="@+id/editVodSearch"
+        <!-- Vollbild-Suchbutton -->
+        <TextView
+            android:id="@+id/btnOpenVodSearch"
             android:layout_width="match_parent"
-            android:layout_height="32dp"
+            android:layout_height="34dp"
             android:background="@drawable/card_focus_selector"
-            android:hint="🔍 Film suchen..."
-            android:textColor="@color/text_primary"
-            android:textColorHint="@color/text_secondary"
-            android:textSize="11sp"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center_vertical"
             android:paddingHorizontal="10dp"
-            android:singleLine="true"
-            android:imeOptions="actionSearch"
-            android:layout_marginBottom="6dp" />
-
-        <!-- 2. Schnellauswahl Filter-Buttons (DE, RU, Alle) -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:layout_marginBottom="6dp">
-
-            <Button
-                android:id="@+id/btnVodFilterDe"
-                android:layout_width="0dp"
-                android:layout_height="28dp"
-                android:layout_weight="1"
-                android:background="@drawable/card_focus_selector"
-                android:text="🇩🇪 DE"
-                android:textColor="@color/text_primary"
-                android:textSize="10.5sp"
-                android:layout_marginEnd="3dp" />
-
-            <Button
-                android:id="@+id/btnVodFilterRu"
-                android:layout_width="0dp"
-                android:layout_height="28dp"
-                android:layout_weight="1"
-                android:background="@drawable/card_focus_selector"
-                android:text="🇷🇺 RU"
-                android:textColor="@color/text_primary"
-                android:textSize="10.5sp"
-                android:layout_marginEnd="3dp" />
-
-            <Button
-                android:id="@+id/btnVodFilterAll"
-                android:layout_width="0dp"
-                android:layout_height="28dp"
-                android:layout_weight="1"
-                android:background="@drawable/card_focus_selector"
-                android:text="🌍 Alle"
-                android:textColor="@color/text_primary"
-                android:textSize="10.5sp" />
-        </LinearLayout>
+            android:text="🔍 Film suchen..."
+            android:textColor="@color/text_primary"
+            android:textSize="11.5sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
 
         <ProgressBar
             android:id="@+id/progressVodCats"
@@ -98,74 +59,16 @@
         android:orientation="vertical"
         android:padding="10dp">
 
-        <!-- Kopfzeile mit Kategorie-Titel und Sortier-Buttons -->
-        <LinearLayout
+        <!-- Kategorie-Titel -->
+        <TextView
+            android:id="@+id/txtVodCategoryTitle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:layout_marginBottom="4dp">
-
-            <TextView
-                android:id="@+id/txtVodCategoryTitle"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Filme"
-                android:textColor="@color/text_primary"
-                android:textSize="15sp"
-                android:textStyle="bold" />
-
-            <!-- Sortier-Buttons -->
-            <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal">
-
-                <Button
-                    android:id="@+id/btnSortDefault"
-                    android:layout_width="wrap_content"
-                    android:layout_height="26dp"
-                    android:background="@drawable/card_focus_selector"
-                    android:text="⚡ Standard"
-                    android:textColor="@color/text_primary"
-                    android:textSize="10sp"
-                    android:paddingHorizontal="6dp"
-                    android:layout_marginEnd="3dp" />
-
-                <Button
-                    android:id="@+id/btnSortRating"
-                    android:layout_width="wrap_content"
-                    android:layout_height="26dp"
-                    android:background="@drawable/card_focus_selector"
-                    android:text="⭐ Bewertung"
-                    android:textColor="@color/text_primary"
-                    android:textSize="10sp"
-                    android:paddingHorizontal="6dp"
-                    android:layout_marginEnd="3dp" />
-
-                <Button
-                    android:id="@+id/btnSortYear"
-                    android:layout_width="wrap_content"
-                    android:layout_height="26dp"
-                    android:background="@drawable/card_focus_selector"
-                    android:text="📅 Jahr"
-                    android:textColor="@color/text_primary"
-                    android:textSize="10sp"
-                    android:paddingHorizontal="6dp"
-                    android:layout_marginEnd="3dp" />
-
-                <Button
-                    android:id="@+id/btnSortAlpha"
-                    android:layout_width="wrap_content"
-                    android:layout_height="26dp"
-                    android:background="@drawable/card_focus_selector"
-                    android:text="🔤 A-Z"
-                    android:textColor="@color/text_primary"
-                    android:textSize="10sp"
-                    android:paddingHorizontal="6dp" />
-            </LinearLayout>
-        </LinearLayout>
+            android:text="Filme"
+            android:textColor="@color/text_primary"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="4dp" />
 
         <!-- Kompakter Hero Banner -->
         <LinearLayout
@@ -180,8 +83,8 @@
 
             <ImageView
                 android:id="@+id/imgHeroPoster"
-                android:layout_width="60dp"
-                android:layout_height="84dp"
+                android:layout_width="70dp"
+                android:layout_height="match_parent"
                 android:scaleType="centerCrop"
                 android:src="@drawable/tv_banner"
                 android:layout_marginEnd="12dp" />
@@ -196,32 +99,93 @@
                     android:id="@+id/txtHeroTitle"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:ellipsize="end"
-                    android:maxLines="1"
-                    android:text="Filmtitel"
+                    android:text="Titel des Films"
                     android:textColor="@color/text_primary"
                     android:textSize="15sp"
-                    android:textStyle="bold" />
+                    android:textStyle="bold"
+                    android:singleLine="true"
+                    android:ellipsize="marquee" />
 
                 <TextView
                     android:id="@+id/txtHeroRating"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="2dp"
                     android:text="⭐ 8.2 | VOD"
                     android:textColor="@color/accent_gold"
                     android:textSize="11sp"
-                    android:textStyle="bold" />
+                    android:layout_marginTop="2dp" />
 
                 <TextView
-                    android:id="@+id/txtHeroHint"
-                    android:layout_width="wrap_content"
+                    android:id="@+id/txtHeroPlot"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="3dp"
-                    android:text="▶ OK zum Abspielen"
-                    android:textColor="@color/netflix_red"
-                    android:textSize="11sp" />
+                    android:text="Wähle einen Film aus dem Katalog aus oder nutze die Suche."
+                    android:textColor="@color/text_secondary"
+                    android:textSize="10.5sp"
+                    android:maxLines="2"
+                    android:ellipsize="end"
+                    android:layout_marginTop="3dp" />
             </LinearLayout>
+        </LinearLayout>
+
+        <!-- Steuerungselement: Sortierleiste direkt über der Grid-Liste -->
+        <LinearLayout
+            android:id="@+id/layoutVodSortBar"
+            android:layout_width="match_parent"
+            android:layout_height="28dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:layout_marginBottom="6dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Sortierung: "
+                android:textColor="@color/text_secondary"
+                android:textSize="11sp" />
+
+            <Button
+                android:id="@+id/btnSortDefault"
+                android:layout_width="wrap_content"
+                android:layout_height="24dp"
+                android:background="@drawable/card_focus_selector"
+                android:text="⚡ Standard"
+                android:textColor="@color/text_primary"
+                android:textSize="10sp"
+                android:paddingHorizontal="8dp"
+                android:layout_marginEnd="4dp" />
+
+            <Button
+                android:id="@+id/btnSortRating"
+                android:layout_width="wrap_content"
+                android:layout_height="24dp"
+                android:background="@drawable/card_focus_selector"
+                android:text="⭐ Bewertung"
+                android:textColor="@color/text_primary"
+                android:textSize="10sp"
+                android:paddingHorizontal="8dp"
+                android:layout_marginEnd="4dp" />
+
+            <Button
+                android:id="@+id/btnSortYear"
+                android:layout_width="wrap_content"
+                android:layout_height="24dp"
+                android:background="@drawable/card_focus_selector"
+                android:text="📅 Jahr"
+                android:textColor="@color/text_primary"
+                android:textSize="10sp"
+                android:paddingHorizontal="8dp"
+                android:layout_marginEnd="4dp" />
+
+            <Button
+                android:id="@+id/btnSortAlpha"
+                android:layout_width="wrap_content"
+                android:layout_height="24dp"
+                android:background="@drawable/card_focus_selector"
+                android:text="🔤 A-Z"
+                android:textColor="@color/text_primary"
+                android:textSize="10sp"
+                android:paddingHorizontal="8dp" />
         </LinearLayout>
 
         <ProgressBar
@@ -231,11 +195,13 @@
             android:layout_gravity="center"
             android:visibility="gone" />
 
+        <!-- 5-Spalten Movie Poster Grid -->
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/recyclerVodGrid"
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:descendantFocusability="afterDescendants" />
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
     </LinearLayout>
 
 </LinearLayout>

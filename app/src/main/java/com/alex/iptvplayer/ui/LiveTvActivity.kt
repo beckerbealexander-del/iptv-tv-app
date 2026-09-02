@@ -1,19 +1,15 @@
 package com.alex.iptvplayer.ui
 
-import android.content.Context
 import android.content.Intent
 import android.os.Bundle
-import android.text.Editable
-import android.text.TextWatcher
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.view.inputmethod.EditorInfo
-import android.view.inputmethod.InputMethodManager
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
@@ -30,8 +26,6 @@ import com.alex.iptvplayer.data.XtreamClient
 import com.alex.iptvplayer.databinding.ActivityLiveTvBinding
 import com.alex.iptvplayer.util.PlayerUtils
 import com.bumptech.glide.Glide
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -45,7 +39,6 @@ class LiveTvActivity : AppCompatActivity() {
 
     private var allCategories: List<Category> = emptyList()
     private var displayedCategories: List<Category> = emptyList()
-    private var currentFilter = LangFilter.AUTO_DE_RU_ADULT
     private var currentStreams: List<LiveStream> = emptyList()
     private var allLiveStreamsGlobal: List<LiveStream> = emptyList()
     private var selectedCategoryId: String? = null
@@ -53,12 +46,21 @@ class LiveTvActivity : AppCompatActivity() {
     private val epgCache = HashMap<Int, List<EpgProgram>>()
 
     private var isInitialLoad = true
+    private var currentSearchQuery: String? = null
 
     // PIP Mini-Player
     private var pipPlayer: ExoPlayer? = null
     private var activePipStream: LiveStream? = null
 
-    private var searchJob: Job? = null
+    // Vollbild-Suche Launcher
+    private val searchLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == RESULT_OK) {
+            val query = result.data?.getStringExtra("SEARCH_QUERY")?.trim() ?: ""
+            if (query.isNotEmpty()) {
+                applySearchQuery(query)
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -83,8 +85,13 @@ class LiveTvActivity : AppCompatActivity() {
             setItemViewCacheSize(80)
         }
 
-        setupFilterButtons()
-        setupSearch()
+        binding.btnOpenLiveSearch.setOnClickListener {
+            val intent = Intent(this, SearchActivity::class.java).apply {
+                putExtra("SEARCH_TYPE", "LIVE")
+            }
+            searchLauncher.launch(intent)
+        }
+
         loadCategories()
         preloadGlobalChannels()
     }
@@ -106,14 +113,12 @@ class LiveTvActivity : AppCompatActivity() {
         }
     }
 
-    // In-Memory Cache beim Rücksprung aus dem Player: Kein Neuladen der Senderliste / kein Flackern
+    // 1. KEIN NEUAUFBAU NACH VOLLBILD:
+    // Der State bleibt vollständig im Speicher erhalten, keine Neuladung bei Rückkehr aus dem Player
     override fun onResume() {
         super.onResume()
-        val lastWatched = historyManager.getRecentLiveChannels().firstOrNull()
-        if (lastWatched != null) {
-            playPipStream(lastWatched)
-        } else if (activePipStream != null) {
-            playPipStream(activePipStream!!)
+        if (pipPlayer != null && activePipStream != null && !pipPlayer!!.isPlaying) {
+            pipPlayer?.play()
         }
     }
 
@@ -143,103 +148,27 @@ class LiveTvActivity : AppCompatActivity() {
         binding.txtCurrentLiveTime.text = "🔴 ${sdf.format(Date())}"
     }
 
-    private fun setupSearch() {
-        binding.editLiveSearch.isFocusable = true
-        binding.editLiveSearch.isFocusableInTouchMode = false
+    // 5. SUCHE: DYNAMISCHE KATEGORIE "🔍 Aktuelle Suche" AN INDEX 0
+    private fun applySearchQuery(query: String) {
+        currentSearchQuery = query
+        val searchCategory = Category(id = "CURRENT_SEARCH", name = "🔍 Aktuelle Suche")
+        val newCategories = mutableListOf(searchCategory)
+        newCategories.addAll(allCategories)
+        displayedCategories = newCategories
+        selectedCategoryId = "CURRENT_SEARCH"
 
-        binding.editLiveSearch.setOnClickListener {
-            binding.editLiveSearch.isFocusableInTouchMode = true
-            binding.editLiveSearch.requestFocus()
-            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-            imm.showSoftInput(binding.editLiveSearch, InputMethodManager.SHOW_IMPLICIT)
+        binding.recyclerCategories.adapter = CategoryAdapter(newCategories) { cat ->
+            loadChannels(cat)
         }
 
-        binding.editLiveSearch.setOnFocusChangeListener { _, hasFocus ->
-            if (!hasFocus) {
-                hideKeyboard()
-            }
-        }
-
-        binding.editLiveSearch.setOnEditorActionListener { _, actionId, event ->
-            if (actionId == EditorInfo.IME_ACTION_SEARCH || actionId == EditorInfo.IME_ACTION_DONE || actionId == EditorInfo.IME_ACTION_GO ||
-                (event != null && event.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN)) {
-                hideKeyboard()
-                focusFirstChannel()
-                true
-            } else false
-        }
-
-        // 1. TYPEN-ISOLIERTE GLOBALE SUCHE (ENTHÄLT / SUBSTRING):
-        // Durchsucht ausnahmslos ALLE Live-TV-Sender (über alle Kategorien hinweg) mit contains()
-        binding.editLiveSearch.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                searchJob?.cancel()
-                val q = s?.toString()?.trim() ?: ""
-                searchJob = lifecycleScope.launch {
-                    delay(300)
-                    if (q.isEmpty()) {
-                        binding.recyclerChannels.adapter = ChannelAdapter(currentStreams)
-                    } else {
-                        val pool = if (allLiveStreamsGlobal.isNotEmpty()) allLiveStreamsGlobal else currentStreams
-                        val filtered = pool.filter { it.name.contains(q, ignoreCase = true) }
-                        binding.recyclerChannels.adapter = ChannelAdapter(filtered)
-                    }
-                }
-            }
-            override fun afterTextChanged(s: Editable?) {}
-        })
-    }
-
-    private fun hideKeyboard() {
-        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-        imm.hideSoftInputFromWindow(binding.editLiveSearch.windowToken, 0)
-        binding.editLiveSearch.isFocusableInTouchMode = false
-        binding.editLiveSearch.clearFocus()
-    }
-
-    // 2. Fokus-Erhalt beim Klick auf Filter (DE / RU / ALLE bleibt auf dem Filter-Button)
-    private fun setupFilterButtons() {
-        binding.btnLiveFilterDe.setOnClickListener {
-            applyFilter(LangFilter.DE)
-            binding.btnLiveFilterDe.requestFocus()
-        }
-        binding.btnLiveFilterRu.setOnClickListener {
-            applyFilter(LangFilter.RU)
-            binding.btnLiveFilterRu.requestFocus()
-        }
-        binding.btnLiveFilterAll.setOnClickListener {
-            applyFilter(LangFilter.ALL)
-            binding.btnLiveFilterAll.requestFocus()
-        }
-    }
-
-    private fun applyFilter(filter: LangFilter) {
-        currentFilter = filter
-        val filtered = client.filterCategories(allCategories, filter)
-        displayedCategories = filtered
-        binding.recyclerCategories.adapter = CategoryAdapter(filtered) { category ->
-            loadChannels(category)
-        }
-
-        if (isInitialLoad) {
-            val lastWatched = historyManager.getRecentLiveChannels().firstOrNull()
-            if (lastWatched != null && !lastWatched.categoryId.isNullOrEmpty()) {
-                val matchingCat = filtered.firstOrNull { it.id == lastWatched.categoryId }
-                if (matchingCat != null) {
-                    loadChannels(matchingCat, preselectedStreamId = lastWatched.streamId)
-                    return
-                }
-            }
-        }
+        val pool = if (allLiveStreamsGlobal.isNotEmpty()) allLiveStreamsGlobal else currentStreams
+        val filtered = pool.filter { it.name.contains(query, ignoreCase = true) }
+        currentStreams = filtered
+        binding.recyclerChannels.adapter = ChannelAdapter(filtered)
 
         if (filtered.isNotEmpty()) {
-            val catToLoad = if (selectedCategoryId != null) {
-                filtered.firstOrNull { it.id == selectedCategoryId } ?: filtered[0]
-            } else {
-                filtered[0]
-            }
-            loadChannels(catToLoad)
+            showChannelPreview(filtered[0], null)
+            focusTargetChannel(0)
         }
     }
 
@@ -247,9 +176,27 @@ class LiveTvActivity : AppCompatActivity() {
         binding.progressCategories.visibility = View.VISIBLE
         lifecycleScope.launch {
             try {
-                allCategories = client.getLiveCategories()
+                val raw = client.getLiveCategories()
+                allCategories = client.filterCategories(raw, LangFilter.AUTO_DE_RU_ADULT)
+                displayedCategories = allCategories
                 binding.progressCategories.visibility = View.GONE
-                applyFilter(currentFilter)
+                binding.recyclerCategories.adapter = CategoryAdapter(displayedCategories) { category ->
+                    loadChannels(category)
+                }
+
+                // Initialer Start: Letzter Sender oder erster Sender laden
+                val lastWatched = historyManager.getRecentLiveChannels().firstOrNull()
+                if (lastWatched != null && !lastWatched.categoryId.isNullOrEmpty()) {
+                    val matchingCat = displayedCategories.firstOrNull { it.id == lastWatched.categoryId }
+                    if (matchingCat != null) {
+                        loadChannels(matchingCat, preselectedStreamId = lastWatched.streamId)
+                        return@launch
+                    }
+                }
+
+                if (displayedCategories.isNotEmpty()) {
+                    loadChannels(displayedCategories[0])
+                }
             } catch (e: Exception) {
                 binding.progressCategories.visibility = View.GONE
                 Toast.makeText(this@LiveTvActivity, "Fehler: ${e.message}", Toast.LENGTH_SHORT).show()
@@ -257,10 +204,21 @@ class LiveTvActivity : AppCompatActivity() {
         }
     }
 
+    // 3. KATEGORIEWECHSEL & PIP-VERHALTEN:
+    // Fokus geht sofort auf den 1. Sender (niemals Suchfeld).
+    // PIP spielt UNVERÄNDERT den aktuellen Sender weiter.
     private fun loadChannels(category: Category, preselectedStreamId: Int? = null) {
-        if (selectedCategoryId == category.id && preselectedStreamId == null && currentStreams.isNotEmpty()) return
-        selectedCategoryId = category.id
+        if (category.id == "CURRENT_SEARCH" && currentSearchQuery != null) {
+            applySearchQuery(currentSearchQuery!!)
+            return
+        }
 
+        if (selectedCategoryId == category.id && preselectedStreamId == null && currentStreams.isNotEmpty()) {
+            focusFirstChannel()
+            return
+        }
+
+        selectedCategoryId = category.id
         binding.recyclerCategories.adapter?.notifyDataSetChanged()
 
         val cached = channelCategoryCache[category.id]
@@ -270,11 +228,12 @@ class LiveTvActivity : AppCompatActivity() {
             binding.recyclerChannels.adapter = ChannelAdapter(cached)
             if (cached.isNotEmpty()) {
                 showChannelPreview(cached[0], null)
-                playPipStream(cached[0])
+                // PIP bleibt unverändert beim bisherigen Sender!
                 if (isInitialLoad) {
                     isInitialLoad = false
-                    focusTargetChannel(0)
+                    playPipStream(cached[0])
                 }
+                focusTargetChannel(0)
             }
             return
         }
@@ -296,13 +255,13 @@ class LiveTvActivity : AppCompatActivity() {
 
                 if (targetStream != null) {
                     showChannelPreview(targetStream, null)
-                    playPipStream(targetStream)
-
-                    val targetPos = currentStreams.indexOf(targetStream).coerceAtLeast(0)
                     if (isInitialLoad) {
                         isInitialLoad = false
-                        focusTargetChannel(targetPos)
+                        playPipStream(targetStream)
                     }
+
+                    val targetPos = currentStreams.indexOf(targetStream).coerceAtLeast(0)
+                    focusTargetChannel(targetPos)
                 }
             } catch (e: Exception) {
                 binding.progressChannels.visibility = View.GONE
@@ -323,7 +282,7 @@ class LiveTvActivity : AppCompatActivity() {
         focusTargetChannel(0)
     }
 
-    // Zurück zur AKTIV ausgewählten Kategorie (Position bleibt erhalten)
+    // Zurück zur AKTIV ausgewählten Kategorie
     private fun focusCurrentCategory() {
         val catIndex = displayedCategories.indexOfFirst { it.id == selectedCategoryId }.coerceAtLeast(0)
         binding.recyclerCategories.scrollToPosition(catIndex)
@@ -353,6 +312,7 @@ class LiveTvActivity : AppCompatActivity() {
     }
 
     private fun openFullscreenPlayer(stream: LiveStream, position: Int) {
+        playPipStream(stream)
         pipPlayer?.pause()
         historyManager.saveLiveChannel(stream)
         val intent = Intent(this, PlayerActivity::class.java).apply {
@@ -415,7 +375,6 @@ class LiveTvActivity : AppCompatActivity() {
                         }
                     }
                     KeyEvent.KEYCODE_DPAD_DOWN -> {
-                        // Strikter Hard Lock am unteren Ende der Senderliste
                         if (channelPos < currentStreams.size - 1) {
                             val nextPos = channelPos + 1
                             binding.recyclerChannels.scrollToPosition(nextPos)
@@ -430,10 +389,9 @@ class LiveTvActivity : AppCompatActivity() {
                                 }
                             }
                         }
-                        return true // Konsumiert: Bricht niemals nach unten/rechts/links aus
+                        return true
                     }
                     KeyEvent.KEYCODE_DPAD_UP -> {
-                        // Strikter Hard Lock am oberen Ende der Senderliste
                         if (channelPos > 0) {
                             val prevPos = channelPos - 1
                             binding.recyclerChannels.scrollToPosition(prevPos)
@@ -448,7 +406,7 @@ class LiveTvActivity : AppCompatActivity() {
                                 }
                             }
                         }
-                        return true // Konsumiert: Bricht niemals nach oben/rechts/links aus
+                        return true
                     }
                 }
             }
@@ -549,16 +507,15 @@ class LiveTvActivity : AppCompatActivity() {
                             return@setOnKeyListener true
                         }
                         KeyEvent.KEYCODE_DPAD_LEFT -> {
-                            return@setOnKeyListener true // Nichts links von Kategorien
+                            return@setOnKeyListener true
                         }
                         KeyEvent.KEYCODE_DPAD_UP -> {
                             if (position == 0) {
-                                binding.btnLiveFilterDe.requestFocus()
+                                binding.btnOpenLiveSearch.requestFocus()
                                 return@setOnKeyListener true
                             }
                         }
                         KeyEvent.KEYCODE_DPAD_DOWN -> {
-                            // Hard-Lock am unteren Ende der Kategorienliste
                             if (position == items.size - 1) {
                                 return@setOnKeyListener true
                             }

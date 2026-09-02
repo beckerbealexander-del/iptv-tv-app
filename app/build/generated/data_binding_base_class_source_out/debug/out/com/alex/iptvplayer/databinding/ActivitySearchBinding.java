@@ -7,7 +7,6 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
-import android.widget.ProgressBar;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -27,49 +26,40 @@ public final class ActivitySearchBinding implements ViewBinding {
   public final Button btnSearchClear;
 
   @NonNull
+  public final Button btnSearchSubmit;
+
+  @NonNull
   public final EditText editSearchQuery;
 
   @NonNull
-  public final TextView headerChannels;
+  public final LinearLayout layoutSearchHistory;
 
   @NonNull
-  public final TextView headerMovies;
+  public final RecyclerView recyclerSearchHistory;
 
   @NonNull
-  public final TextView headerSeries;
+  public final TextView txtHistoryHeader;
 
   @NonNull
-  public final ProgressBar progressSearch;
+  public final TextView txtSearchHint;
 
   @NonNull
-  public final RecyclerView recyclerSearchChannels;
-
-  @NonNull
-  public final RecyclerView recyclerSearchMovies;
-
-  @NonNull
-  public final RecyclerView recyclerSearchSeries;
-
-  @NonNull
-  public final TextView txtNoResults;
+  public final TextView txtSearchTitle;
 
   private ActivitySearchBinding(@NonNull LinearLayout rootView, @NonNull Button btnSearchClear,
-      @NonNull EditText editSearchQuery, @NonNull TextView headerChannels,
-      @NonNull TextView headerMovies, @NonNull TextView headerSeries,
-      @NonNull ProgressBar progressSearch, @NonNull RecyclerView recyclerSearchChannels,
-      @NonNull RecyclerView recyclerSearchMovies, @NonNull RecyclerView recyclerSearchSeries,
-      @NonNull TextView txtNoResults) {
+      @NonNull Button btnSearchSubmit, @NonNull EditText editSearchQuery,
+      @NonNull LinearLayout layoutSearchHistory, @NonNull RecyclerView recyclerSearchHistory,
+      @NonNull TextView txtHistoryHeader, @NonNull TextView txtSearchHint,
+      @NonNull TextView txtSearchTitle) {
     this.rootView = rootView;
     this.btnSearchClear = btnSearchClear;
+    this.btnSearchSubmit = btnSearchSubmit;
     this.editSearchQuery = editSearchQuery;
-    this.headerChannels = headerChannels;
-    this.headerMovies = headerMovies;
-    this.headerSeries = headerSeries;
-    this.progressSearch = progressSearch;
-    this.recyclerSearchChannels = recyclerSearchChannels;
-    this.recyclerSearchMovies = recyclerSearchMovies;
-    this.recyclerSearchSeries = recyclerSearchSeries;
-    this.txtNoResults = txtNoResults;
+    this.layoutSearchHistory = layoutSearchHistory;
+    this.recyclerSearchHistory = recyclerSearchHistory;
+    this.txtHistoryHeader = txtHistoryHeader;
+    this.txtSearchHint = txtSearchHint;
+    this.txtSearchTitle = txtSearchTitle;
   }
 
   @Override
@@ -105,63 +95,51 @@ public final class ActivitySearchBinding implements ViewBinding {
         break missingId;
       }
 
+      id = R.id.btnSearchSubmit;
+      Button btnSearchSubmit = ViewBindings.findChildViewById(rootView, id);
+      if (btnSearchSubmit == null) {
+        break missingId;
+      }
+
       id = R.id.editSearchQuery;
       EditText editSearchQuery = ViewBindings.findChildViewById(rootView, id);
       if (editSearchQuery == null) {
         break missingId;
       }
 
-      id = R.id.headerChannels;
-      TextView headerChannels = ViewBindings.findChildViewById(rootView, id);
-      if (headerChannels == null) {
+      id = R.id.layoutSearchHistory;
+      LinearLayout layoutSearchHistory = ViewBindings.findChildViewById(rootView, id);
+      if (layoutSearchHistory == null) {
         break missingId;
       }
 
-      id = R.id.headerMovies;
-      TextView headerMovies = ViewBindings.findChildViewById(rootView, id);
-      if (headerMovies == null) {
+      id = R.id.recyclerSearchHistory;
+      RecyclerView recyclerSearchHistory = ViewBindings.findChildViewById(rootView, id);
+      if (recyclerSearchHistory == null) {
         break missingId;
       }
 
-      id = R.id.headerSeries;
-      TextView headerSeries = ViewBindings.findChildViewById(rootView, id);
-      if (headerSeries == null) {
+      id = R.id.txtHistoryHeader;
+      TextView txtHistoryHeader = ViewBindings.findChildViewById(rootView, id);
+      if (txtHistoryHeader == null) {
         break missingId;
       }
 
-      id = R.id.progressSearch;
-      ProgressBar progressSearch = ViewBindings.findChildViewById(rootView, id);
-      if (progressSearch == null) {
+      id = R.id.txtSearchHint;
+      TextView txtSearchHint = ViewBindings.findChildViewById(rootView, id);
+      if (txtSearchHint == null) {
         break missingId;
       }
 
-      id = R.id.recyclerSearchChannels;
-      RecyclerView recyclerSearchChannels = ViewBindings.findChildViewById(rootView, id);
-      if (recyclerSearchChannels == null) {
+      id = R.id.txtSearchTitle;
+      TextView txtSearchTitle = ViewBindings.findChildViewById(rootView, id);
+      if (txtSearchTitle == null) {
         break missingId;
       }
 
-      id = R.id.recyclerSearchMovies;
-      RecyclerView recyclerSearchMovies = ViewBindings.findChildViewById(rootView, id);
-      if (recyclerSearchMovies == null) {
-        break missingId;
-      }
-
-      id = R.id.recyclerSearchSeries;
-      RecyclerView recyclerSearchSeries = ViewBindings.findChildViewById(rootView, id);
-      if (recyclerSearchSeries == null) {
-        break missingId;
-      }
-
-      id = R.id.txtNoResults;
-      TextView txtNoResults = ViewBindings.findChildViewById(rootView, id);
-      if (txtNoResults == null) {
-        break missingId;
-      }
-
-      return new ActivitySearchBinding((LinearLayout) rootView, btnSearchClear, editSearchQuery,
-          headerChannels, headerMovies, headerSeries, progressSearch, recyclerSearchChannels,
-          recyclerSearchMovies, recyclerSearchSeries, txtNoResults);
+      return new ActivitySearchBinding((LinearLayout) rootView, btnSearchClear, btnSearchSubmit,
+          editSearchQuery, layoutSearchHistory, recyclerSearchHistory, txtHistoryHeader,
+          txtSearchHint, txtSearchTitle);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));

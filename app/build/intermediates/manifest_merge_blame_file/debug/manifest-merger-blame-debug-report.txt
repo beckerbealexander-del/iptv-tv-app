@@ -41,7 +41,7 @@
 26-->[androidx.core:core:1.12.0] C:\Users\becke\.gradle\caches\transforms-3\01be542a8a7642ecba403b94caa2bdf6\transformed\core-1.12.0\AndroidManifest.xml:26:22-94
 27
 28    <application
-28-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:15:5-75:19
+28-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:15:5-82:19
 29        android:allowBackup="true"
 29-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:16:9-35
 30        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
@@ -89,131 +89,145 @@
 51            </intent-filter>
 52        </activity>
 53        <activity
-53-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:38:9-41:53
+53-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:38:9-42:136
 54            android:name="com.alex.iptvplayer.ui.SearchActivity"
 54-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:39:13-46
-55            android:exported="false"
-55-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:40:13-37
-56            android:screenOrientation="landscape" />
-56-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:41:13-50
-57        <activity
-57-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:43:9-47:63
-58            android:name="com.alex.iptvplayer.ui.LiveTvActivity"
-58-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:44:13-46
-59            android:exported="false"
-59-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:45:13-37
-60            android:screenOrientation="landscape"
-60-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:46:13-50
-61            android:windowSoftInputMode="stateAlwaysHidden" />
-61-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:47:13-60
-62        <activity
-62-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:49:9-52:53
-63            android:name="com.alex.iptvplayer.ui.VodActivity"
-63-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:50:13-43
-64            android:exported="false"
-64-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:51:13-37
-65            android:screenOrientation="landscape" />
-65-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:52:13-50
-66        <activity
-66-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:54:9-57:53
-67            android:name="com.alex.iptvplayer.ui.SeriesActivity"
-67-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:55:13-46
-68            android:exported="false"
-68-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:56:13-37
-69            android:screenOrientation="landscape" />
-69-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:57:13-50
+55            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
+55-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:42:13-133
+56            android:exported="false"
+56-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:40:13-37
+57            android:screenOrientation="landscape" />
+57-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:41:13-50
+58        <activity
+58-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:44:9-49:136
+59            android:name="com.alex.iptvplayer.ui.LiveTvActivity"
+59-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:45:13-46
+60            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
+60-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:49:13-133
+61            android:exported="false"
+61-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:46:13-37
+62            android:screenOrientation="landscape"
+62-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:47:13-50
+63            android:windowSoftInputMode="stateAlwaysHidden" />
+63-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:48:13-60
+64        <activity
+64-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:51:9-56:136
+65            android:name="com.alex.iptvplayer.ui.VodActivity"
+65-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:52:13-43
+66            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
+66-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:56:13-133
+67            android:exported="false"
+67-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:53:13-37
+68            android:screenOrientation="landscape"
+68-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:54:13-50
+69            android:windowSoftInputMode="stateAlwaysHidden" />
+69-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:55:13-60
 70        <activity
-70-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:59:9-62:53
-71            android:name="com.alex.iptvplayer.ui.SeriesDetailActivity"
-71-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:60:13-52
-72            android:exported="false"
-72-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:61:13-37
-73            android:screenOrientation="landscape" />
-73-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:62:13-50
-74        <activity
-74-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:64:9-68:53
-75            android:name="com.alex.iptvplayer.ui.PlayerActivity"
-75-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:65:13-46
-76            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
-76-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:66:13-133
-77            android:exported="false"
-77-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:67:13-37
-78            android:screenOrientation="landscape" />
-78-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:68:13-50
-79        <activity
-79-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:70:9-73:53
-80            android:name="com.alex.iptvplayer.ui.SettingsActivity"
-80-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:71:13-48
-81            android:exported="false"
-81-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:72:13-37
-82            android:screenOrientation="landscape" />
-82-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:73:13-50
-83
-84        <provider
-84-->[androidx.emoji2:emoji2:1.2.0] C:\Users\becke\.gradle\caches\transforms-3\2497a04ce439ba5192d483e53a542533\transformed\emoji2-1.2.0\AndroidManifest.xml:24:9-32:20
-85            android:name="androidx.startup.InitializationProvider"
-85-->[androidx.emoji2:emoji2:1.2.0] C:\Users\becke\.gradle\caches\transforms-3\2497a04ce439ba5192d483e53a542533\transformed\emoji2-1.2.0\AndroidManifest.xml:25:13-67
-86            android:authorities="com.alex.iptvplayer.androidx-startup"
-86-->[androidx.emoji2:emoji2:1.2.0] C:\Users\becke\.gradle\caches\transforms-3\2497a04ce439ba5192d483e53a542533\transformed\emoji2-1.2.0\AndroidManifest.xml:26:13-68
-87            android:exported="false" >
-87-->[androidx.emoji2:emoji2:1.2.0] C:\Users\becke\.gradle\caches\transforms-3\2497a04ce439ba5192d483e53a542533\transformed\emoji2-1.2.0\AndroidManifest.xml:27:13-37
-88            <meta-data
-88-->[androidx.emoji2:emoji2:1.2.0] C:\Users\becke\.gradle\caches\transforms-3\2497a04ce439ba5192d483e53a542533\transformed\emoji2-1.2.0\AndroidManifest.xml:29:13-31:52
-89                android:name="androidx.emoji2.text.EmojiCompatInitializer"
-89-->[androidx.emoji2:emoji2:1.2.0] C:\Users\becke\.gradle\caches\transforms-3\2497a04ce439ba5192d483e53a542533\transformed\emoji2-1.2.0\AndroidManifest.xml:30:17-75
-90                android:value="androidx.startup" />
-90-->[androidx.emoji2:emoji2:1.2.0] C:\Users\becke\.gradle\caches\transforms-3\2497a04ce439ba5192d483e53a542533\transformed\emoji2-1.2.0\AndroidManifest.xml:31:17-49
-91            <meta-data
-91-->[androidx.lifecycle:lifecycle-process:2.6.1] C:\Users\becke\.gradle\caches\transforms-3\86ffc40331241160dd6ae3395fef3d53\transformed\lifecycle-process-2.6.1\AndroidManifest.xml:29:13-31:52
-92                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
-92-->[androidx.lifecycle:lifecycle-process:2.6.1] C:\Users\becke\.gradle\caches\transforms-3\86ffc40331241160dd6ae3395fef3d53\transformed\lifecycle-process-2.6.1\AndroidManifest.xml:30:17-78
-93                android:value="androidx.startup" />
-93-->[androidx.lifecycle:lifecycle-process:2.6.1] C:\Users\becke\.gradle\caches\transforms-3\86ffc40331241160dd6ae3395fef3d53\transformed\lifecycle-process-2.6.1\AndroidManifest.xml:31:17-49
-94            <meta-data
-94-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\becke\.gradle\caches\transforms-3\5f7ce29a25973535d221a2c1da52466d\transformed\profileinstaller-1.3.0\AndroidManifest.xml:29:13-31:52
-95                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
-95-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\becke\.gradle\caches\transforms-3\5f7ce29a25973535d221a2c1da52466d\transformed\profileinstaller-1.3.0\AndroidManifest.xml:30:17-85
-96                android:value="androidx.startup" />
-96-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\becke\.gradle\caches\transforms-3\5f7ce29a25973535d221a2c1da52466d\transformed\profileinstaller-1.3.0\AndroidManifest.xml:31:17-49
-97        </provider>
-98
-99        <receiver
-99-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\becke\.gradle\caches\transforms-3\5f7ce29a25973535d221a2c1da52466d\transformed\profileinstaller-1.3.0\AndroidManifest.xml:34:9-52:20
-100            android:name="androidx.profileinstaller.ProfileInstallReceiver"
-100-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\becke\.gradle\caches\transforms-3\5f7ce29a25973535d221a2c1da52466d\transformed\profileinstaller-1.3.0\AndroidManifest.xml:35:13-76
-101            android:directBootAware="false"
-101-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\becke\.gradle\caches\transforms-3\5f7ce29a25973535d221a2c1da52466d\transformed\profileinstaller-1.3.0\AndroidManifest.xml:36:13-44
-102            android:enabled="true"
-102-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\becke\.gradle\caches\transforms-3\5f7ce29a25973535d221a2c1da52466d\transformed\profileinstaller-1.3.0\AndroidManifest.xml:37:13-35
-103            android:exported="true"
-103-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\becke\.gradle\caches\transforms-3\5f7ce29a25973535d221a2c1da52466d\transformed\profileinstaller-1.3.0\AndroidManifest.xml:38:13-36
-104            android:permission="android.permission.DUMP" >
-104-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\becke\.gradle\caches\transforms-3\5f7ce29a25973535d221a2c1da52466d\transformed\profileinstaller-1.3.0\AndroidManifest.xml:39:13-57
-105            <intent-filter>
-105-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\becke\.gradle\caches\transforms-3\5f7ce29a25973535d221a2c1da52466d\transformed\profileinstaller-1.3.0\AndroidManifest.xml:40:13-42:29
-106                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
-106-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\becke\.gradle\caches\transforms-3\5f7ce29a25973535d221a2c1da52466d\transformed\profileinstaller-1.3.0\AndroidManifest.xml:41:17-91
-106-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\becke\.gradle\caches\transforms-3\5f7ce29a25973535d221a2c1da52466d\transformed\profileinstaller-1.3.0\AndroidManifest.xml:41:25-88
-107            </intent-filter>
-108            <intent-filter>
-108-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\becke\.gradle\caches\transforms-3\5f7ce29a25973535d221a2c1da52466d\transformed\profileinstaller-1.3.0\AndroidManifest.xml:43:13-45:29
-109                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
-109-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\becke\.gradle\caches\transforms-3\5f7ce29a25973535d221a2c1da52466d\transformed\profileinstaller-1.3.0\AndroidManifest.xml:44:17-85
-109-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\becke\.gradle\caches\transforms-3\5f7ce29a25973535d221a2c1da52466d\transformed\profileinstaller-1.3.0\AndroidManifest.xml:44:25-82
-110            </intent-filter>
-111            <intent-filter>
-111-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\becke\.gradle\caches\transforms-3\5f7ce29a25973535d221a2c1da52466d\transformed\profileinstaller-1.3.0\AndroidManifest.xml:46:13-48:29
-112                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
-112-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\becke\.gradle\caches\transforms-3\5f7ce29a25973535d221a2c1da52466d\transformed\profileinstaller-1.3.0\AndroidManifest.xml:47:17-88
-112-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\becke\.gradle\caches\transforms-3\5f7ce29a25973535d221a2c1da52466d\transformed\profileinstaller-1.3.0\AndroidManifest.xml:47:25-85
-113            </intent-filter>
-114            <intent-filter>
-114-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\becke\.gradle\caches\transforms-3\5f7ce29a25973535d221a2c1da52466d\transformed\profileinstaller-1.3.0\AndroidManifest.xml:49:13-51:29
-115                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
-115-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\becke\.gradle\caches\transforms-3\5f7ce29a25973535d221a2c1da52466d\transformed\profileinstaller-1.3.0\AndroidManifest.xml:50:17-95
-115-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\becke\.gradle\caches\transforms-3\5f7ce29a25973535d221a2c1da52466d\transformed\profileinstaller-1.3.0\AndroidManifest.xml:50:25-92
-116            </intent-filter>
-117        </receiver>
-118    </application>
-119
-120</manifest>
+70-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:58:9-63:136
+71            android:name="com.alex.iptvplayer.ui.SeriesActivity"
+71-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:59:13-46
+72            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
+72-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:63:13-133
+73            android:exported="false"
+73-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:60:13-37
+74            android:screenOrientation="landscape"
+74-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:61:13-50
+75            android:windowSoftInputMode="stateAlwaysHidden" />
+75-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:62:13-60
+76        <activity
+76-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:65:9-69:136
+77            android:name="com.alex.iptvplayer.ui.SeriesDetailActivity"
+77-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:66:13-52
+78            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
+78-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:69:13-133
+79            android:exported="false"
+79-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:67:13-37
+80            android:screenOrientation="landscape" />
+80-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:68:13-50
+81        <activity
+81-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:71:9-75:53
+82            android:name="com.alex.iptvplayer.ui.PlayerActivity"
+82-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:72:13-46
+83            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
+83-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:73:13-133
+84            android:exported="false"
+84-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:74:13-37
+85            android:screenOrientation="landscape" />
+85-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:75:13-50
+86        <activity
+86-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:77:9-80:53
+87            android:name="com.alex.iptvplayer.ui.SettingsActivity"
+87-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:78:13-48
+88            android:exported="false"
+88-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:79:13-37
+89            android:screenOrientation="landscape" />
+89-->C:\Users\becke\.gemini\antigravity\scratch\iptv-tv-app\app\src\main\AndroidManifest.xml:80:13-50
+90
+91        <provider
+91-->[androidx.emoji2:emoji2:1.2.0] C:\Users\becke\.gradle\caches\transforms-3\2497a04ce439ba5192d483e53a542533\transformed\emoji2-1.2.0\AndroidManifest.xml:24:9-32:20
+92            android:name="androidx.startup.InitializationProvider"
+92-->[androidx.emoji2:emoji2:1.2.0] C:\Users\becke\.gradle\caches\transforms-3\2497a04ce439ba5192d483e53a542533\transformed\emoji2-1.2.0\AndroidManifest.xml:25:13-67
+93            android:authorities="com.alex.iptvplayer.androidx-startup"
+93-->[androidx.emoji2:emoji2:1.2.0] C:\Users\becke\.gradle\caches\transforms-3\2497a04ce439ba5192d483e53a542533\transformed\emoji2-1.2.0\AndroidManifest.xml:26:13-68
+94            android:exported="false" >
+94-->[androidx.emoji2:emoji2:1.2.0] C:\Users\becke\.gradle\caches\transforms-3\2497a04ce439ba5192d483e53a542533\transformed\emoji2-1.2.0\AndroidManifest.xml:27:13-37
+95            <meta-data
+95-->[androidx.emoji2:emoji2:1.2.0] C:\Users\becke\.gradle\caches\transforms-3\2497a04ce439ba5192d483e53a542533\transformed\emoji2-1.2.0\AndroidManifest.xml:29:13-31:52
+96                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+96-->[androidx.emoji2:emoji2:1.2.0] C:\Users\becke\.gradle\caches\transforms-3\2497a04ce439ba5192d483e53a542533\transformed\emoji2-1.2.0\AndroidManifest.xml:30:17-75
+97                android:value="androidx.startup" />
+97-->[androidx.emoji2:emoji2:1.2.0] C:\Users\becke\.gradle\caches\transforms-3\2497a04ce439ba5192d483e53a542533\transformed\emoji2-1.2.0\AndroidManifest.xml:31:17-49
+98            <meta-data
+98-->[androidx.lifecycle:lifecycle-process:2.6.1] C:\Users\becke\.gradle\caches\transforms-3\86ffc40331241160dd6ae3395fef3d53\transformed\lifecycle-process-2.6.1\AndroidManifest.xml:29:13-31:52
+99                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+99-->[androidx.lifecycle:lifecycle-process:2.6.1] C:\Users\becke\.gradle\caches\transforms-3\86ffc40331241160dd6ae3395fef3d53\transformed\lifecycle-process-2.6.1\AndroidManifest.xml:30:17-78
+100                android:value="androidx.startup" />
+100-->[androidx.lifecycle:lifecycle-process:2.6.1] C:\Users\becke\.gradle\caches\transforms-3\86ffc40331241160dd6ae3395fef3d53\transformed\lifecycle-process-2.6.1\AndroidManifest.xml:31:17-49
+101            <meta-data
+101-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\becke\.gradle\caches\transforms-3\5f7ce29a25973535d221a2c1da52466d\transformed\profileinstaller-1.3.0\AndroidManifest.xml:29:13-31:52
+102                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+102-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\becke\.gradle\caches\transforms-3\5f7ce29a25973535d221a2c1da52466d\transformed\profileinstaller-1.3.0\AndroidManifest.xml:30:17-85
+103                android:value="androidx.startup" />
+103-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\becke\.gradle\caches\transforms-3\5f7ce29a25973535d221a2c1da52466d\transformed\profileinstaller-1.3.0\AndroidManifest.xml:31:17-49
+104        </provider>
+105
+106        <receiver
+106-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\becke\.gradle\caches\transforms-3\5f7ce29a25973535d221a2c1da52466d\transformed\profileinstaller-1.3.0\AndroidManifest.xml:34:9-52:20
+107            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+107-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\becke\.gradle\caches\transforms-3\5f7ce29a25973535d221a2c1da52466d\transformed\profileinstaller-1.3.0\AndroidManifest.xml:35:13-76
+108            android:directBootAware="false"
+108-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\becke\.gradle\caches\transforms-3\5f7ce29a25973535d221a2c1da52466d\transformed\profileinstaller-1.3.0\AndroidManifest.xml:36:13-44
+109            android:enabled="true"
+109-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\becke\.gradle\caches\transforms-3\5f7ce29a25973535d221a2c1da52466d\transformed\profileinstaller-1.3.0\AndroidManifest.xml:37:13-35
+110            android:exported="true"
+110-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\becke\.gradle\caches\transforms-3\5f7ce29a25973535d221a2c1da52466d\transformed\profileinstaller-1.3.0\AndroidManifest.xml:38:13-36
+111            android:permission="android.permission.DUMP" >
+111-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\becke\.gradle\caches\transforms-3\5f7ce29a25973535d221a2c1da52466d\transformed\profileinstaller-1.3.0\AndroidManifest.xml:39:13-57
+112            <intent-filter>
+112-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\becke\.gradle\caches\transforms-3\5f7ce29a25973535d221a2c1da52466d\transformed\profileinstaller-1.3.0\AndroidManifest.xml:40:13-42:29
+113                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+113-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\becke\.gradle\caches\transforms-3\5f7ce29a25973535d221a2c1da52466d\transformed\profileinstaller-1.3.0\AndroidManifest.xml:41:17-91
+113-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\becke\.gradle\caches\transforms-3\5f7ce29a25973535d221a2c1da52466d\transformed\profileinstaller-1.3.0\AndroidManifest.xml:41:25-88
+114            </intent-filter>
+115            <intent-filter>
+115-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\becke\.gradle\caches\transforms-3\5f7ce29a25973535d221a2c1da52466d\transformed\profileinstaller-1.3.0\AndroidManifest.xml:43:13-45:29
+116                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+116-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\becke\.gradle\caches\transforms-3\5f7ce29a25973535d221a2c1da52466d\transformed\profileinstaller-1.3.0\AndroidManifest.xml:44:17-85
+116-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\becke\.gradle\caches\transforms-3\5f7ce29a25973535d221a2c1da52466d\transformed\profileinstaller-1.3.0\AndroidManifest.xml:44:25-82
+117            </intent-filter>
+118            <intent-filter>
+118-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\becke\.gradle\caches\transforms-3\5f7ce29a25973535d221a2c1da52466d\transformed\profileinstaller-1.3.0\AndroidManifest.xml:46:13-48:29
+119                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+119-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\becke\.gradle\caches\transforms-3\5f7ce29a25973535d221a2c1da52466d\transformed\profileinstaller-1.3.0\AndroidManifest.xml:47:17-88
+119-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\becke\.gradle\caches\transforms-3\5f7ce29a25973535d221a2c1da52466d\transformed\profileinstaller-1.3.0\AndroidManifest.xml:47:25-85
+120            </intent-filter>
+121            <intent-filter>
+121-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\becke\.gradle\caches\transforms-3\5f7ce29a25973535d221a2c1da52466d\transformed\profileinstaller-1.3.0\AndroidManifest.xml:49:13-51:29
+122                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+122-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\becke\.gradle\caches\transforms-3\5f7ce29a25973535d221a2c1da52466d\transformed\profileinstaller-1.3.0\AndroidManifest.xml:50:17-95
+122-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\becke\.gradle\caches\transforms-3\5f7ce29a25973535d221a2c1da52466d\transformed\profileinstaller-1.3.0\AndroidManifest.xml:50:25-92
+123            </intent-filter>
+124        </receiver>
+125    </application>
+126
+127</manifest>

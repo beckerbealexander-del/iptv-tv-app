@@ -1,19 +1,15 @@
 package com.alex.iptvplayer.ui
 
-import android.content.Context
 import android.content.Intent
 import android.os.Bundle
-import android.text.Editable
-import android.text.TextWatcher
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.view.inputmethod.EditorInfo
-import android.view.inputmethod.InputMethodManager
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
@@ -37,7 +33,6 @@ class VodActivity : AppCompatActivity() {
     private lateinit var client: XtreamClient
     private var allCategories: List<Category> = emptyList()
     private var displayedCategories: List<Category> = emptyList()
-    private var currentFilter = LangFilter.AUTO_DE_RU_ADULT
     private var currentMovies: List<VodStream> = emptyList()
     private var rawCategoryMovies: List<VodStream> = emptyList()
     private var allMoviesGlobal: List<VodStream> = emptyList()
@@ -45,10 +40,20 @@ class VodActivity : AppCompatActivity() {
     private val categoryCache = HashMap<String, List<VodStream>>()
 
     private var currentSortMode: String = "DEFAULT"
+    private var currentSearchQuery: String? = null
 
     private var loadJob: Job? = null
-    private var searchJob: Job? = null
     private var heroJob: Job? = null
+
+    // Vollbild-Suche Launcher
+    private val searchLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == RESULT_OK) {
+            val query = result.data?.getStringExtra("SEARCH_QUERY")?.trim() ?: ""
+            if (query.isNotEmpty()) {
+                applySearchQuery(query)
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -69,17 +74,16 @@ class VodActivity : AppCompatActivity() {
             setItemViewCacheSize(80)
         }
 
-        binding.txtVodCategoryTitle.text = "👈 Wähle eine Kategorie oder nutze die Suche"
+        binding.btnOpenVodSearch.setOnClickListener {
+            val intent = Intent(this, SearchActivity::class.java).apply {
+                putExtra("SEARCH_TYPE", "VOD")
+            }
+            searchLauncher.launch(intent)
+        }
 
-        setupFilterButtons()
         setupSortButtons()
-        setupSearch()
         loadCategories()
         preloadGlobalCatalog()
-
-        binding.recyclerVodCategories.post {
-            binding.recyclerVodCategories.requestFocus()
-        }
     }
 
     private fun preloadGlobalCatalog() {
@@ -123,98 +127,49 @@ class VodActivity : AppCompatActivity() {
         }
     }
 
-    private fun setupSearch() {
-        binding.editVodSearch.isFocusable = true
-        binding.editVodSearch.isFocusableInTouchMode = false
-        binding.editVodSearch.setOnClickListener {
-            binding.editVodSearch.isFocusableInTouchMode = true
-            binding.editVodSearch.requestFocus()
-            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-            imm.showSoftInput(binding.editVodSearch, InputMethodManager.SHOW_IMPLICIT)
-        }
+    // 5. SUCHE: DYNAMISCHE KATEGORIE "🔍 Aktuelle Suche" AN INDEX 0
+    private fun applySearchQuery(query: String) {
+        currentSearchQuery = query
+        val searchCategory = Category(id = "CURRENT_SEARCH", name = "🔍 Aktuelle Suche")
+        val newCategories = mutableListOf(searchCategory)
+        newCategories.addAll(allCategories)
+        displayedCategories = newCategories
+        selectedCategoryId = "CURRENT_SEARCH"
 
-        binding.editVodSearch.setOnFocusChangeListener { _, hasFocus ->
-            if (!hasFocus) {
-                hideKeyboard()
-            }
-        }
-
-        binding.editVodSearch.setOnEditorActionListener { _, actionId, event ->
-            if (actionId == EditorInfo.IME_ACTION_SEARCH || actionId == EditorInfo.IME_ACTION_DONE || actionId == EditorInfo.IME_ACTION_GO ||
-                (event != null && event.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN)) {
-                hideKeyboard()
-                binding.recyclerVodGrid.requestFocus()
-                true
-            } else false
-        }
-
-        // 1. Typen-isolierte globale Suche: Durchsucht ausnahmslos ALLE Filme über alle Kategorien hinweg mit contains()
-        binding.editVodSearch.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                searchJob?.cancel()
-                val q = s?.toString()?.trim() ?: ""
-                searchJob = lifecycleScope.launch {
-                    delay(300)
-                    if (q.isEmpty()) {
-                        binding.txtVodCategoryTitle.text = "Filme"
-                        rawCategoryMovies = currentMovies
-                        applySorting(currentSortMode)
-                    } else {
-                        val pool = if (allMoviesGlobal.isNotEmpty()) allMoviesGlobal else currentMovies
-                        val filtered = pool.filter { it.name.contains(q, ignoreCase = true) }
-                        binding.txtVodCategoryTitle.text = "Suchergebnisse (${filtered.size})"
-                        rawCategoryMovies = filtered
-                        applySorting(currentSortMode)
-                    }
-                }
-            }
-            override fun afterTextChanged(s: Editable?) {}
-        })
-    }
-
-    private fun hideKeyboard() {
-        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-        imm.hideSoftInputFromWindow(binding.editVodSearch.windowToken, 0)
-        binding.editVodSearch.isFocusableInTouchMode = false
-        binding.editVodSearch.clearFocus()
-    }
-
-    // 2. Fokus-Erhalt beim Klick auf Filter (DE / RU / ALLE bleibt auf dem Filter-Button)
-    private fun setupFilterButtons() {
-        binding.btnVodFilterDe.setOnClickListener {
-            applyFilter(LangFilter.DE)
-            binding.btnVodFilterDe.requestFocus()
-        }
-        binding.btnVodFilterRu.setOnClickListener {
-            applyFilter(LangFilter.RU)
-            binding.btnVodFilterRu.requestFocus()
-        }
-        binding.btnVodFilterAll.setOnClickListener {
-            applyFilter(LangFilter.ALL)
-            binding.btnVodFilterAll.requestFocus()
-        }
-    }
-
-    private fun applyFilter(filter: LangFilter) {
-        currentFilter = filter
-        val filtered = client.filterCategories(allCategories, filter).toMutableList()
-        if (filtered.none { it.id == "ALL_MOVIES" }) {
-            filtered.add(0, Category(id = "ALL_MOVIES", name = "✨ Alle Filme"))
-        }
-        displayedCategories = filtered
-        binding.recyclerVodCategories.adapter = VodCategoryAdapter(filtered) { cat ->
+        binding.recyclerVodCategories.adapter = VodCategoryAdapter(newCategories) { cat ->
             loadMovies(cat)
         }
+
+        val pool = if (allMoviesGlobal.isNotEmpty()) allMoviesGlobal else currentMovies
+        val filtered = pool.filter { it.name.contains(query, ignoreCase = true) }
+        binding.txtVodCategoryTitle.text = "Suchergebnisse: „$query“ (${filtered.size})"
+        rawCategoryMovies = filtered
+        applySorting(currentSortMode)
+
+        // Fokus sofort auf das erste Suchergebnis
+        focusFirstMovie()
     }
 
     private fun loadCategories() {
         binding.progressVodCats.visibility = View.VISIBLE
         lifecycleScope.launch {
             try {
-                allCategories = client.getVodCategories()
+                val raw = client.getVodCategories()
+                val filtered = client.filterCategories(raw, LangFilter.AUTO_DE_RU_ADULT).toMutableList()
+                if (filtered.none { it.id == "ALL_MOVIES" }) {
+                    filtered.add(0, Category(id = "ALL_MOVIES", name = "✨ Alle Filme"))
+                }
+                allCategories = filtered
+                displayedCategories = filtered
                 binding.progressVodCats.visibility = View.GONE
-                applyFilter(currentFilter)
+                binding.recyclerVodCategories.adapter = VodCategoryAdapter(displayedCategories) { cat ->
+                    loadMovies(cat)
+                }
+
+                // 6. STANDARD-KATEGORIE: Beim Start immer "Alle Filme" vorauswählen und laden!
+                if (displayedCategories.isNotEmpty()) {
+                    loadMovies(displayedCategories[0])
+                }
             } catch (e: Exception) {
                 binding.progressVodCats.visibility = View.GONE
                 Toast.makeText(this@VodActivity, "Fehler: ${e.message}", Toast.LENGTH_SHORT).show()
@@ -222,10 +177,11 @@ class VodActivity : AppCompatActivity() {
         }
     }
 
+    // 6. KEIN SUCH-SPRUNG: Fokus springt immer auf das erste Media-Item der Kategorie (niemals Suchfeld)
     private fun loadMovies(category: Category) {
-        if (binding.editVodSearch.text.isNotEmpty()) {
-            binding.editVodSearch.setText("")
-            hideKeyboard()
+        if (category.id == "CURRENT_SEARCH" && currentSearchQuery != null) {
+            applySearchQuery(currentSearchQuery!!)
+            return
         }
 
         selectedCategoryId = category.id
@@ -237,6 +193,7 @@ class VodActivity : AppCompatActivity() {
             rawCategoryMovies = cached
             binding.progressVod.visibility = View.GONE
             applySorting(currentSortMode)
+            focusFirstMovie()
             return
         }
 
@@ -249,10 +206,18 @@ class VodActivity : AppCompatActivity() {
                 rawCategoryMovies = list
                 binding.progressVod.visibility = View.GONE
                 applySorting(currentSortMode)
+                focusFirstMovie()
             } catch (e: Exception) {
                 binding.progressVod.visibility = View.GONE
                 Toast.makeText(this@VodActivity, "Fehler beim Laden: ${e.message}", Toast.LENGTH_SHORT).show()
             }
+        }
+    }
+
+    private fun focusFirstMovie() {
+        binding.recyclerVodGrid.scrollToPosition(0)
+        binding.recyclerVodGrid.post {
+            binding.recyclerVodGrid.findViewHolderForAdapterPosition(0)?.itemView?.requestFocus()
         }
     }
 
@@ -300,7 +265,7 @@ class VodActivity : AppCompatActivity() {
         }
     }
 
-    // --- Hard-Lock D-Pad Navigation in der Grid ---
+    // --- Hard-Lock D-Pad Navigation in der Grid & Sortierleiste ---
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.action == KeyEvent.ACTION_DOWN) {
             val focused = currentFocus
@@ -317,6 +282,7 @@ class VodActivity : AppCompatActivity() {
                     }
                     KeyEvent.KEYCODE_DPAD_LEFT -> {
                         if (gridPos % 5 == 0) {
+                            // Ganz links in der Grid -> springt exakt auf die ausgewählte Kategorie
                             focusSelectedCategory()
                         } else {
                             val target = gridPos - 1
@@ -332,7 +298,6 @@ class VodActivity : AppCompatActivity() {
                         return true
                     }
                     KeyEvent.KEYCODE_DPAD_DOWN -> {
-                        // Strikter Hard-Lock: Niemals aus der Grid nach unten ausbrechen
                         val nextPos = gridPos + 5
                         if (nextPos < total) {
                             binding.recyclerVodGrid.scrollToPosition(nextPos)
@@ -340,10 +305,9 @@ class VodActivity : AppCompatActivity() {
                                 binding.recyclerVodGrid.findViewHolderForAdapterPosition(nextPos)?.itemView?.requestFocus()
                             }
                         }
-                        return true
+                        return true // Hard-Lock unten
                     }
                     KeyEvent.KEYCODE_DPAD_UP -> {
-                        // Strikter Hard-Lock: Oben in die Sortierleiste, niemals horizontal ausbrechen
                         val prevPos = gridPos - 5
                         if (prevPos >= 0) {
                             binding.recyclerVodGrid.scrollToPosition(prevPos)
@@ -351,10 +315,19 @@ class VodActivity : AppCompatActivity() {
                                 binding.recyclerVodGrid.findViewHolderForAdapterPosition(prevPos)?.itemView?.requestFocus()
                             }
                         } else {
+                            // Aus der ersten Reihe nach oben in die integrierte Sortierleiste
                             binding.btnSortDefault.requestFocus()
                         }
                         return true
                     }
+                }
+            } else if (isViewInView(focused, binding.layoutVodSortBar)) {
+                if (event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+                    focusFirstMovie()
+                    return true
+                } else if (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT && focused == binding.btnSortDefault) {
+                    focusSelectedCategory()
+                    return true
                 }
             }
         }
@@ -414,8 +387,7 @@ class VodActivity : AppCompatActivity() {
                             return@setOnKeyListener true
                         }
                         KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                            binding.recyclerVodGrid.findViewHolderForAdapterPosition(0)?.itemView?.requestFocus()
-                                ?: binding.recyclerVodGrid.requestFocus()
+                            focusFirstMovie()
                             return@setOnKeyListener true
                         }
                         KeyEvent.KEYCODE_DPAD_LEFT -> {
@@ -423,13 +395,13 @@ class VodActivity : AppCompatActivity() {
                         }
                         KeyEvent.KEYCODE_DPAD_UP -> {
                             if (position == 0) {
-                                binding.btnVodFilterDe.requestFocus()
+                                binding.btnOpenVodSearch.requestFocus()
                                 return@setOnKeyListener true
                             }
                         }
                         KeyEvent.KEYCODE_DPAD_DOWN -> {
                             if (position == items.size - 1) {
-                                return@setOnKeyListener true // Hard-Lock unten
+                                return@setOnKeyListener true
                             }
                         }
                     }

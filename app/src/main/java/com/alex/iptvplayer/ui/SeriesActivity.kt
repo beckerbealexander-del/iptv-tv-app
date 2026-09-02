@@ -1,19 +1,15 @@
 package com.alex.iptvplayer.ui
 
-import android.content.Context
 import android.content.Intent
 import android.os.Bundle
-import android.text.Editable
-import android.text.TextWatcher
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.view.inputmethod.EditorInfo
-import android.view.inputmethod.InputMethodManager
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
@@ -37,7 +33,6 @@ class SeriesActivity : AppCompatActivity() {
     private lateinit var client: XtreamClient
     private var allCategories: List<Category> = emptyList()
     private var displayedCategories: List<Category> = emptyList()
-    private var currentFilter = LangFilter.AUTO_DE_RU_ADULT
     private var currentSeries: List<SeriesItem> = emptyList()
     private var rawCategorySeries: List<SeriesItem> = emptyList()
     private var allSeriesGlobal: List<SeriesItem> = emptyList()
@@ -45,10 +40,20 @@ class SeriesActivity : AppCompatActivity() {
     private val categoryCache = HashMap<String, List<SeriesItem>>()
 
     private var currentSortMode: String = "DEFAULT"
+    private var currentSearchQuery: String? = null
 
     private var loadJob: Job? = null
-    private var searchJob: Job? = null
     private var heroJob: Job? = null
+
+    // Vollbild-Suche Launcher
+    private val searchLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == RESULT_OK) {
+            val query = result.data?.getStringExtra("SEARCH_QUERY")?.trim() ?: ""
+            if (query.isNotEmpty()) {
+                applySearchQuery(query)
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -69,17 +74,16 @@ class SeriesActivity : AppCompatActivity() {
             setItemViewCacheSize(80)
         }
 
-        binding.txtSeriesCategoryTitle.text = "👈 Wähle eine Kategorie oder nutze die Suche"
+        binding.btnOpenSeriesSearch.setOnClickListener {
+            val intent = Intent(this, SearchActivity::class.java).apply {
+                putExtra("SEARCH_TYPE", "SERIES")
+            }
+            searchLauncher.launch(intent)
+        }
 
-        setupFilterButtons()
         setupSortButtons()
-        setupSearch()
         loadCategories()
         preloadGlobalCatalog()
-
-        binding.recyclerSeriesCategories.post {
-            binding.recyclerSeriesCategories.requestFocus()
-        }
     }
 
     private fun preloadGlobalCatalog() {
@@ -123,98 +127,49 @@ class SeriesActivity : AppCompatActivity() {
         }
     }
 
-    private fun setupSearch() {
-        binding.editSeriesSearch.isFocusable = true
-        binding.editSeriesSearch.isFocusableInTouchMode = false
-        binding.editSeriesSearch.setOnClickListener {
-            binding.editSeriesSearch.isFocusableInTouchMode = true
-            binding.editSeriesSearch.requestFocus()
-            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-            imm.showSoftInput(binding.editSeriesSearch, InputMethodManager.SHOW_IMPLICIT)
-        }
+    // 5. SUCHE: DYNAMISCHE KATEGORIE "🔍 Aktuelle Suche" AN INDEX 0
+    private fun applySearchQuery(query: String) {
+        currentSearchQuery = query
+        val searchCategory = Category(id = "CURRENT_SEARCH", name = "🔍 Aktuelle Suche")
+        val newCategories = mutableListOf(searchCategory)
+        newCategories.addAll(allCategories)
+        displayedCategories = newCategories
+        selectedCategoryId = "CURRENT_SEARCH"
 
-        binding.editSeriesSearch.setOnFocusChangeListener { _, hasFocus ->
-            if (!hasFocus) {
-                hideKeyboard()
-            }
-        }
-
-        binding.editSeriesSearch.setOnEditorActionListener { _, actionId, event ->
-            if (actionId == EditorInfo.IME_ACTION_SEARCH || actionId == EditorInfo.IME_ACTION_DONE || actionId == EditorInfo.IME_ACTION_GO ||
-                (event != null && event.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN)) {
-                hideKeyboard()
-                binding.recyclerSeriesGrid.requestFocus()
-                true
-            } else false
-        }
-
-        // 1. Typen-isolierte globale Suche: Durchsucht ausnahmslos ALLE Serien über alle Kategorien hinweg mit contains()
-        binding.editSeriesSearch.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                searchJob?.cancel()
-                val q = s?.toString()?.trim() ?: ""
-                searchJob = lifecycleScope.launch {
-                    delay(300)
-                    if (q.isEmpty()) {
-                        binding.txtSeriesCategoryTitle.text = "Serien"
-                        rawCategorySeries = currentSeries
-                        applySorting(currentSortMode)
-                    } else {
-                        val pool = if (allSeriesGlobal.isNotEmpty()) allSeriesGlobal else currentSeries
-                        val filtered = pool.filter { it.name.contains(q, ignoreCase = true) }
-                        binding.txtSeriesCategoryTitle.text = "Suchergebnisse (${filtered.size})"
-                        rawCategorySeries = filtered
-                        applySorting(currentSortMode)
-                    }
-                }
-            }
-            override fun afterTextChanged(s: Editable?) {}
-        })
-    }
-
-    private fun hideKeyboard() {
-        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-        imm.hideSoftInputFromWindow(binding.editSeriesSearch.windowToken, 0)
-        binding.editSeriesSearch.isFocusableInTouchMode = false
-        binding.editSeriesSearch.clearFocus()
-    }
-
-    // 2. Fokus-Erhalt beim Klick auf Filter (DE / RU / ALLE bleibt auf dem Filter-Button)
-    private fun setupFilterButtons() {
-        binding.btnSeriesFilterDe.setOnClickListener {
-            applyFilter(LangFilter.DE)
-            binding.btnSeriesFilterDe.requestFocus()
-        }
-        binding.btnSeriesFilterRu.setOnClickListener {
-            applyFilter(LangFilter.RU)
-            binding.btnSeriesFilterRu.requestFocus()
-        }
-        binding.btnSeriesFilterAll.setOnClickListener {
-            applyFilter(LangFilter.ALL)
-            binding.btnSeriesFilterAll.requestFocus()
-        }
-    }
-
-    private fun applyFilter(filter: LangFilter) {
-        currentFilter = filter
-        val filtered = client.filterCategories(allCategories, filter).toMutableList()
-        if (filtered.none { it.id == "ALL_SERIES" }) {
-            filtered.add(0, Category(id = "ALL_SERIES", name = "✨ Alle Serien"))
-        }
-        displayedCategories = filtered
-        binding.recyclerSeriesCategories.adapter = SeriesCategoryAdapter(filtered) { cat ->
+        binding.recyclerSeriesCategories.adapter = SeriesCategoryAdapter(newCategories) { cat ->
             loadSeries(cat)
         }
+
+        val pool = if (allSeriesGlobal.isNotEmpty()) allSeriesGlobal else currentSeries
+        val filtered = pool.filter { it.name.contains(query, ignoreCase = true) }
+        binding.txtSeriesCategoryTitle.text = "Suchergebnisse: „$query“ (${filtered.size})"
+        rawCategorySeries = filtered
+        applySorting(currentSortMode)
+
+        // Fokus sofort auf das erste Suchergebnis
+        focusFirstSeries()
     }
 
     private fun loadCategories() {
         binding.progressSeriesCats.visibility = View.VISIBLE
         lifecycleScope.launch {
             try {
-                allCategories = client.getSeriesCategories()
+                val raw = client.getSeriesCategories()
+                val filtered = client.filterCategories(raw, LangFilter.AUTO_DE_RU_ADULT).toMutableList()
+                if (filtered.none { it.id == "ALL_SERIES" }) {
+                    filtered.add(0, Category(id = "ALL_SERIES", name = "✨ Alle Serien"))
+                }
+                allCategories = filtered
+                displayedCategories = filtered
                 binding.progressSeriesCats.visibility = View.GONE
-                applyFilter(currentFilter)
+                binding.recyclerSeriesCategories.adapter = SeriesCategoryAdapter(displayedCategories) { cat ->
+                    loadSeries(cat)
+                }
+
+                // 6. STANDARD-KATEGORIE: Beim Start immer "Alle Serien" vorauswählen und laden!
+                if (displayedCategories.isNotEmpty()) {
+                    loadSeries(displayedCategories[0])
+                }
             } catch (e: Exception) {
                 binding.progressSeriesCats.visibility = View.GONE
                 Toast.makeText(this@SeriesActivity, "Fehler: ${e.message}", Toast.LENGTH_SHORT).show()
@@ -222,10 +177,11 @@ class SeriesActivity : AppCompatActivity() {
         }
     }
 
+    // 6. KEIN SUCH-SPRUNG: Fokus springt immer auf das erste Media-Item der Kategorie (niemals Suchfeld)
     private fun loadSeries(category: Category) {
-        if (binding.editSeriesSearch.text.isNotEmpty()) {
-            binding.editSeriesSearch.setText("")
-            hideKeyboard()
+        if (category.id == "CURRENT_SEARCH" && currentSearchQuery != null) {
+            applySearchQuery(currentSearchQuery!!)
+            return
         }
 
         selectedCategoryId = category.id
@@ -237,6 +193,7 @@ class SeriesActivity : AppCompatActivity() {
             rawCategorySeries = cached
             binding.progressSeries.visibility = View.GONE
             applySorting(currentSortMode)
+            focusFirstSeries()
             return
         }
 
@@ -249,10 +206,18 @@ class SeriesActivity : AppCompatActivity() {
                 rawCategorySeries = list
                 binding.progressSeries.visibility = View.GONE
                 applySorting(currentSortMode)
+                focusFirstSeries()
             } catch (e: Exception) {
                 binding.progressSeries.visibility = View.GONE
                 Toast.makeText(this@SeriesActivity, "Fehler beim Laden: ${e.message}", Toast.LENGTH_SHORT).show()
             }
+        }
+    }
+
+    private fun focusFirstSeries() {
+        binding.recyclerSeriesGrid.scrollToPosition(0)
+        binding.recyclerSeriesGrid.post {
+            binding.recyclerSeriesGrid.findViewHolderForAdapterPosition(0)?.itemView?.requestFocus()
         }
     }
 
@@ -296,7 +261,7 @@ class SeriesActivity : AppCompatActivity() {
         }
     }
 
-    // --- Hard-Lock D-Pad Navigation in der Grid ---
+    // --- Hard-Lock D-Pad Navigation in der Grid & Sortierleiste ---
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.action == KeyEvent.ACTION_DOWN) {
             val focused = currentFocus
@@ -313,6 +278,7 @@ class SeriesActivity : AppCompatActivity() {
                     }
                     KeyEvent.KEYCODE_DPAD_LEFT -> {
                         if (gridPos % 5 == 0) {
+                            // Ganz links in der Grid -> springt exakt auf die ausgewählte Kategorie
                             focusSelectedCategory()
                         } else {
                             val target = gridPos - 1
@@ -328,7 +294,6 @@ class SeriesActivity : AppCompatActivity() {
                         return true
                     }
                     KeyEvent.KEYCODE_DPAD_DOWN -> {
-                        // Strikter Hard-Lock: Niemals aus der Grid nach unten ausbrechen
                         val nextPos = gridPos + 5
                         if (nextPos < total) {
                             binding.recyclerSeriesGrid.scrollToPosition(nextPos)
@@ -336,10 +301,9 @@ class SeriesActivity : AppCompatActivity() {
                                 binding.recyclerSeriesGrid.findViewHolderForAdapterPosition(nextPos)?.itemView?.requestFocus()
                             }
                         }
-                        return true
+                        return true // Hard-Lock unten
                     }
                     KeyEvent.KEYCODE_DPAD_UP -> {
-                        // Strikter Hard-Lock: Oben in die Sortierleiste, niemals horizontal ausbrechen
                         val prevPos = gridPos - 5
                         if (prevPos >= 0) {
                             binding.recyclerSeriesGrid.scrollToPosition(prevPos)
@@ -347,10 +311,19 @@ class SeriesActivity : AppCompatActivity() {
                                 binding.recyclerSeriesGrid.findViewHolderForAdapterPosition(prevPos)?.itemView?.requestFocus()
                             }
                         } else {
+                            // Aus der ersten Reihe nach oben in die integrierte Sortierleiste
                             binding.btnSeriesSortDefault.requestFocus()
                         }
                         return true
                     }
+                }
+            } else if (isViewInView(focused, binding.layoutSeriesSortBar)) {
+                if (event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+                    focusFirstSeries()
+                    return true
+                } else if (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT && focused == binding.btnSeriesSortDefault) {
+                    focusSelectedCategory()
+                    return true
                 }
             }
         }
@@ -410,8 +383,7 @@ class SeriesActivity : AppCompatActivity() {
                             return@setOnKeyListener true
                         }
                         KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                            binding.recyclerSeriesGrid.findViewHolderForAdapterPosition(0)?.itemView?.requestFocus()
-                                ?: binding.recyclerSeriesGrid.requestFocus()
+                            focusFirstSeries()
                             return@setOnKeyListener true
                         }
                         KeyEvent.KEYCODE_DPAD_LEFT -> {
@@ -419,13 +391,13 @@ class SeriesActivity : AppCompatActivity() {
                         }
                         KeyEvent.KEYCODE_DPAD_UP -> {
                             if (position == 0) {
-                                binding.btnSeriesFilterDe.requestFocus()
+                                binding.btnOpenSeriesSearch.requestFocus()
                                 return@setOnKeyListener true
                             }
                         }
                         KeyEvent.KEYCODE_DPAD_DOWN -> {
                             if (position == items.size - 1) {
-                                return@setOnKeyListener true // Hard-Lock unten
+                                return@setOnKeyListener true
                             }
                         }
                     }

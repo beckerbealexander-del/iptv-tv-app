@@ -4,8 +4,6 @@ package com.alex.iptvplayer.databinding;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Button;
-import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
@@ -25,16 +23,7 @@ public final class ActivityLiveTvBinding implements ViewBinding {
   private final LinearLayout rootView;
 
   @NonNull
-  public final Button btnLiveFilterAll;
-
-  @NonNull
-  public final Button btnLiveFilterDe;
-
-  @NonNull
-  public final Button btnLiveFilterRu;
-
-  @NonNull
-  public final EditText editLiveSearch;
+  public final TextView btnOpenLiveSearch;
 
   @NonNull
   public final PlayerView livePipPlayerView;
@@ -63,18 +52,14 @@ public final class ActivityLiveTvBinding implements ViewBinding {
   @NonNull
   public final TextView txtPreviewTitle;
 
-  private ActivityLiveTvBinding(@NonNull LinearLayout rootView, @NonNull Button btnLiveFilterAll,
-      @NonNull Button btnLiveFilterDe, @NonNull Button btnLiveFilterRu,
-      @NonNull EditText editLiveSearch, @NonNull PlayerView livePipPlayerView,
-      @NonNull ProgressBar progressCategories, @NonNull ProgressBar progressChannels,
-      @NonNull RecyclerView recyclerCategories, @NonNull RecyclerView recyclerChannels,
-      @NonNull TextView txtCurrentLiveTime, @NonNull TextView txtPreviewDesc,
-      @NonNull TextView txtPreviewTime, @NonNull TextView txtPreviewTitle) {
+  private ActivityLiveTvBinding(@NonNull LinearLayout rootView, @NonNull TextView btnOpenLiveSearch,
+      @NonNull PlayerView livePipPlayerView, @NonNull ProgressBar progressCategories,
+      @NonNull ProgressBar progressChannels, @NonNull RecyclerView recyclerCategories,
+      @NonNull RecyclerView recyclerChannels, @NonNull TextView txtCurrentLiveTime,
+      @NonNull TextView txtPreviewDesc, @NonNull TextView txtPreviewTime,
+      @NonNull TextView txtPreviewTitle) {
     this.rootView = rootView;
-    this.btnLiveFilterAll = btnLiveFilterAll;
-    this.btnLiveFilterDe = btnLiveFilterDe;
-    this.btnLiveFilterRu = btnLiveFilterRu;
-    this.editLiveSearch = editLiveSearch;
+    this.btnOpenLiveSearch = btnOpenLiveSearch;
     this.livePipPlayerView = livePipPlayerView;
     this.progressCategories = progressCategories;
     this.progressChannels = progressChannels;
@@ -113,27 +98,9 @@ public final class ActivityLiveTvBinding implements ViewBinding {
     // This is done to optimize the compiled bytecode for size and performance.
     int id;
     missingId: {
-      id = R.id.btnLiveFilterAll;
-      Button btnLiveFilterAll = ViewBindings.findChildViewById(rootView, id);
-      if (btnLiveFilterAll == null) {
-        break missingId;
-      }
-
-      id = R.id.btnLiveFilterDe;
-      Button btnLiveFilterDe = ViewBindings.findChildViewById(rootView, id);
-      if (btnLiveFilterDe == null) {
-        break missingId;
-      }
-
-      id = R.id.btnLiveFilterRu;
-      Button btnLiveFilterRu = ViewBindings.findChildViewById(rootView, id);
-      if (btnLiveFilterRu == null) {
-        break missingId;
-      }
-
-      id = R.id.editLiveSearch;
-      EditText editLiveSearch = ViewBindings.findChildViewById(rootView, id);
-      if (editLiveSearch == null) {
+      id = R.id.btnOpenLiveSearch;
+      TextView btnOpenLiveSearch = ViewBindings.findChildViewById(rootView, id);
+      if (btnOpenLiveSearch == null) {
         break missingId;
       }
 
@@ -191,10 +158,9 @@ public final class ActivityLiveTvBinding implements ViewBinding {
         break missingId;
       }
 
-      return new ActivityLiveTvBinding((LinearLayout) rootView, btnLiveFilterAll, btnLiveFilterDe,
-          btnLiveFilterRu, editLiveSearch, livePipPlayerView, progressCategories, progressChannels,
-          recyclerCategories, recyclerChannels, txtCurrentLiveTime, txtPreviewDesc, txtPreviewTime,
-          txtPreviewTitle);
+      return new ActivityLiveTvBinding((LinearLayout) rootView, btnOpenLiveSearch,
+          livePipPlayerView, progressCategories, progressChannels, recyclerCategories,
+          recyclerChannels, txtCurrentLiveTime, txtPreviewDesc, txtPreviewTime, txtPreviewTitle);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));
