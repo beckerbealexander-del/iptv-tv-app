@@ -3485,6 +3485,7 @@ drawable btn_radio_off_to_on_mtrl_animation
 drawable btn_radio_on_mtrl
 drawable btn_radio_on_to_off_mtrl_animation
 drawable card_focus_selector
+drawable category_item_bg
 drawable design_fab_background
 drawable design_ic_visibility
 drawable design_ic_visibility_off
@@ -3950,6 +3951,7 @@ id easeInOut
 id easeOut
 id edge
 id editPassword
+id editSearchOverlayQuery
 id editSearchQuery
 id editServerUrl
 id editUsername
@@ -4110,8 +4112,11 @@ id jumpToStart
 id label
 id labeled
 id layout
+id layoutFullscreenOsd
 id layoutOverview
 id layoutSearchHistory
+id layoutSearchOverlay
+id layoutSearchOverlayHistory
 id layoutSectionChannelHistory
 id layoutSectionMovieHistory
 id layoutSectionSeriesHistory
@@ -4312,9 +4317,11 @@ id postLayout
 id pressed
 id progressCategories
 id progressChannels
+id progressCurrentProgram
 id progressEpisodeWatched
 id progressEpisodes
 id progressHistoryBar
+id progressOsdProgram
 id progressSeries
 id progressSeriesCats
 id progressVod
@@ -4331,6 +4338,7 @@ id recyclerChannels
 id recyclerEpisodes
 id recyclerMovieHistory
 id recyclerSearchHistory
+id recyclerSearchOverlayHistory
 id recyclerSeasons
 id recyclerSeriesCategories
 id recyclerSeriesGrid
@@ -4496,6 +4504,12 @@ id txtHistoryTitle
 id txtNoChannelHistory
 id txtNoMovieHistory
 id txtNoSeriesHistory
+id txtOsdChannelName
+id txtOsdChannelNum
+id txtOsdProgramDesc
+id txtOsdProgramTime
+id txtOsdProgramTitle
+id txtOsdTechSpecs
 id txtPlayerSubtitle
 id txtPlayerTitle
 id txtPosterTitle

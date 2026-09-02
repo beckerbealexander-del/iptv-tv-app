@@ -1,16 +1,20 @@
 package com.alex.iptvplayer.ui
 
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
@@ -29,10 +33,10 @@ import com.alex.iptvplayer.util.PlayerUtils
 import com.bumptech.glide.Glide
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
-// Datenhalter für Sender inklusive gecachter EPG-Daten
 data class ChannelWithEpg(
     val stream: LiveStream,
     var epgList: List<EpgProgram> = emptyList()
@@ -41,7 +45,6 @@ data class ChannelWithEpg(
 class LiveTvActivity : AppCompatActivity() {
 
     companion object {
-        // 3. In-Memory-Cache für Sender und EPG: Sobald geladen, bleibt alles persistent im Speicher!
         val categoryChannelMap = HashMap<String, List<ChannelWithEpg>>()
     }
 
@@ -54,26 +57,28 @@ class LiveTvActivity : AppCompatActivity() {
     private var currentChannelItems: List<ChannelWithEpg> = emptyList()
     private var allLiveStreamsGlobal: List<LiveStream> = emptyList()
     private var selectedCategoryId: String? = null
-    private var currentChannelIndex: Int = 0
+
+    // 5. Aktiver Playlisten-Kontext (z. B. Suchergebnisse vs. Kategorie)
+    private var activePlaylist: List<ChannelWithEpg> = emptyList()
+    private var activePlaylistIndex: Int = 0
 
     private var categoryAdapter: CategoryAdapter? = null
     private var channelAdapter: ChannelAdapter? = null
 
     private var isInitialLoad = true
     private var isFullscreen = false
+    private var isSearchOverlayOpen = false
     private var currentSearchQuery: String? = null
 
-    // Gemeinsamer Player für Mini-PIP und Vollbild (Nahtloser Übergang ohne Rebuffering)
+    // Gemeinsamer Player für Mini-PIP und Vollbild
     private var livePlayer: ExoPlayer? = null
     private var activeStream: LiveStream? = null
+    private var activeStreamEpg: EpgProgram? = null
 
-    private val searchLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == RESULT_OK) {
-            val query = result.data?.getStringExtra("SEARCH_QUERY")?.trim() ?: ""
-            if (query.isNotEmpty()) {
-                applySearchQuery(query)
-            }
-        }
+    // 4. OSD Timer
+    private val osdHandler = Handler(Looper.getMainLooper())
+    private val hideOsdRunnable = Runnable {
+        binding.layoutFullscreenOsd.visibility = View.GONE
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -101,6 +106,7 @@ class LiveTvActivity : AppCompatActivity() {
             adapter = channelAdapter
         }
 
+        setupSearchOverlay()
         setupSearchAndPipRouting()
         setupPipFocusVisuals()
 
@@ -119,6 +125,10 @@ class LiveTvActivity : AppCompatActivity() {
                 binding.pipFocusBorder.visibility = if (hasFocus) View.VISIBLE else View.GONE
                 if (hasFocus) {
                     binding.livePlayerContainer.animate().scaleX(1.05f).scaleY(1.05f).setDuration(150).start()
+                    // 3. Wenn PiP fokussiert wird, zeige sofort die Details des laufenden Streams!
+                    if (activeStream != null) {
+                        updatePipProgramInfo(activeStream!!, activeStreamEpg)
+                    }
                 } else {
                     binding.livePlayerContainer.animate().scaleX(1.0f).scaleY(1.0f).setDuration(150).start()
                 }
@@ -130,18 +140,83 @@ class LiveTvActivity : AppCompatActivity() {
         }
     }
 
-    // 2. Definiertes Fokus-Routing zwischen Suche, PiP und Listen
-    private fun setupSearchAndPipRouting() {
+    // 2. Integrierter Such-Overlay (PIP läuft oben rechts unterbrechungsfrei weiter!)
+    private fun setupSearchOverlay() {
         binding.btnOpenLiveSearch.setOnClickListener {
-            val intent = Intent(this, SearchActivity::class.java).apply {
-                putExtra("SEARCH_TYPE", "LIVE")
-            }
-            searchLauncher.launch(intent)
+            openSearchOverlay()
         }
 
-        // Vom Suchfeld:
-        // - DPAD_RIGHT -> direkt in den PiP
-        // - DPAD_DOWN -> in die Kategorienliste
+        binding.editSearchOverlayQuery.setOnEditorActionListener { _, actionId, event ->
+            if (actionId == EditorInfo.IME_ACTION_SEARCH || actionId == EditorInfo.IME_ACTION_DONE || actionId == EditorInfo.IME_ACTION_GO ||
+                (event != null && event.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN)) {
+                val q = binding.editSearchOverlayQuery.text.toString().trim()
+                if (q.isNotEmpty()) {
+                    submitSearchQuery(q)
+                }
+                true
+            } else false
+        }
+
+        binding.editSearchOverlayQuery.setOnKeyListener { _, keyCode, event ->
+            if (event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+                val holder = binding.recyclerSearchOverlayHistory.findViewHolderForAdapterPosition(0)
+                if (holder != null) {
+                    holder.itemView.requestFocus()
+                    return@setOnKeyListener true
+                }
+            }
+            false
+        }
+
+        binding.recyclerSearchOverlayHistory.layoutManager =
+            LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
+    }
+
+    private fun openSearchOverlay() {
+        isSearchOverlayOpen = true
+        binding.layoutSearchOverlay.visibility = View.VISIBLE
+        binding.editSearchOverlayQuery.setText("")
+        loadSearchHistory()
+
+        binding.editSearchOverlayQuery.post {
+            binding.editSearchOverlayQuery.requestFocus()
+            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+            imm.showSoftInput(binding.editSearchOverlayQuery, InputMethodManager.SHOW_IMPLICIT)
+        }
+    }
+
+    private fun closeSearchOverlay() {
+        isSearchOverlayOpen = false
+        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+        imm.hideSoftInputFromWindow(binding.editSearchOverlayQuery.windowToken, 0)
+        binding.layoutSearchOverlay.visibility = View.GONE
+        binding.btnOpenLiveSearch.requestFocus()
+    }
+
+    private fun loadSearchHistory() {
+        val history = historyManager.getSearchHistory("LIVE")
+        if (history.isEmpty()) {
+            binding.layoutSearchOverlayHistory.visibility = View.GONE
+        } else {
+            binding.layoutSearchOverlayHistory.visibility = View.VISIBLE
+            binding.recyclerSearchOverlayHistory.adapter = HistoryChipAdapter(history) { query ->
+                submitSearchQuery(query)
+            }
+        }
+    }
+
+    private fun submitSearchQuery(query: String) {
+        historyManager.addSearchQuery("LIVE", query)
+        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+        imm.hideSoftInputFromWindow(binding.editSearchOverlayQuery.windowToken, 0)
+        binding.layoutSearchOverlay.visibility = View.GONE
+        isSearchOverlayOpen = false
+
+        applySearchQuery(query)
+    }
+
+    // 2. Definiertes Fokus-Routing zwischen Suche, PiP und Listen
+    private fun setupSearchAndPipRouting() {
         binding.btnOpenLiveSearch.setOnKeyListener { _, keyCode, event ->
             if (event.action == KeyEvent.ACTION_DOWN) {
                 when (keyCode) {
@@ -159,10 +234,6 @@ class LiveTvActivity : AppCompatActivity() {
             false
         }
 
-        // Vom PiP:
-        // - DPAD_DOWN -> zurück auf das erste Element der Senderliste
-        // - DPAD_LEFT -> zurück auf das Suchfeld
-        // - DPAD_CENTER / ENTER -> Vollbildmodus
         binding.livePlayerContainer.setOnClickListener {
             if (!isFullscreen) setFullscreenMode()
         }
@@ -222,12 +293,16 @@ class LiveTvActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        osdHandler.removeCallbacks(hideOsdRunnable)
         livePlayer?.release()
         livePlayer = null
     }
 
     private fun playLiveStream(stream: LiveStream) {
-        if (activeStream?.streamId == stream.streamId && livePlayer?.isPlaying == true) return
+        if (activeStream?.streamId == stream.streamId && livePlayer?.isPlaying == true) {
+            updatePipProgramInfo(stream, activeStreamEpg)
+            return
+        }
         activeStream = stream
         historyManager.saveLiveChannel(stream)
 
@@ -236,6 +311,60 @@ class LiveTvActivity : AppCompatActivity() {
         livePlayer?.setMediaItem(mediaItem)
         livePlayer?.prepare()
         livePlayer?.playWhenReady = true
+
+        // 3. EPG für den aktuellen Stream laden & Info aktualisieren
+        lifecycleScope.launch {
+            val cachedEpg = currentChannelItems.firstOrNull { it.stream.streamId == stream.streamId }?.epgList
+            val epg = if (!cachedEpg.isNullOrEmpty()) cachedEpg else client.getEpg(stream.streamId)
+            activeStreamEpg = epg.firstOrNull()
+            updatePipProgramInfo(stream, activeStreamEpg)
+            if (isFullscreen) {
+                updateOsdContent(stream, activeStreamEpg)
+            }
+        }
+    }
+
+    // 3. Programminfo rechts neben dem Mini-Player
+    private fun updatePipProgramInfo(stream: LiveStream, program: EpgProgram?) {
+        if (program != null) {
+            binding.txtPreviewTitle.text = "${stream.name} – ${program.title}"
+            binding.txtPreviewTime.text = "${program.start} - ${program.end}"
+            binding.txtPreviewDesc.text = if (program.description.isNotEmpty()) program.description else "Keine Programmbeschreibung vorhanden."
+
+            val progress = calculateProgress(program.start, program.end)
+            binding.progressCurrentProgram.progress = progress
+            binding.progressCurrentProgram.visibility = View.VISIBLE
+        } else {
+            binding.txtPreviewTitle.text = stream.name
+            binding.txtPreviewTime.text = "🔴 LIVE"
+            binding.txtPreviewDesc.text = "Drücke OK auf der Fernbedienung, um den Sender im Vollbild zu starten."
+            binding.progressCurrentProgram.visibility = View.GONE
+        }
+    }
+
+    private fun calculateProgress(start: String, end: String): Int {
+        try {
+            val sdf = SimpleDateFormat("HH:mm", Locale.getDefault())
+            val cal = Calendar.getInstance()
+            val now = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
+
+            val sCal = Calendar.getInstance().apply { time = sdf.parse(start) ?: return 50 }
+            val sMin = sCal.get(Calendar.HOUR_OF_DAY) * 60 + sCal.get(Calendar.MINUTE)
+
+            val eCal = Calendar.getInstance().apply { time = sdf.parse(end) ?: return 50 }
+            var eMin = eCal.get(Calendar.HOUR_OF_DAY) * 60 + eCal.get(Calendar.MINUTE)
+            if (eMin <= sMin) eMin += 24 * 60
+
+            var curMin = now
+            if (curMin < sMin && eMin > 24 * 60) curMin += 24 * 60
+
+            val total = eMin - sMin
+            if (total <= 0) return 50
+            val current = curMin - sMin
+            return ((current.toFloat() / total.toFloat()) * 100).toInt().coerceIn(0, 100)
+        } catch (e: Exception) {
+            return 50
+        }
     }
 
     private fun updatePipPosition() {
@@ -279,13 +408,74 @@ class LiveTvActivity : AppCompatActivity() {
         binding.livePlayerContainer.layoutParams = lp
         binding.livePlayerContainer.bringToFront()
         binding.livePlayerContainer.requestFocus()
-        binding.livePlayerView.useController = true
+        binding.livePlayerView.useController = false
+
+        // 4. Zeige OSD beim Eintritt in den Vollbildmodus für 5 Sekunden
+        showOsd()
     }
 
     private fun setMiniPipMode() {
         isFullscreen = false
+        binding.layoutFullscreenOsd.visibility = View.GONE
+        osdHandler.removeCallbacks(hideOsdRunnable)
         updatePipPosition()
-        focusCurrentChannel()
+        focusTargetChannel(activePlaylistIndex)
+    }
+
+    // 4. Player-Info-Overlay (OSD) mit Tech-Specs
+    private fun showOsd() {
+        osdHandler.removeCallbacks(hideOsdRunnable)
+        if (activeStream != null) {
+            updateOsdContent(activeStream!!, activeStreamEpg)
+        }
+        binding.layoutFullscreenOsd.visibility = View.VISIBLE
+        binding.layoutFullscreenOsd.bringToFront()
+        osdHandler.postDelayed(hideOsdRunnable, 5000)
+    }
+
+    private fun toggleOsd() {
+        if (binding.layoutFullscreenOsd.visibility == View.VISIBLE) {
+            osdHandler.removeCallbacks(hideOsdRunnable)
+            binding.layoutFullscreenOsd.visibility = View.GONE
+        } else {
+            showOsd()
+        }
+    }
+
+    private fun updateOsdContent(stream: LiveStream, program: EpgProgram?) {
+        binding.txtOsdChannelNum.text = "${activePlaylistIndex + 1}"
+        binding.txtOsdChannelName.text = stream.name
+
+        // Technische Stream-Metriken aus ExoPlayer auslesen
+        val videoFormat = livePlayer?.videoFormat
+        val audioFormat = livePlayer?.audioFormat
+
+        val res = if (videoFormat != null && videoFormat.width > 0 && videoFormat.height > 0) {
+            "${videoFormat.width}x${videoFormat.height}"
+        } else "1080p"
+
+        val fps = if (videoFormat != null && videoFormat.frameRate > 0) {
+            "${videoFormat.frameRate.toInt()} fps"
+        } else "50 fps"
+
+        val vCodec = videoFormat?.sampleMimeType?.substringAfter("/")?.uppercase() ?: "H.264"
+        val aCodec = audioFormat?.sampleMimeType?.substringAfter("/")?.uppercase() ?: "AAC"
+
+        binding.txtOsdTechSpecs.text = "$res | $fps | $vCodec | $aCodec"
+
+        if (program != null) {
+            binding.txtOsdProgramTitle.text = "🔴 JETZT: ${program.title}"
+            binding.txtOsdProgramTime.text = "${program.start} - ${program.end}"
+            binding.txtOsdProgramDesc.text = if (program.description.isNotEmpty()) program.description else "Keine Programmbeschreibung vorhanden."
+            val prog = calculateProgress(program.start, program.end)
+            binding.progressOsdProgram.progress = prog
+            binding.progressOsdProgram.visibility = View.VISIBLE
+        } else {
+            binding.txtOsdProgramTitle.text = "🔴 LIVE TV"
+            binding.txtOsdProgramTime.text = ""
+            binding.txtOsdProgramDesc.text = "Live Stream aktiv"
+            binding.progressOsdProgram.visibility = View.GONE
+        }
     }
 
     private fun dpToPx(dp: Int): Int {
@@ -314,6 +504,11 @@ class LiveTvActivity : AppCompatActivity() {
         val filtered = pool.filter { it.name.contains(query, ignoreCase = true) }
         val channelListWithEpg = filtered.map { ChannelWithEpg(it) }
         currentChannelItems = channelListWithEpg
+
+        // 5. Playlist-Kontext auf die Trefferliste der Suche setzen
+        activePlaylist = channelListWithEpg
+        activePlaylistIndex = 0
+
         channelAdapter?.updateItems(channelListWithEpg)
 
         if (channelListWithEpg.isNotEmpty()) {
@@ -355,7 +550,6 @@ class LiveTvActivity : AppCompatActivity() {
     }
 
     // 3. KATEGORIEWECHSEL & EPG-IN-MEMORY-CACHE:
-    // Kein Ladekreis, kein Flackern, sofortige Anzeige aus dem Cache!
     private fun loadChannels(category: Category, preselectedStreamId: Int? = null) {
         if (category.id == "CURRENT_SEARCH" && currentSearchQuery != null) {
             applySearchQuery(currentSearchQuery!!)
@@ -368,12 +562,14 @@ class LiveTvActivity : AppCompatActivity() {
         }
 
         selectedCategoryId = category.id
+        // 1. Visuelles Highlighting: Immer nur GENAU EINE Kategorie als ausgewählt markieren
         categoryAdapter?.setSelectedCategoryId(category.id)
 
-        // Cache-Check: Wurde diese Kategorie bereits geladen?
+        // Cache-Check
         val cached = categoryChannelMap[category.id]
         if (cached != null && preselectedStreamId == null) {
             currentChannelItems = cached
+            activePlaylist = cached
             binding.progressChannels.visibility = View.GONE
             channelAdapter?.updateItems(cached)
             if (cached.isNotEmpty()) {
@@ -383,7 +579,6 @@ class LiveTvActivity : AppCompatActivity() {
             return
         }
 
-        // Nur wenn noch nie geladen: Ladeindikator zeigen und Daten holen
         binding.progressChannels.visibility = View.VISIBLE
         lifecycleScope.launch {
             try {
@@ -391,6 +586,7 @@ class LiveTvActivity : AppCompatActivity() {
                 val channelList = streams.map { ChannelWithEpg(it) }
                 categoryChannelMap[category.id] = channelList
                 currentChannelItems = channelList
+                activePlaylist = channelList
                 binding.progressChannels.visibility = View.GONE
                 channelAdapter?.updateItems(channelList)
 
@@ -418,16 +614,12 @@ class LiveTvActivity : AppCompatActivity() {
     }
 
     private fun focusTargetChannel(position: Int) {
-        currentChannelIndex = position
+        activePlaylistIndex = position
         binding.recyclerChannels.scrollToPosition(position)
         binding.recyclerChannels.post {
             val holder = binding.recyclerChannels.findViewHolderForAdapterPosition(position) as? ChannelAdapter.ViewHolder
             holder?.header?.requestFocus()
         }
-    }
-
-    private fun focusCurrentChannel() {
-        focusTargetChannel(currentChannelIndex)
     }
 
     private fun focusFirstChannel() {
@@ -448,22 +640,34 @@ class LiveTvActivity : AppCompatActivity() {
             binding.txtPreviewTitle.text = "${stream.name} – ${program.title}"
             binding.txtPreviewTime.text = "${program.start} - ${program.end}"
             binding.txtPreviewDesc.text = if (program.description.isNotEmpty()) program.description else "Keine Programmbeschreibung vorhanden."
+            val prog = calculateProgress(program.start, program.end)
+            binding.progressCurrentProgram.progress = prog
+            binding.progressCurrentProgram.visibility = View.VISIBLE
         } else {
             val cached = currentChannelItems.firstOrNull { it.stream.streamId == stream.streamId }?.epgList?.firstOrNull()
             if (cached != null) {
                 binding.txtPreviewTitle.text = "${stream.name} – ${cached.title}"
                 binding.txtPreviewTime.text = "${cached.start} - ${cached.end}"
                 binding.txtPreviewDesc.text = if (cached.description.isNotEmpty()) cached.description else "Keine Programmbeschreibung vorhanden."
+                val prog = calculateProgress(cached.start, cached.end)
+                binding.progressCurrentProgram.progress = prog
+                binding.progressCurrentProgram.visibility = View.VISIBLE
             } else {
                 binding.txtPreviewTitle.text = stream.name
                 binding.txtPreviewTime.text = "🔴 LIVE"
                 binding.txtPreviewDesc.text = "Drücke OK auf der Fernbedienung, um den Sender im Vollbild zu starten."
+                binding.progressCurrentProgram.visibility = View.GONE
             }
         }
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         if (keyCode == KeyEvent.KEYCODE_BACK) {
+            if (isSearchOverlayOpen) {
+                closeSearchOverlay()
+                return true
+            }
+
             if (isFullscreen) {
                 setMiniPipMode()
                 return true
@@ -480,27 +684,34 @@ class LiveTvActivity : AppCompatActivity() {
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.action == KeyEvent.ACTION_DOWN) {
+            // Im Vollbildmodus
             if (isFullscreen) {
                 when (event.keyCode) {
                     KeyEvent.KEYCODE_BACK -> {
                         setMiniPipMode()
                         return true
                     }
+                    // 4. OSD Toggle bei DPAD_CENTER / OK
+                    KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
+                        toggleOsd()
+                        return true
+                    }
+                    // 5. Channel-Zapping strikt innerhalb des aktiven Kontexts (z.B. Suche)
                     KeyEvent.KEYCODE_DPAD_UP -> {
-                        if (currentChannelIndex > 0) {
-                            currentChannelIndex--
-                            val item = currentChannelItems[currentChannelIndex]
+                        if (activePlaylistIndex > 0) {
+                            activePlaylistIndex--
+                            val item = activePlaylist[activePlaylistIndex]
                             playLiveStream(item.stream)
-                            Toast.makeText(this, "${currentChannelIndex + 1}. ${item.stream.name}", Toast.LENGTH_SHORT).show()
+                            showOsd()
                         }
                         return true
                     }
                     KeyEvent.KEYCODE_DPAD_DOWN -> {
-                        if (currentChannelIndex < currentChannelItems.size - 1) {
-                            currentChannelIndex++
-                            val item = currentChannelItems[currentChannelIndex]
+                        if (activePlaylistIndex < activePlaylist.size - 1) {
+                            activePlaylistIndex++
+                            val item = activePlaylist[activePlaylistIndex]
                             playLiveStream(item.stream)
-                            Toast.makeText(this, "${currentChannelIndex + 1}. ${item.stream.name}", Toast.LENGTH_SHORT).show()
+                            showOsd()
                         }
                         return true
                     }
@@ -544,7 +755,7 @@ class LiveTvActivity : AppCompatActivity() {
                     KeyEvent.KEYCODE_DPAD_DOWN -> {
                         if (channelPos < currentChannelItems.size - 1) {
                             val nextPos = channelPos + 1
-                            currentChannelIndex = nextPos
+                            activePlaylistIndex = nextPos
                             binding.recyclerChannels.scrollToPosition(nextPos)
                             binding.recyclerChannels.post {
                                 val holder = binding.recyclerChannels.findViewHolderForAdapterPosition(nextPos) as? ChannelAdapter.ViewHolder
@@ -560,13 +771,13 @@ class LiveTvActivity : AppCompatActivity() {
                         return true
                     }
                     KeyEvent.KEYCODE_DPAD_UP -> {
-                        // 2. Weg in den PiP: Vom obersten Element (Index 0) der Senderliste mit DPAD_UP direkt in den PiP!
+                        // 2. Weg in den PiP: Vom 1. Sender nach oben in den PiP
                         if (channelPos == 0) {
                             binding.livePlayerContainer.requestFocus()
                             return true
                         } else {
                             val prevPos = channelPos - 1
-                            currentChannelIndex = prevPos
+                            activePlaylistIndex = prevPos
                             binding.recyclerChannels.scrollToPosition(prevPos)
                             binding.recyclerChannels.post {
                                 val holder = binding.recyclerChannels.findViewHolderForAdapterPosition(prevPos) as? ChannelAdapter.ViewHolder
@@ -644,7 +855,7 @@ class LiveTvActivity : AppCompatActivity() {
         return -1
     }
 
-    // --- Adapter 1: Kategorien ---
+    // --- Adapter 1: Kategorien mit strikter 1-Element-Selektion und Skalierung ---
     inner class CategoryAdapter(
         private val items: List<Category>,
         private val onSelect: (Category) -> Unit
@@ -654,11 +865,12 @@ class LiveTvActivity : AppCompatActivity() {
             val txtName: TextView = view.findViewById(R.id.txtCategoryName)
         }
 
-        fun setSelectedCategoryId(id: String?) {
+        // 1. Strikt nur genau EINE Kategorie selektieren
+        fun setSelectedCategoryId(newId: String?) {
             val prevId = selectedCategoryId
-            selectedCategoryId = id
+            selectedCategoryId = newId
             val prevPos = items.indexOfFirst { it.id == prevId }
-            val newPos = items.indexOfFirst { it.id == id }
+            val newPos = items.indexOfFirst { it.id == newId }
             if (prevPos != -1) notifyItemChanged(prevPos)
             if (newPos != -1) notifyItemChanged(newPos)
         }
@@ -672,6 +884,15 @@ class LiveTvActivity : AppCompatActivity() {
             val cat = items[position]
             holder.txtName.text = cat.name
             holder.itemView.isSelected = (cat.id == selectedCategoryId)
+
+            // 1. Fokus-Animation (leichtes Vergrößern)
+            holder.itemView.setOnFocusChangeListener { _, hasFocus ->
+                if (hasFocus) {
+                    holder.itemView.animate().scaleX(1.03f).scaleY(1.03f).setDuration(120).start()
+                } else {
+                    holder.itemView.animate().scaleX(1.0f).scaleY(1.0f).setDuration(120).start()
+                }
+            }
 
             holder.itemView.setOnClickListener {
                 onSelect(cat)
@@ -694,7 +915,7 @@ class LiveTvActivity : AppCompatActivity() {
                             return@setOnKeyListener true
                         }
                         KeyEvent.KEYCODE_DPAD_UP -> {
-                            // 2. Fix: Aus der obersten Kategorie MUSS DPAD_UP zwingend auf das Suchfeld springen!
+                            // 2. Aus der obersten Kategorie MUSS DPAD_UP zwingend auf das Suchfeld springen!
                             if (position == 0) {
                                 binding.btnOpenLiveSearch.requestFocus()
                                 return@setOnKeyListener true
@@ -750,14 +971,15 @@ class LiveTvActivity : AppCompatActivity() {
             }
 
             holder.header.setOnClickListener {
-                currentChannelIndex = position
+                activePlaylist = currentChannelItems
+                activePlaylistIndex = position
                 playLiveStream(s)
                 setFullscreenMode()
             }
 
             holder.header.setOnFocusChangeListener { _, hasFocus ->
                 if (hasFocus) {
-                    currentChannelIndex = position
+                    activePlaylistIndex = position
                     showChannelPreview(s, item.epgList.firstOrNull())
                 }
             }
@@ -823,7 +1045,8 @@ class LiveTvActivity : AppCompatActivity() {
             }
 
             holder.itemView.setOnClickListener {
-                currentChannelIndex = channelIndex
+                activePlaylist = currentChannelItems
+                activePlaylistIndex = channelIndex
                 playLiveStream(stream)
                 setFullscreenMode()
             }
@@ -840,5 +1063,46 @@ class LiveTvActivity : AppCompatActivity() {
         }
 
         override fun getItemCount() = programs.size
+    }
+
+    // --- Adapter 4: Such-Historie Chips im Overlay ---
+    inner class HistoryChipAdapter(
+        private val items: List<String>,
+        private val onClick: (String) -> Unit
+    ) : RecyclerView.Adapter<HistoryChipAdapter.ViewHolder>() {
+
+        inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+            val txt: TextView = view.findViewById(R.id.txtHistoryQuery)
+        }
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
+            val view = LayoutInflater.from(parent.context).inflate(R.layout.item_search_history, parent, false)
+            return ViewHolder(view)
+        }
+
+        override fun onBindViewHolder(holder: ViewHolder, position: Int) {
+            val q = items[position]
+            holder.txt.text = "🔍 $q"
+            holder.itemView.isFocusable = true
+            holder.itemView.isClickable = true
+
+            holder.itemView.setOnClickListener {
+                onClick(q)
+            }
+            holder.itemView.setOnKeyListener { _, keyCode, event ->
+                if (event.action == KeyEvent.ACTION_DOWN) {
+                    if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) {
+                        onClick(q)
+                        return@setOnKeyListener true
+                    } else if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
+                        binding.editSearchOverlayQuery.requestFocus()
+                        return@setOnKeyListener true
+                    }
+                }
+                false
+            }
+        }
+
+        override fun getItemCount() = items.size
     }
 }

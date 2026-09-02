@@ -3,7 +3,7 @@
     android:layout_width="match_parent"
     android:layout_height="36dp"
     android:layout_marginBottom="3dp"
-    android:background="@drawable/card_focus_selector"
+    android:background="@drawable/category_item_bg"
     android:clickable="true"
     android:focusable="true"
     android:paddingHorizontal="10dp"

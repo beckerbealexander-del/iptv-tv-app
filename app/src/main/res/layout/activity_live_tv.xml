@@ -119,12 +119,22 @@
                             android:textStyle="bold" />
                     </LinearLayout>
 
+                    <!-- 3. Fortschrittsbalken für die aktuelle Sendung -->
+                    <ProgressBar
+                        android:id="@+id/progressCurrentProgram"
+                        style="?android:attr/progressBarStyleHorizontal"
+                        android:layout_width="match_parent"
+                        android:layout_height="3dp"
+                        android:layout_marginVertical="3dp"
+                        android:progress="0"
+                        android:progressTint="@color/netflix_red"
+                        android:visibility="gone" />
+
                     <TextView
                         android:id="@+id/txtPreviewDesc"
                         android:layout_width="match_parent"
                         android:layout_height="0dp"
                         android:layout_weight="1"
-                        android:layout_marginTop="2dp"
                         android:ellipsize="end"
                         android:maxLines="3"
                         android:text="Drücke OK auf der Fernbedienung, um den Sender im Vollbild zu starten."
@@ -188,7 +198,85 @@
 
     </LinearLayout>
 
-    <!-- 2. Gemeinsamer Player-Container (Skaliert nahtlos zwischen Mini-PIP und Vollbild) -->
+    <!-- 2. Integrierter Such-Overlay (PIP läuft oben rechts unterbrechungsfrei weiter!) -->
+    <LinearLayout
+        android:id="@+id/layoutSearchOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#F2080808"
+        android:orientation="vertical"
+        android:padding="28dp"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="16dp">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:layout_marginEnd="220dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="🔍 Live TV Sender durchsuchen"
+                    android:textColor="@color/text_primary"
+                    android:textSize="20sp"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="14dp" />
+
+                <EditText
+                    android:id="@+id/editSearchOverlayQuery"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:background="@drawable/card_focus_selector"
+                    android:hint="Sendername eingeben (z. B. Sky, Pro7, ZDF)..."
+                    android:textColor="@color/text_primary"
+                    android:textColorHint="@color/text_secondary"
+                    android:textSize="15sp"
+                    android:paddingHorizontal="16dp"
+                    android:inputType="text"
+                    android:imeOptions="actionSearch"
+                    android:nextFocusDown="@+id/recyclerSearchOverlayHistory"
+                    android:layout_marginBottom="20dp" />
+
+                <!-- Such-Historie Sektion -->
+                <LinearLayout
+                    android:id="@+id/layoutSearchOverlayHistory"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="🕒 Letzte Suchen:"
+                        android:textColor="@color/accent_gold"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:layout_marginBottom="10dp" />
+
+                    <androidx.recyclerview.widget.RecyclerView
+                        android:id="@+id/recyclerSearchOverlayHistory"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- Platzhalter rechts oben für den durchscheinenden PiP-Player -->
+            <View
+                android:layout_width="190dp"
+                android:layout_height="115dp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- 3. Gemeinsamer Player-Container (Skaliert nahtlos zwischen Mini-PIP und Vollbild) -->
     <FrameLayout
         android:id="@+id/livePlayerContainer"
         android:layout_width="190dp"
@@ -203,7 +291,7 @@
             app:use_controller="false"
             app:resize_mode="zoom" />
 
-        <!-- Visueller Fokus-Rahmen ÜBER der SurfaceView -->
+        <!-- 1. Visueller Fokus-Rahmen ÜBER der SurfaceView -->
         <View
             android:id="@+id/pipFocusBorder"
             android:layout_width="match_parent"
@@ -211,5 +299,104 @@
             android:background="@drawable/pip_focus_border"
             android:visibility="gone" />
     </FrameLayout>
+
+    <!-- 4. On-Screen-Display (OSD) für Vollbildmodus bei Klick auf OK -->
+    <LinearLayout
+        android:id="@+id/layoutFullscreenOsd"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:background="#E6101010"
+        android:orientation="vertical"
+        android:padding="18dp"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/txtOsdChannelNum"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="1"
+                android:textColor="@color/netflix_red"
+                android:textSize="22sp"
+                android:textStyle="bold"
+                android:layout_marginEnd="10dp" />
+
+            <TextView
+                android:id="@+id/txtOsdChannelName"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Sendername"
+                android:textColor="@color/text_primary"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <!-- Tech-Specs Badge -->
+            <TextView
+                android:id="@+id/txtOsdTechSpecs"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="#242424"
+                android:paddingHorizontal="10dp"
+                android:paddingVertical="4dp"
+                android:text="1920x1080 | 50 fps | H.264 | AAC"
+                android:textColor="@color/accent_gold"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/txtOsdProgramTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="🔴 JETZT: Sendungstitel"
+            android:textColor="@color/text_primary"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:layout_marginTop="3dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:layout_marginTop="3dp">
+
+            <ProgressBar
+                android:id="@+id/progressOsdProgram"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="0dp"
+                android:layout_height="4dp"
+                android:layout_weight="1"
+                android:progress="50"
+                android:progressTint="@color/netflix_red"
+                android:layout_marginEnd="12dp" />
+
+            <TextView
+                android:id="@+id/txtOsdProgramTime"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="20:15 - 21:45"
+                android:textColor="@color/text_secondary"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/txtOsdProgramDesc"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Sendungsbeschreibung..."
+            android:textColor="@color/text_secondary"
+            android:textSize="11.5sp"
+            android:maxLines="2"
+            android:ellipsize="end"
+            android:layout_marginTop="3dp" />
+    </LinearLayout>
 
 </FrameLayout>

@@ -10,6 +10,7 @@ color netflix_red
 color text_primary
 color text_secondary
 drawable card_focus_selector
+drawable category_item_bg
 drawable pip_focus_border
 drawable tv_banner
 id badgeAudio
@@ -32,6 +33,7 @@ id btnSortYear
 id btnSubtitles
 id channelHeader
 id editPassword
+id editSearchOverlayQuery
 id editSearchQuery
 id editServerUrl
 id editUsername
@@ -43,8 +45,11 @@ id imgHeroSeriesCover
 id imgHistoryChannelLogo
 id imgHistoryPoster
 id imgPoster
+id layoutFullscreenOsd
 id layoutOverview
 id layoutSearchHistory
+id layoutSearchOverlay
+id layoutSearchOverlayHistory
 id layoutSectionChannelHistory
 id layoutSectionMovieHistory
 id layoutSectionSeriesHistory
@@ -68,9 +73,11 @@ id playerSeekBar
 id playerView
 id progressCategories
 id progressChannels
+id progressCurrentProgram
 id progressEpisodeWatched
 id progressEpisodes
 id progressHistoryBar
+id progressOsdProgram
 id progressSeries
 id progressSeriesCats
 id progressVod
@@ -82,6 +89,7 @@ id recyclerChannels
 id recyclerEpisodes
 id recyclerMovieHistory
 id recyclerSearchHistory
+id recyclerSearchOverlayHistory
 id recyclerSeasons
 id recyclerSeriesCategories
 id recyclerSeriesGrid
@@ -119,6 +127,12 @@ id txtHistoryTitle
 id txtNoChannelHistory
 id txtNoMovieHistory
 id txtNoSeriesHistory
+id txtOsdChannelName
+id txtOsdChannelNum
+id txtOsdProgramDesc
+id txtOsdProgramTime
+id txtOsdProgramTitle
+id txtOsdTechSpecs
 id txtPlayerSubtitle
 id txtPlayerTitle
 id txtPosterTitle
