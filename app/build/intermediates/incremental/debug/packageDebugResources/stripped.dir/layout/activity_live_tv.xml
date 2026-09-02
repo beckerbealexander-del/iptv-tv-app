@@ -12,13 +12,17 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:background="#000000"
+        android:clipChildren="false"
+        android:clipToPadding="false"
         android:orientation="horizontal">
 
         <!-- Linke Spalte: Suche + TV-Kategorien -->
         <LinearLayout
-            android:layout_width="210dp"
+            android:layout_width="216dp"
             android:layout_height="match_parent"
             android:background="#0B0B0B"
+            android:clipChildren="false"
+            android:clipToPadding="false"
             android:orientation="vertical"
             android:padding="8dp">
 
@@ -29,6 +33,7 @@
                 android:textColor="@color/text_primary"
                 android:textSize="14sp"
                 android:textStyle="bold"
+                android:layout_marginStart="4dp"
                 android:layout_marginBottom="6dp" />
 
             <!-- Such-Button öffnet Vollbild-Suche -->
@@ -41,6 +46,8 @@
                 android:focusable="true"
                 android:gravity="center_vertical"
                 android:paddingHorizontal="10dp"
+                android:layout_marginStart="4dp"
+                android:layout_marginEnd="4dp"
                 android:text="🔍 Sender suchen..."
                 android:textColor="@color/text_primary"
                 android:textSize="11.5sp"
@@ -58,6 +65,8 @@
                 android:id="@+id/recyclerCategories"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
+                android:clipChildren="false"
+                android:clipToPadding="false"
                 android:descendantFocusability="afterDescendants" />
         </LinearLayout>
 

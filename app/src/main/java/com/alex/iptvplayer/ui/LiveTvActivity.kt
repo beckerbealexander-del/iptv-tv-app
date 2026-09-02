@@ -57,14 +57,15 @@ class LiveTvActivity : AppCompatActivity() {
     private var currentChannelItems: List<ChannelWithEpg> = emptyList()
     private var allLiveStreamsGlobal: List<LiveStream> = emptyList()
 
-    // Status-Tracking
-    private var selectedCategoryId: String? = null
+    // 2. Exakt getrenntes State-Modell: Now-Playing vs. Browsing
+    private var nowPlayingCategoryId: String? = null
     private var nowPlayingStreamId: Int? = null
+    private var browsingCategoryId: String? = null
 
-    // 2. Sperre gegen Fokus-Zwischensprung in die Suche
+    // Sperre gegen Fokus-Zwischensprung in die Suche
     private var isSwitchingCategories = false
 
-    // 5. Playlist-Kontext (z. B. Suche vs. Kategorie)
+    // Playlist-Kontext (z. B. Suche vs. Kategorie)
     private var activePlaylist: List<ChannelWithEpg> = emptyList()
     private var activePlaylistIndex: Int = 0
 
@@ -80,13 +81,13 @@ class LiveTvActivity : AppCompatActivity() {
     private var activeStream: LiveStream? = null
     private var activeStreamEpg: EpgProgram? = null
 
-    // 4. OSD Timer
+    // OSD Timer
     private val osdHandler = Handler(Looper.getMainLooper())
     private val hideOsdRunnable = Runnable {
         binding.layoutFullscreenOsd.visibility = View.GONE
     }
 
-    // 3. Rollback zu sauberem SearchActivity-Launcher (Player läuft im Hintergrund unterbrechungsfrei weiter!)
+    // Saubere Vollbild-Suche (Audio läuft im Hintergrund weiter)
     private val searchLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == RESULT_OK) {
             val query = result.data?.getStringExtra("SEARCH_QUERY")?.trim() ?: ""
@@ -111,6 +112,8 @@ class LiveTvActivity : AppCompatActivity() {
             layoutManager = LinearLayoutManager(this@LiveTvActivity)
             setHasFixedSize(true)
             setItemViewCacheSize(60)
+            clipChildren = false
+            clipToPadding = false
         }
 
         channelAdapter = ChannelAdapter(emptyList())
@@ -118,6 +121,8 @@ class LiveTvActivity : AppCompatActivity() {
             layoutManager = LinearLayoutManager(this@LiveTvActivity)
             setHasFixedSize(true)
             setItemViewCacheSize(80)
+            clipChildren = false
+            clipToPadding = false
             adapter = channelAdapter
         }
 
@@ -153,7 +158,6 @@ class LiveTvActivity : AppCompatActivity() {
     }
 
     private fun setupSearchAndPipRouting() {
-        // 3. Klick auf Suche öffnet saubere Vollbild-Suche (Audio läuft im Hintergrund weiter)
         binding.btnOpenLiveSearch.setOnClickListener {
             val intent = Intent(this, SearchActivity::class.java).apply {
                 putExtra("SEARCH_TYPE", "LIVE")
@@ -161,7 +165,7 @@ class LiveTvActivity : AppCompatActivity() {
             searchLauncher.launch(intent)
         }
 
-        // 2. Verhindere Fokus-Zwischensprung: Falls das Suchfeld während eines Kategoriewechsels fokussiert wird, sofort umleiten!
+        // Fokus-Schutz: Wenn während eines Kategoriewechsels die Suche Fokus erhält, sofort auf Sender 0 leiten
         binding.btnOpenLiveSearch.setOnFocusChangeListener { _, hasFocus ->
             if (hasFocus && isSwitchingCategories) {
                 focusTargetChannel(0)
@@ -237,7 +241,7 @@ class LiveTvActivity : AppCompatActivity() {
         }
     }
 
-    // 3. Audio & Stream im Hintergrund unterbrechungsfrei weiterlaufen lassen
+    // Audio & Stream im Hintergrund unterbrechungsfrei weiterlaufen lassen
     override fun onPause() {
         super.onPause()
         if (isFinishing) {
@@ -259,12 +263,16 @@ class LiveTvActivity : AppCompatActivity() {
         livePlayer = null
     }
 
+    // Sender starten: Now-Playing wandert auf diesen Sender und dessen Ursprungskategorie
     private fun playLiveStream(stream: LiveStream) {
         nowPlayingStreamId = stream.streamId
+        nowPlayingCategoryId = browsingCategoryId
+
         activeStream = stream
         historyManager.saveLiveChannel(stream)
 
         channelAdapter?.notifyDataSetChanged()
+        categoryAdapter?.setCategoryStates(nowPlayingCategoryId, browsingCategoryId)
 
         val url = client.getLiveStreamUrl(stream.streamId)
         val mediaItem = MediaItem.fromUri(url)
@@ -448,12 +456,13 @@ class LiveTvActivity : AppCompatActivity() {
         val newCategories = mutableListOf(searchCategory)
         newCategories.addAll(allCategories)
         displayedCategories = newCategories
-        selectedCategoryId = "CURRENT_SEARCH"
+        browsingCategoryId = "CURRENT_SEARCH"
 
         categoryAdapter = CategoryAdapter(newCategories) { cat ->
             loadChannels(cat)
         }
         binding.recyclerCategories.adapter = categoryAdapter
+        categoryAdapter?.setCategoryStates(nowPlayingCategoryId, browsingCategoryId)
 
         val pool = if (allLiveStreamsGlobal.isNotEmpty()) allLiveStreamsGlobal else currentChannelItems.map { it.stream }
         val filtered = pool.filter { it.name.contains(query, ignoreCase = true) }
@@ -503,21 +512,23 @@ class LiveTvActivity : AppCompatActivity() {
         }
     }
 
-    // 2. KATEGORIEWECHSEL: SOFORTIGER FOKUS AUF SENDER 0 OHNE ZWISCHENSPRUNG
+    // 2. KATEGORIEWECHSEL: KATEGORIE-STATE AKTUALISIEREN & DIREKT SENDER 0 FOKUSSIEREN
     private fun loadChannels(category: Category, preselectedStreamId: Int? = null) {
         if (category.id == "CURRENT_SEARCH" && currentSearchQuery != null) {
             applySearchQuery(currentSearchQuery!!)
             return
         }
 
-        if (selectedCategoryId == category.id && preselectedStreamId == null && currentChannelItems.isNotEmpty()) {
+        if (browsingCategoryId == category.id && preselectedStreamId == null && currentChannelItems.isNotEmpty()) {
             focusTargetChannel(0)
             return
         }
 
         isSwitchingCategories = true
-        selectedCategoryId = category.id
-        categoryAdapter?.setSelectedCategoryId(category.id)
+        browsingCategoryId = category.id
+
+        // Aktualisiere Kategorie-States: Vorherige durchstöberte Kategorie wird sofort neutral!
+        categoryAdapter?.setCategoryStates(nowPlayingCategoryId, browsingCategoryId)
 
         // Cache-Check
         val cached = categoryChannelMap[category.id]
@@ -590,7 +601,7 @@ class LiveTvActivity : AppCompatActivity() {
     }
 
     private fun focusCurrentCategory() {
-        val catIndex = displayedCategories.indexOfFirst { it.id == selectedCategoryId }.coerceAtLeast(0)
+        val catIndex = displayedCategories.indexOfFirst { it.id == browsingCategoryId }.coerceAtLeast(0)
         binding.recyclerCategories.scrollToPosition(catIndex)
         binding.recyclerCategories.post {
             val holder = binding.recyclerCategories.findViewHolderForAdapterPosition(catIndex)
@@ -810,9 +821,7 @@ class LiveTvActivity : AppCompatActivity() {
         return -1
     }
 
-    // --- Adapter 1: Kategorien mit DESIGN-ROLLBACK ---
-    // AKTIVE KATEGORIE: Nur farbige Fläche, komplett OHNE Umrandung.
-    // AKTUELLER FOKUS: NUR der leuchtende Rahmen, KEINE farbige Füllung.
+    // --- Adapter 1: Kategorien mit sauberem State-Modell ---
     inner class CategoryAdapter(
         private val items: List<Category>,
         private val onSelect: (Category) -> Unit
@@ -822,13 +831,23 @@ class LiveTvActivity : AppCompatActivity() {
             val txtName: TextView = view.findViewById(R.id.txtCategoryName)
         }
 
-        fun setSelectedCategoryId(newId: String?) {
-            val oldId = selectedCategoryId
-            selectedCategoryId = newId
-            val oldPos = items.indexOfFirst { it.id == oldId }
-            val newPos = items.indexOfFirst { it.id == newId }
-            if (oldPos != -1) notifyItemChanged(oldPos)
-            if (newPos != -1) notifyItemChanged(newPos)
+        // 2. Aktualisiere exakt die betroffenen Positionen (Now-Playing vs. Browsing)
+        fun setCategoryStates(nowPlayingId: String?, browsingId: String?) {
+            val oldBrowsing = browsingCategoryId
+            val oldNowPlaying = nowPlayingCategoryId
+
+            nowPlayingCategoryId = nowPlayingId
+            browsingCategoryId = browsingId
+
+            val toUpdate = mutableSetOf<Int>()
+            items.indexOfFirst { it.id == oldBrowsing }.takeIf { it != -1 }?.let { toUpdate.add(it) }
+            items.indexOfFirst { it.id == oldNowPlaying }.takeIf { it != -1 }?.let { toUpdate.add(it) }
+            items.indexOfFirst { it.id == browsingId }.takeIf { it != -1 }?.let { toUpdate.add(it) }
+            items.indexOfFirst { it.id == nowPlayingId }.takeIf { it != -1 }?.let { toUpdate.add(it) }
+
+            for (pos in toUpdate) {
+                notifyItemChanged(pos)
+            }
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -841,9 +860,9 @@ class LiveTvActivity : AppCompatActivity() {
             holder.txtName.text = cat.name
             applyCategoryStyle(holder, cat)
 
-            holder.itemView.setOnFocusChangeListener { _, hasFocus ->
+            holder.itemView.setOnFocusChangeListener { _, _ ->
                 applyCategoryStyle(holder, cat)
-                if (!hasFocus && activeStream != null) {
+                if (!holder.itemView.isFocused && activeStream != null) {
                     updatePipProgramInfo(activeStream!!, activeStreamEpg)
                 }
             }
@@ -883,30 +902,43 @@ class LiveTvActivity : AppCompatActivity() {
             }
         }
 
-        // 4. DESIGN-ROLLBACK: Farbige Fläche = Aktiv / Läuft gerade; Roter Rahmen = Cursor-Fokus
+        // 2. & 4. DESIGN-ROLLBACK & SAUBERE STATE-UNTERSCHEIDUNG
         private fun applyCategoryStyle(holder: ViewHolder, cat: Category) {
-            val isActive = (cat.id == selectedCategoryId)
+            val isNowPlaying = (cat.id == nowPlayingCategoryId)
+            val isBrowsing = (cat.id == browsingCategoryId)
             val isFocused = holder.itemView.isFocused
 
-            holder.txtName.setTextColor(if (isFocused || isActive) Color.parseColor("#FFFFFF") else Color.parseColor("#B0B0B0"))
+            holder.txtName.setTextColor(if (isFocused || isNowPlaying || isBrowsing) Color.parseColor("#FFFFFF") else Color.parseColor("#B0B0B0"))
 
             val drawable = GradientDrawable().apply {
                 cornerRadius = dpToPx(6).toFloat()
                 when {
-                    // Cursor steht auf der aktiven Kategorie: Farbige Fläche + roter Rahmen
-                    isFocused && isActive -> {
-                        setColor(Color.parseColor("#7A141A"))
+                    // Cursor steht auf der Now-Playing Kategorie: Rote Vollfläche + weißer/hellroter Rahmen
+                    isFocused && isNowPlaying -> {
+                        setColor(Color.parseColor("#E50914"))
+                        setStroke(dpToPx(3), Color.parseColor("#FFFFFF"))
+                    }
+                    // Cursor steht auf der durchstöberten Kategorie: Dezente Füllung + leuchtender 3dp roter Rahmen
+                    isFocused && isBrowsing -> {
+                        setColor(Color.parseColor("#3A1417"))
                         setStroke(dpToPx(3), Color.parseColor("#E50914"))
                     }
-                    // AKTUELLER FOKUS: NUR leuchtender Rahmen, KEINE flächige Füllung
+                    // AKTUELLER FOKUS: NUR leuchtender roter Rahmen, KEINE flächige Füllung!
                     isFocused -> {
                         setColor(Color.parseColor("#181818"))
                         setStroke(dpToPx(3), Color.parseColor("#E50914"))
                     }
-                    // AKTIVE KATEGORIE: Nur farbiger Hintergrund, komplett OHNE Umrandung!
-                    isActive -> {
-                        setColor(Color.parseColor("#5A1216"))
+                    // A) URSPRUNGS-KATEGORIE DES LAUFENDEN SENDERS (Now Playing):
+                    // Bleibt IMMER vollfarbig rot hinterlegt, komplett OHNE Umrandung!
+                    isNowPlaying -> {
+                        setColor(Color.parseColor("#E50914"))
                         setStroke(0, Color.TRANSPARENT)
+                    }
+                    // B) AKTUELL DURCHSTÖBERTE KATEGORIE (Browsing):
+                    // Optisch eindeutig abweichend: dezentes Dunkelrot mit feinem 1.5dp Rand, KEINE rote Vollfläche!
+                    isBrowsing -> {
+                        setColor(Color.parseColor("#3A1417"))
+                        setStroke(dpToPx(1.5f.toInt()), Color.parseColor("#8A2028"))
                     }
                     // Normal / Inaktiv
                     else -> {
@@ -918,8 +950,8 @@ class LiveTvActivity : AppCompatActivity() {
             holder.itemView.background = drawable
 
             if (isFocused) {
-                holder.itemView.scaleX = 1.03f
-                holder.itemView.scaleY = 1.03f
+                holder.itemView.scaleX = 1.02f
+                holder.itemView.scaleY = 1.02f
             } else {
                 holder.itemView.scaleX = 1.0f
                 holder.itemView.scaleY = 1.0f
@@ -955,14 +987,14 @@ class LiveTvActivity : AppCompatActivity() {
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val item = items[position]
             val s = item.stream
-            val isPlaying = (s.streamId == activeStream?.streamId)
+            val isPlaying = (s.streamId == nowPlayingStreamId)
 
-            // 1. DATEN-BINDING BUG BEHOBEN: Echter dynamischer Sendername aus dem Stream-Objekt!
+            // 1. DATEN-BINDING BUG BEHOBEN: Echter dynamischer Sendername!
             holder.txtName.text = s.name
 
             if (isPlaying) {
                 holder.txtNum.text = "▶"
-                holder.txtNum.setTextColor(Color.parseColor("#E50914"))
+                holder.txtNum.setTextColor(Color.parseColor("#FFFFFF"))
                 holder.txtName.setTextColor(Color.parseColor("#FFFFFF"))
             } else {
                 holder.txtNum.text = "${position + 1}"
@@ -978,9 +1010,9 @@ class LiveTvActivity : AppCompatActivity() {
 
             applyChannelHeaderStyle(holder, isPlaying)
 
-            holder.header.setOnFocusChangeListener { _, hasFocus ->
+            holder.header.setOnFocusChangeListener { _, _ ->
                 applyChannelHeaderStyle(holder, isPlaying)
-                if (hasFocus) {
+                if (holder.header.isFocused) {
                     activePlaylistIndex = position
                     showChannelPreview(s, item.epgList.firstOrNull())
                 } else if (activeStream != null) {
@@ -1017,26 +1049,25 @@ class LiveTvActivity : AppCompatActivity() {
             }
         }
 
-        // 4. DESIGN-ROLLBACK FÜR SENDER-HIGHLIGHTS
-        // Farbige Fläche = Läuft gerade; Roter Rahmen = Cursor
+        // 4. DESIGN-ROLLBACK FÜR SENDER: Rote Fläche = Läuft gerade; Roter Rahmen = Cursor
         private fun applyChannelHeaderStyle(holder: ViewHolder, isPlaying: Boolean) {
             val isFocused = holder.header.isFocused
             val drawable = GradientDrawable().apply {
                 cornerRadius = dpToPx(6).toFloat()
                 when {
-                    // Cursor steht auf laufendem Sender: Farbige Fläche + roter Rahmen
+                    // Cursor steht auf laufendem Sender: Rote Vollfläche + weißer Rahmen
                     isFocused && isPlaying -> {
-                        setColor(Color.parseColor("#7A141A"))
-                        setStroke(dpToPx(3), Color.parseColor("#E50914"))
+                        setColor(Color.parseColor("#E50914"))
+                        setStroke(dpToPx(3), Color.parseColor("#FFFFFF"))
                     }
-                    // AKTUELLER FOKUS: NUR leuchtender Rahmen, KEINE farbige Füllung
+                    // AKTUELLER FOKUS: NUR leuchtender 3dp roter Rahmen, KEINE Füllung
                     isFocused -> {
                         setColor(Color.parseColor("#181818"))
                         setStroke(dpToPx(3), Color.parseColor("#E50914"))
                     }
-                    // AKTUELL LAUFENDER SENDER: Nur farbiger Hintergrund, komplett OHNE Umrandung!
+                    // AKTUELL LAUFENDER SENDER: Nur rote Vollfläche, komplett OHNE Umrandung!
                     isPlaying -> {
-                        setColor(Color.parseColor("#5A1216"))
+                        setColor(Color.parseColor("#E50914"))
                         setStroke(0, Color.TRANSPARENT)
                     }
                     // Normal / Inaktiv
