@@ -6,6 +6,7 @@ import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
@@ -33,6 +34,11 @@ import java.util.Locale
 
 class LiveTvActivity : AppCompatActivity() {
 
+    companion object {
+        val globalChannelCategoryCache = HashMap<String, List<LiveStream>>()
+        val globalEpgCache = HashMap<Int, List<EpgProgram>>()
+    }
+
     private lateinit var binding: ActivityLiveTvBinding
     private lateinit var client: XtreamClient
     private lateinit var historyManager: HistoryManager
@@ -42,17 +48,16 @@ class LiveTvActivity : AppCompatActivity() {
     private var currentStreams: List<LiveStream> = emptyList()
     private var allLiveStreamsGlobal: List<LiveStream> = emptyList()
     private var selectedCategoryId: String? = null
-    private val channelCategoryCache = HashMap<String, List<LiveStream>>()
-    private val epgCache = HashMap<Int, List<EpgProgram>>()
+    private var currentChannelIndex: Int = 0
 
     private var isInitialLoad = true
+    private var isFullscreen = false
     private var currentSearchQuery: String? = null
 
-    // PIP Mini-Player
-    private var pipPlayer: ExoPlayer? = null
-    private var activePipStream: LiveStream? = null
+    // Gemeinsamer Player für Mini-PIP und Vollbild (Nahtloser Übergang ohne Rebuffering)
+    private var livePlayer: ExoPlayer? = null
+    private var activeStream: LiveStream? = null
 
-    // Vollbild-Suche Launcher
     private val searchLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == RESULT_OK) {
             val query = result.data?.getStringExtra("SEARCH_QUERY")?.trim() ?: ""
@@ -70,7 +75,7 @@ class LiveTvActivity : AppCompatActivity() {
         client = XtreamClient(this)
         historyManager = HistoryManager(this)
 
-        setupPipPlayer()
+        setupLivePlayer()
         updateLiveTimeHeader()
 
         binding.recyclerCategories.apply {
@@ -92,6 +97,37 @@ class LiveTvActivity : AppCompatActivity() {
             searchLauncher.launch(intent)
         }
 
+        // 2. PIP-Container Klick & Fokus Logik:
+        binding.livePlayerContainer.setOnClickListener {
+            if (!isFullscreen) {
+                setFullscreenMode()
+            }
+        }
+
+        binding.livePlayerContainer.setOnKeyListener { _, keyCode, event ->
+            if (event.action == KeyEvent.ACTION_DOWN && !isFullscreen) {
+                when (keyCode) {
+                    KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
+                        setFullscreenMode()
+                        return@setOnKeyListener true
+                    }
+                    KeyEvent.KEYCODE_DPAD_DOWN -> {
+                        focusTargetChannel(0)
+                        return@setOnKeyListener true
+                    }
+                    KeyEvent.KEYCODE_DPAD_LEFT -> {
+                        focusCurrentCategory()
+                        return@setOnKeyListener true
+                    }
+                }
+            }
+            false
+        }
+
+        binding.root.post {
+            updatePipPosition()
+        }
+
         loadCategories()
         preloadGlobalChannels()
     }
@@ -106,41 +142,99 @@ class LiveTvActivity : AppCompatActivity() {
         }
     }
 
-    private fun setupPipPlayer() {
-        pipPlayer = PlayerUtils.createExoPlayer(this).apply {
-            binding.livePipPlayerView.player = this
+    private fun setupLivePlayer() {
+        livePlayer = PlayerUtils.createExoPlayer(this).apply {
+            binding.livePlayerView.player = this
             playWhenReady = true
         }
     }
 
-    // 1. KEIN NEUAUFBAU NACH VOLLBILD:
-    // Der State bleibt vollständig im Speicher erhalten, keine Neuladung bei Rückkehr aus dem Player
+    // 1. PERSISTENTER STATE & NAHTLOSER PIP-ÜBERGANG:
+    // Der Player läuft kontinuierlich weiter.
     override fun onResume() {
         super.onResume()
-        if (pipPlayer != null && activePipStream != null && !pipPlayer!!.isPlaying) {
-            pipPlayer?.play()
+        if (livePlayer != null && activeStream != null && !livePlayer!!.isPlaying) {
+            livePlayer?.play()
+        }
+        binding.root.post {
+            updatePipPosition()
         }
     }
 
     override fun onPause() {
         super.onPause()
-        pipPlayer?.pause()
+        livePlayer?.pause()
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        pipPlayer?.release()
-        pipPlayer = null
+        livePlayer?.release()
+        livePlayer = null
     }
 
-    private fun playPipStream(stream: LiveStream) {
-        if (activePipStream?.streamId == stream.streamId && pipPlayer?.isPlaying == true) return
-        activePipStream = stream
+    private fun playLiveStream(stream: LiveStream) {
+        if (activeStream?.streamId == stream.streamId && livePlayer?.isPlaying == true) return
+        activeStream = stream
+        historyManager.saveLiveChannel(stream)
+
         val url = client.getLiveStreamUrl(stream.streamId)
         val mediaItem = MediaItem.fromUri(url)
-        pipPlayer?.setMediaItem(mediaItem)
-        pipPlayer?.prepare()
-        pipPlayer?.playWhenReady = true
+        livePlayer?.setMediaItem(mediaItem)
+        livePlayer?.prepare()
+        livePlayer?.playWhenReady = true
+    }
+
+    // Berechnet exakt die Position des PIP-Fensters über dem Anker
+    private fun updatePipPosition() {
+        if (isFullscreen) return
+        val anchor = binding.pipAnchor
+        val root = binding.rootLiveTv
+        val anchorLoc = IntArray(2)
+        val rootLoc = IntArray(2)
+        anchor.getLocationOnScreen(anchorLoc)
+        root.getLocationOnScreen(rootLoc)
+
+        val x = anchorLoc[0] - rootLoc[0]
+        val y = anchorLoc[1] - rootLoc[1]
+
+        val w = if (anchor.width > 0) anchor.width else dpToPx(190)
+        val h = if (anchor.height > 0) anchor.height else dpToPx(103)
+
+        val lp = FrameLayout.LayoutParams(w, h).apply {
+            leftMargin = x
+            topMargin = y
+        }
+        binding.livePlayerContainer.layoutParams = lp
+        binding.livePlayerContainer.isFocusable = true
+        binding.livePlayerContainer.isClickable = true
+        binding.livePlayerView.useController = false
+    }
+
+    // 1. Vollbildmodus aktivieren (gleiche Player-Instanz skaliert nach oben)
+    private fun setFullscreenMode() {
+        isFullscreen = true
+        val lp = FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ).apply {
+            leftMargin = 0
+            topMargin = 0
+        }
+        binding.livePlayerContainer.layoutParams = lp
+        binding.livePlayerContainer.bringToFront()
+        binding.livePlayerContainer.requestFocus()
+        binding.livePlayerView.useController = true
+    }
+
+    // 1. Mini-PIP Modus wiederherstellen (ohne Neuladen der Übersicht)
+    private fun setMiniPipMode() {
+        isFullscreen = false
+        updatePipPosition()
+        focusCurrentChannel()
+    }
+
+    private fun dpToPx(dp: Int): Int {
+        return (dp * resources.displayMetrics.density).toInt()
     }
 
     private fun updateLiveTimeHeader() {
@@ -184,7 +278,7 @@ class LiveTvActivity : AppCompatActivity() {
                     loadChannels(category)
                 }
 
-                // Initialer Start: Letzter Sender oder erster Sender laden
+                // Initialer Start: Zuletzt gesehenen Sender laden
                 val lastWatched = historyManager.getRecentLiveChannels().firstOrNull()
                 if (lastWatched != null && !lastWatched.categoryId.isNullOrEmpty()) {
                     val matchingCat = displayedCategories.firstOrNull { it.id == lastWatched.categoryId }
@@ -204,7 +298,7 @@ class LiveTvActivity : AppCompatActivity() {
         }
     }
 
-    // 3. KATEGORIEWECHSEL & PIP-VERHALTEN:
+    // 3. KATEGORIEWECHSEL OHNE ZWISCHENSPRUNG & EPG-CACHE:
     // Fokus geht sofort auf den 1. Sender (niemals Suchfeld).
     // PIP spielt UNVERÄNDERT den aktuellen Sender weiter.
     private fun loadChannels(category: Category, preselectedStreamId: Int? = null) {
@@ -221,17 +315,16 @@ class LiveTvActivity : AppCompatActivity() {
         selectedCategoryId = category.id
         binding.recyclerCategories.adapter?.notifyDataSetChanged()
 
-        val cached = channelCategoryCache[category.id]
+        val cached = globalChannelCategoryCache[category.id]
         if (cached != null && preselectedStreamId == null) {
             currentStreams = cached
             binding.progressChannels.visibility = View.GONE
             binding.recyclerChannels.adapter = ChannelAdapter(cached)
             if (cached.isNotEmpty()) {
                 showChannelPreview(cached[0], null)
-                // PIP bleibt unverändert beim bisherigen Sender!
                 if (isInitialLoad) {
                     isInitialLoad = false
-                    playPipStream(cached[0])
+                    playLiveStream(cached[0])
                 }
                 focusTargetChannel(0)
             }
@@ -242,7 +335,7 @@ class LiveTvActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 val list = client.getLiveStreams(category.id)
-                channelCategoryCache[category.id] = list
+                globalChannelCategoryCache[category.id] = list
                 currentStreams = list
                 binding.progressChannels.visibility = View.GONE
                 binding.recyclerChannels.adapter = ChannelAdapter(currentStreams)
@@ -257,7 +350,7 @@ class LiveTvActivity : AppCompatActivity() {
                     showChannelPreview(targetStream, null)
                     if (isInitialLoad) {
                         isInitialLoad = false
-                        playPipStream(targetStream)
+                        playLiveStream(targetStream)
                     }
 
                     val targetPos = currentStreams.indexOf(targetStream).coerceAtLeast(0)
@@ -271,6 +364,7 @@ class LiveTvActivity : AppCompatActivity() {
     }
 
     private fun focusTargetChannel(position: Int) {
+        currentChannelIndex = position
         binding.recyclerChannels.scrollToPosition(position)
         binding.recyclerChannels.post {
             val holder = binding.recyclerChannels.findViewHolderForAdapterPosition(position) as? ChannelAdapter.ViewHolder
@@ -278,11 +372,14 @@ class LiveTvActivity : AppCompatActivity() {
         }
     }
 
+    private fun focusCurrentChannel() {
+        focusTargetChannel(currentChannelIndex)
+    }
+
     private fun focusFirstChannel() {
         focusTargetChannel(0)
     }
 
-    // Zurück zur AKTIV ausgewählten Kategorie
     private fun focusCurrentCategory() {
         val catIndex = displayedCategories.indexOfFirst { it.id == selectedCategoryId }.coerceAtLeast(0)
         binding.recyclerCategories.scrollToPosition(catIndex)
@@ -298,7 +395,7 @@ class LiveTvActivity : AppCompatActivity() {
             binding.txtPreviewTime.text = "${program.start} - ${program.end}"
             binding.txtPreviewDesc.text = if (program.description.isNotEmpty()) program.description else "Keine Programmbeschreibung vorhanden."
         } else {
-            val cached = epgCache[stream.streamId]?.firstOrNull { it.isNowPlaying } ?: epgCache[stream.streamId]?.firstOrNull()
+            val cached = globalEpgCache[stream.streamId]?.firstOrNull { it.isNowPlaying } ?: globalEpgCache[stream.streamId]?.firstOrNull()
             if (cached != null) {
                 binding.txtPreviewTitle.text = "${stream.name} – ${cached.title}"
                 binding.txtPreviewTime.text = "${cached.start} - ${cached.end}"
@@ -306,29 +403,19 @@ class LiveTvActivity : AppCompatActivity() {
             } else {
                 binding.txtPreviewTitle.text = stream.name
                 binding.txtPreviewTime.text = "🔴 LIVE"
-                binding.txtPreviewDesc.text = "Drücke OK auf der Fernbedienung, um den Sender direkt zu starten."
+                binding.txtPreviewDesc.text = "Drücke OK auf der Fernbedienung, um den Sender im Vollbild zu starten."
             }
         }
     }
 
-    private fun openFullscreenPlayer(stream: LiveStream, position: Int) {
-        playPipStream(stream)
-        pipPlayer?.pause()
-        historyManager.saveLiveChannel(stream)
-        val intent = Intent(this, PlayerActivity::class.java).apply {
-            putExtra("STREAM_URL", client.getLiveStreamUrl(stream.streamId))
-            putExtra("STREAM_NAME", stream.name)
-            putExtra("POSTER_URL", stream.streamIcon)
-            putExtra("STREAM_ID", stream.streamId)
-            putExtra("STREAM_TYPE", "LIVE")
-            putExtra("STREAM_LIST", ArrayList(currentStreams))
-            putExtra("CURRENT_INDEX", position)
-        }
-        startActivity(intent)
-    }
-
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         if (keyCode == KeyEvent.KEYCODE_BACK) {
+            // Wenn im Vollbildmodus -> Zurück in den Mini-PIP Modus (nahtlos!)
+            if (isFullscreen) {
+                setMiniPipMode()
+                return true
+            }
+
             val focused = currentFocus
             if (isViewInRecyclerView(focused, binding.recyclerChannels)) {
                 focusCurrentCategory()
@@ -338,9 +425,37 @@ class LiveTvActivity : AppCompatActivity() {
         return super.onKeyDown(keyCode, event)
     }
 
-    // STRIKTE HARD LOCKS: DPAD_UP/DPAD_DOWN bricht niemals horizontal in eine andere Spalte aus!
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.action == KeyEvent.ACTION_DOWN) {
+            // Im Vollbildmodus: Kanalwechsel mit DPAD UP/DOWN
+            if (isFullscreen) {
+                when (event.keyCode) {
+                    KeyEvent.KEYCODE_BACK -> {
+                        setMiniPipMode()
+                        return true
+                    }
+                    KeyEvent.KEYCODE_DPAD_UP -> {
+                        if (currentChannelIndex > 0) {
+                            currentChannelIndex--
+                            val stream = currentStreams[currentChannelIndex]
+                            playLiveStream(stream)
+                            Toast.makeText(this, "${currentChannelIndex + 1}. ${stream.name}", Toast.LENGTH_SHORT).show()
+                        }
+                        return true
+                    }
+                    KeyEvent.KEYCODE_DPAD_DOWN -> {
+                        if (currentChannelIndex < currentStreams.size - 1) {
+                            currentChannelIndex++
+                            val stream = currentStreams[currentChannelIndex]
+                            playLiveStream(stream)
+                            Toast.makeText(this, "${currentChannelIndex + 1}. ${stream.name}", Toast.LENGTH_SHORT).show()
+                        }
+                        return true
+                    }
+                }
+                return super.dispatchKeyEvent(event)
+            }
+
             val focused = currentFocus
             val channelPos = getFocusedChannelPosition(focused)
 
@@ -377,6 +492,7 @@ class LiveTvActivity : AppCompatActivity() {
                     KeyEvent.KEYCODE_DPAD_DOWN -> {
                         if (channelPos < currentStreams.size - 1) {
                             val nextPos = channelPos + 1
+                            currentChannelIndex = nextPos
                             binding.recyclerChannels.scrollToPosition(nextPos)
                             binding.recyclerChannels.post {
                                 val holder = binding.recyclerChannels.findViewHolderForAdapterPosition(nextPos) as? ChannelAdapter.ViewHolder
@@ -392,8 +508,13 @@ class LiveTvActivity : AppCompatActivity() {
                         return true
                     }
                     KeyEvent.KEYCODE_DPAD_UP -> {
-                        if (channelPos > 0) {
+                        // 2. Feature: Mit DPAD_UP über das oberste Element direkt auf den PIP-Player
+                        if (channelPos == 0) {
+                            binding.livePlayerContainer.requestFocus()
+                            return true
+                        } else {
                             val prevPos = channelPos - 1
+                            currentChannelIndex = prevPos
                             binding.recyclerChannels.scrollToPosition(prevPos)
                             binding.recyclerChannels.post {
                                 val holder = binding.recyclerChannels.findViewHolderForAdapterPosition(prevPos) as? ChannelAdapter.ViewHolder
@@ -405,8 +526,8 @@ class LiveTvActivity : AppCompatActivity() {
                                     holder?.header?.requestFocus()
                                 }
                             }
+                            return true
                         }
-                        return true
                     }
                 }
             }
@@ -491,8 +612,10 @@ class LiveTvActivity : AppCompatActivity() {
             holder.txtName.text = cat.name
             holder.itemView.isSelected = (cat.id == selectedCategoryId)
 
+            // 3. Klick springt OHNE Zwischensprung auf den 1. Sender
             holder.itemView.setOnClickListener {
                 onSelect(cat)
+                focusTargetChannel(0)
             }
 
             holder.itemView.setOnKeyListener { _, keyCode, event ->
@@ -500,6 +623,7 @@ class LiveTvActivity : AppCompatActivity() {
                     when (keyCode) {
                         KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
                             onSelect(cat)
+                            focusTargetChannel(0)
                             return@setOnKeyListener true
                         }
                         KeyEvent.KEYCODE_DPAD_RIGHT -> {
@@ -511,7 +635,8 @@ class LiveTvActivity : AppCompatActivity() {
                         }
                         KeyEvent.KEYCODE_DPAD_UP -> {
                             if (position == 0) {
-                                binding.btnOpenLiveSearch.requestFocus()
+                                // 2. Feature: Mit DPAD_UP direkt auf den PIP-Player
+                                binding.livePlayerContainer.requestFocus()
                                 return@setOnKeyListener true
                             }
                         }
@@ -558,12 +683,16 @@ class LiveTvActivity : AppCompatActivity() {
                 holder.imgLogo.setImageResource(R.drawable.tv_banner)
             }
 
+            // Klick auf Sender: Spielt Sender ab und öffnet Vollbildmodus nahtlos
             holder.header.setOnClickListener {
-                openFullscreenPlayer(s, position)
+                currentChannelIndex = position
+                playLiveStream(s)
+                setFullscreenMode()
             }
 
             holder.header.setOnFocusChangeListener { _, hasFocus ->
                 if (hasFocus) {
+                    currentChannelIndex = position
                     showChannelPreview(s, null)
                 }
             }
@@ -573,17 +702,18 @@ class LiveTvActivity : AppCompatActivity() {
                 setHasFixedSize(true)
             }
 
-            val cached = epgCache[s.streamId]
+            // 3. EPG-Cache: Wenn bereits gecached, kein neues Laden!
+            val cached = globalEpgCache[s.streamId]
             if (cached != null) {
                 holder.recyclerPrograms.adapter = ProgramTimelineAdapter(s, position, cached, holder)
             } else {
-                val fallback = listOf(EpgProgram("Lade EPG...", "", "16:00", "23:59", true))
+                val fallback = listOf(EpgProgram("Lade EPG...", "", "Jetzt", "", true))
                 holder.recyclerPrograms.adapter = ProgramTimelineAdapter(s, position, fallback, holder)
 
                 lifecycleScope.launch {
                     val epgList = client.getEpg(s.streamId)
                     if (epgList.isNotEmpty()) {
-                        epgCache[s.streamId] = epgList
+                        globalEpgCache[s.streamId] = epgList
                         holder.recyclerPrograms.adapter = ProgramTimelineAdapter(s, position, epgList, holder)
                     }
                 }
@@ -629,7 +759,9 @@ class LiveTvActivity : AppCompatActivity() {
             }
 
             holder.itemView.setOnClickListener {
-                openFullscreenPlayer(stream, channelIndex)
+                currentChannelIndex = channelIndex
+                playLiveStream(stream)
+                setFullscreenMode()
             }
 
             holder.itemView.setOnKeyListener { _, keyCode, event ->

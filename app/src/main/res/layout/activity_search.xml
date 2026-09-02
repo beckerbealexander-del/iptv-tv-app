@@ -4,7 +4,7 @@
     android:layout_height="match_parent"
     android:background="@color/bg_dark"
     android:orientation="vertical"
-    android:padding="32dp">
+    android:padding="36dp">
 
     <!-- Titel -->
     <TextView
@@ -15,61 +15,30 @@
         android:textColor="@color/text_primary"
         android:textSize="22sp"
         android:textStyle="bold"
-        android:layout_marginBottom="16dp" />
+        android:layout_marginBottom="20dp" />
 
-    <!-- Suchleiste mit Eingabe, Bestätigen und Löschen -->
-    <LinearLayout
+    <!-- Vollbreite Suchleiste: Tastatur-Enter löst Suche direkt aus -->
+    <EditText
+        android:id="@+id/editSearchQuery"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:layout_marginBottom="24dp">
-
-        <EditText
-            android:id="@+id/editSearchQuery"
-            android:layout_width="0dp"
-            android:layout_height="48dp"
-            android:layout_weight="1"
-            android:background="@drawable/card_focus_selector"
-            android:hint="Suchbegriff eingeben (z. B. Sky, Pro7, Harry Potter, Lost)..."
-            android:textColor="@color/text_primary"
-            android:textColorHint="@color/text_secondary"
-            android:textSize="15sp"
-            android:paddingHorizontal="16dp"
-            android:inputType="text"
-            android:imeOptions="actionSearch" />
-
-        <Button
-            android:id="@+id/btnSearchSubmit"
-            android:layout_width="wrap_content"
-            android:layout_height="48dp"
-            android:background="@drawable/card_focus_selector"
-            android:text="🔍 Suchen"
-            android:textColor="@color/text_primary"
-            android:textSize="14sp"
-            android:textStyle="bold"
-            android:paddingHorizontal="20dp"
-            android:layout_marginStart="12dp" />
-
-        <Button
-            android:id="@+id/btnSearchClear"
-            android:layout_width="wrap_content"
-            android:layout_height="48dp"
-            android:background="@drawable/card_focus_selector"
-            android:text="✖ Löschen"
-            android:textColor="@color/text_secondary"
-            android:textSize="14sp"
-            android:paddingHorizontal="16dp"
-            android:layout_marginStart="8dp" />
-    </LinearLayout>
+        android:layout_height="52dp"
+        android:background="@drawable/card_focus_selector"
+        android:hint="Suchbegriff eingeben (z. B. Sky, Pro7, Harry Potter, Lost)..."
+        android:textColor="@color/text_primary"
+        android:textColorHint="@color/text_secondary"
+        android:textSize="16sp"
+        android:paddingHorizontal="20dp"
+        android:inputType="text"
+        android:imeOptions="actionSearch"
+        android:nextFocusDown="@+id/recyclerSearchHistory"
+        android:layout_marginBottom="28dp" />
 
     <!-- Such-Historie Sektion -->
     <LinearLayout
         android:id="@+id/layoutSearchHistory"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:layout_marginBottom="20dp">
+        android:orientation="vertical">
 
         <TextView
             android:id="@+id/txtHistoryHeader"
@@ -79,22 +48,14 @@
             android:textColor="@color/accent_gold"
             android:textSize="15sp"
             android:textStyle="bold"
-            android:layout_marginBottom="10dp" />
+            android:layout_marginBottom="12dp" />
 
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/recyclerSearchHistory"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal" />
+            android:orientation="horizontal"
+            android:descendantFocusability="afterDescendants" />
     </LinearLayout>
-
-    <TextView
-        android:id="@+id/txtSearchHint"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="💡 Bestätige die Suche mit 'Suchen' oder wähle einen Begriff aus der Historie, um die gefilterte Liste in der Übersicht anzuzeigen."
-        android:textColor="@color/text_secondary"
-        android:textSize="13sp"
-        android:layout_marginTop="16dp" />
 
 </LinearLayout>

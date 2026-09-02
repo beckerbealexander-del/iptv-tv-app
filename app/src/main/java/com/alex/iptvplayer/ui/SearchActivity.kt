@@ -43,17 +43,7 @@ class SearchActivity : AppCompatActivity() {
 
         loadSearchHistory()
 
-        binding.btnSearchClear.setOnClickListener {
-            binding.editSearchQuery.setText("")
-        }
-
-        binding.btnSearchSubmit.setOnClickListener {
-            val q = binding.editSearchQuery.text.toString().trim()
-            if (q.isNotEmpty()) {
-                submitSearch(q)
-            }
-        }
-
+        // Suche wird direkt ausgelöst, sobald auf der Tastatur "Enter" / "Suchen" gedrückt wird
         binding.editSearchQuery.setOnEditorActionListener { _, actionId, event ->
             if (actionId == EditorInfo.IME_ACTION_SEARCH || actionId == EditorInfo.IME_ACTION_DONE || actionId == EditorInfo.IME_ACTION_GO ||
                 (event != null && event.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN)) {
@@ -63,6 +53,18 @@ class SearchActivity : AppCompatActivity() {
                 }
                 true
             } else false
+        }
+
+        // Fokus-Fix: DPAD_DOWN wechselt direkt in die Liste "Letzte Suchen"
+        binding.editSearchQuery.setOnKeyListener { _, keyCode, event ->
+            if (event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+                val holder = binding.recyclerSearchHistory.findViewHolderForAdapterPosition(0)
+                if (holder != null) {
+                    holder.itemView.requestFocus()
+                    return@setOnKeyListener true
+                }
+            }
+            false
         }
 
         binding.editSearchQuery.post {
@@ -114,13 +116,21 @@ class SearchActivity : AppCompatActivity() {
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val q = items[position]
             holder.txt.text = "🔍 $q"
+            holder.itemView.isFocusable = true
+            holder.itemView.isClickable = true
+
             holder.itemView.setOnClickListener {
                 onClick(q)
             }
             holder.itemView.setOnKeyListener { _, keyCode, event ->
-                if (event.action == KeyEvent.ACTION_DOWN && (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER)) {
-                    onClick(q)
-                    return@setOnKeyListener true
+                if (event.action == KeyEvent.ACTION_DOWN) {
+                    if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) {
+                        onClick(q)
+                        return@setOnKeyListener true
+                    } else if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
+                        binding.editSearchQuery.requestFocus()
+                        return@setOnKeyListener true
+                    }
                 }
                 false
             }

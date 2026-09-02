@@ -4,7 +4,6 @@ package com.alex.iptvplayer.databinding;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -23,12 +22,6 @@ public final class ActivitySearchBinding implements ViewBinding {
   private final LinearLayout rootView;
 
   @NonNull
-  public final Button btnSearchClear;
-
-  @NonNull
-  public final Button btnSearchSubmit;
-
-  @NonNull
   public final EditText editSearchQuery;
 
   @NonNull
@@ -41,24 +34,16 @@ public final class ActivitySearchBinding implements ViewBinding {
   public final TextView txtHistoryHeader;
 
   @NonNull
-  public final TextView txtSearchHint;
-
-  @NonNull
   public final TextView txtSearchTitle;
 
-  private ActivitySearchBinding(@NonNull LinearLayout rootView, @NonNull Button btnSearchClear,
-      @NonNull Button btnSearchSubmit, @NonNull EditText editSearchQuery,
+  private ActivitySearchBinding(@NonNull LinearLayout rootView, @NonNull EditText editSearchQuery,
       @NonNull LinearLayout layoutSearchHistory, @NonNull RecyclerView recyclerSearchHistory,
-      @NonNull TextView txtHistoryHeader, @NonNull TextView txtSearchHint,
-      @NonNull TextView txtSearchTitle) {
+      @NonNull TextView txtHistoryHeader, @NonNull TextView txtSearchTitle) {
     this.rootView = rootView;
-    this.btnSearchClear = btnSearchClear;
-    this.btnSearchSubmit = btnSearchSubmit;
     this.editSearchQuery = editSearchQuery;
     this.layoutSearchHistory = layoutSearchHistory;
     this.recyclerSearchHistory = recyclerSearchHistory;
     this.txtHistoryHeader = txtHistoryHeader;
-    this.txtSearchHint = txtSearchHint;
     this.txtSearchTitle = txtSearchTitle;
   }
 
@@ -89,18 +74,6 @@ public final class ActivitySearchBinding implements ViewBinding {
     // This is done to optimize the compiled bytecode for size and performance.
     int id;
     missingId: {
-      id = R.id.btnSearchClear;
-      Button btnSearchClear = ViewBindings.findChildViewById(rootView, id);
-      if (btnSearchClear == null) {
-        break missingId;
-      }
-
-      id = R.id.btnSearchSubmit;
-      Button btnSearchSubmit = ViewBindings.findChildViewById(rootView, id);
-      if (btnSearchSubmit == null) {
-        break missingId;
-      }
-
       id = R.id.editSearchQuery;
       EditText editSearchQuery = ViewBindings.findChildViewById(rootView, id);
       if (editSearchQuery == null) {
@@ -125,21 +98,14 @@ public final class ActivitySearchBinding implements ViewBinding {
         break missingId;
       }
 
-      id = R.id.txtSearchHint;
-      TextView txtSearchHint = ViewBindings.findChildViewById(rootView, id);
-      if (txtSearchHint == null) {
-        break missingId;
-      }
-
       id = R.id.txtSearchTitle;
       TextView txtSearchTitle = ViewBindings.findChildViewById(rootView, id);
       if (txtSearchTitle == null) {
         break missingId;
       }
 
-      return new ActivitySearchBinding((LinearLayout) rootView, btnSearchClear, btnSearchSubmit,
-          editSearchQuery, layoutSearchHistory, recyclerSearchHistory, txtHistoryHeader,
-          txtSearchHint, txtSearchTitle);
+      return new ActivitySearchBinding((LinearLayout) rootView, editSearchQuery,
+          layoutSearchHistory, recyclerSearchHistory, txtHistoryHeader, txtSearchTitle);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));

@@ -131,7 +131,7 @@ class XtreamClient(context: Context) {
         list
     }
 
-    // EPG: Exakt auf 6 Stunden Vergangenheit (-6h) und 12 Stunden Zukunft (+12h) begrenzt
+    // EPG: Vergangene Daten werden komplett ignoriert (nur aktuelle "Jetzt" und zukünftige bis +12h)
     suspend fun getEpg(streamId: Int): List<EpgProgram> = withContext(Dispatchers.IO) {
         try {
             val url = buildApiUrl("get_simple_data_table", "&stream_id=$streamId")
@@ -139,7 +139,6 @@ class XtreamClient(context: Context) {
             val resp = gson.fromJson(json, EpgResponse::class.java)
             val list = mutableListOf<EpgProgram>()
             val nowMs = System.currentTimeMillis()
-            val windowStartMs = nowMs - (6 * 3600 * 1000L) // -6 Stunden
             val windowEndMs = nowMs + (12 * 3600 * 1000L)  // +12 Stunden
             val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
 
@@ -149,10 +148,11 @@ class XtreamClient(context: Context) {
                 val startTimeMs = try { raw.start?.let { sdf.parse(it)?.time } } catch (e: Exception) { null }
                 val endTimeMs = try { raw.end?.let { sdf.parse(it)?.time } } catch (e: Exception) { null }
 
-                val inWindow = if (startTimeMs != null && endTimeMs != null) {
-                    endTimeMs >= windowStartMs && startTimeMs <= windowEndMs
+                // Vergangene Daten komplett ignorieren
+                val inWindow = if (endTimeMs != null) {
+                    endTimeMs >= nowMs && (startTimeMs == null || startTimeMs <= windowEndMs)
                 } else {
-                    true
+                    raw.nowPlaying == 1
                 }
 
                 if (inWindow && title.isNotEmpty()) {

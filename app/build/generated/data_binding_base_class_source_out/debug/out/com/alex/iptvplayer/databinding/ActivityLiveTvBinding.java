@@ -4,6 +4,7 @@ package com.alex.iptvplayer.databinding;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
@@ -20,13 +21,22 @@ import java.lang.String;
 
 public final class ActivityLiveTvBinding implements ViewBinding {
   @NonNull
-  private final LinearLayout rootView;
+  private final FrameLayout rootView;
 
   @NonNull
   public final TextView btnOpenLiveSearch;
 
   @NonNull
-  public final PlayerView livePipPlayerView;
+  public final LinearLayout layoutOverview;
+
+  @NonNull
+  public final FrameLayout livePlayerContainer;
+
+  @NonNull
+  public final PlayerView livePlayerView;
+
+  @NonNull
+  public final FrameLayout pipAnchor;
 
   @NonNull
   public final ProgressBar progressCategories;
@@ -41,6 +51,9 @@ public final class ActivityLiveTvBinding implements ViewBinding {
   public final RecyclerView recyclerChannels;
 
   @NonNull
+  public final FrameLayout rootLiveTv;
+
+  @NonNull
   public final TextView txtCurrentLiveTime;
 
   @NonNull
@@ -52,19 +65,25 @@ public final class ActivityLiveTvBinding implements ViewBinding {
   @NonNull
   public final TextView txtPreviewTitle;
 
-  private ActivityLiveTvBinding(@NonNull LinearLayout rootView, @NonNull TextView btnOpenLiveSearch,
-      @NonNull PlayerView livePipPlayerView, @NonNull ProgressBar progressCategories,
-      @NonNull ProgressBar progressChannels, @NonNull RecyclerView recyclerCategories,
-      @NonNull RecyclerView recyclerChannels, @NonNull TextView txtCurrentLiveTime,
+  private ActivityLiveTvBinding(@NonNull FrameLayout rootView, @NonNull TextView btnOpenLiveSearch,
+      @NonNull LinearLayout layoutOverview, @NonNull FrameLayout livePlayerContainer,
+      @NonNull PlayerView livePlayerView, @NonNull FrameLayout pipAnchor,
+      @NonNull ProgressBar progressCategories, @NonNull ProgressBar progressChannels,
+      @NonNull RecyclerView recyclerCategories, @NonNull RecyclerView recyclerChannels,
+      @NonNull FrameLayout rootLiveTv, @NonNull TextView txtCurrentLiveTime,
       @NonNull TextView txtPreviewDesc, @NonNull TextView txtPreviewTime,
       @NonNull TextView txtPreviewTitle) {
     this.rootView = rootView;
     this.btnOpenLiveSearch = btnOpenLiveSearch;
-    this.livePipPlayerView = livePipPlayerView;
+    this.layoutOverview = layoutOverview;
+    this.livePlayerContainer = livePlayerContainer;
+    this.livePlayerView = livePlayerView;
+    this.pipAnchor = pipAnchor;
     this.progressCategories = progressCategories;
     this.progressChannels = progressChannels;
     this.recyclerCategories = recyclerCategories;
     this.recyclerChannels = recyclerChannels;
+    this.rootLiveTv = rootLiveTv;
     this.txtCurrentLiveTime = txtCurrentLiveTime;
     this.txtPreviewDesc = txtPreviewDesc;
     this.txtPreviewTime = txtPreviewTime;
@@ -73,7 +92,7 @@ public final class ActivityLiveTvBinding implements ViewBinding {
 
   @Override
   @NonNull
-  public LinearLayout getRoot() {
+  public FrameLayout getRoot() {
     return rootView;
   }
 
@@ -104,9 +123,27 @@ public final class ActivityLiveTvBinding implements ViewBinding {
         break missingId;
       }
 
-      id = R.id.livePipPlayerView;
-      PlayerView livePipPlayerView = ViewBindings.findChildViewById(rootView, id);
-      if (livePipPlayerView == null) {
+      id = R.id.layoutOverview;
+      LinearLayout layoutOverview = ViewBindings.findChildViewById(rootView, id);
+      if (layoutOverview == null) {
+        break missingId;
+      }
+
+      id = R.id.livePlayerContainer;
+      FrameLayout livePlayerContainer = ViewBindings.findChildViewById(rootView, id);
+      if (livePlayerContainer == null) {
+        break missingId;
+      }
+
+      id = R.id.livePlayerView;
+      PlayerView livePlayerView = ViewBindings.findChildViewById(rootView, id);
+      if (livePlayerView == null) {
+        break missingId;
+      }
+
+      id = R.id.pipAnchor;
+      FrameLayout pipAnchor = ViewBindings.findChildViewById(rootView, id);
+      if (pipAnchor == null) {
         break missingId;
       }
 
@@ -134,6 +171,8 @@ public final class ActivityLiveTvBinding implements ViewBinding {
         break missingId;
       }
 
+      FrameLayout rootLiveTv = (FrameLayout) rootView;
+
       id = R.id.txtCurrentLiveTime;
       TextView txtCurrentLiveTime = ViewBindings.findChildViewById(rootView, id);
       if (txtCurrentLiveTime == null) {
@@ -158,9 +197,10 @@ public final class ActivityLiveTvBinding implements ViewBinding {
         break missingId;
       }
 
-      return new ActivityLiveTvBinding((LinearLayout) rootView, btnOpenLiveSearch,
-          livePipPlayerView, progressCategories, progressChannels, recyclerCategories,
-          recyclerChannels, txtCurrentLiveTime, txtPreviewDesc, txtPreviewTime, txtPreviewTitle);
+      return new ActivityLiveTvBinding((FrameLayout) rootView, btnOpenLiveSearch, layoutOverview,
+          livePlayerContainer, livePlayerView, pipAnchor, progressCategories, progressChannels,
+          recyclerCategories, recyclerChannels, rootLiveTv, txtCurrentLiveTime, txtPreviewDesc,
+          txtPreviewTime, txtPreviewTitle);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));

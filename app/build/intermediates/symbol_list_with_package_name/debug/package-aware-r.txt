@@ -3849,8 +3849,6 @@ id btnOpenSeriesSearch
 id btnOpenVodSearch
 id btnPrevEpisode
 id btnSaveSettings
-id btnSearchClear
-id btnSearchSubmit
 id btnSeriesSortAlpha
 id btnSeriesSortDefault
 id btnSeriesSortRating
@@ -4111,6 +4109,7 @@ id jumpToStart
 id label
 id labeled
 id layout
+id layoutOverview
 id layoutSearchHistory
 id layoutSectionChannelHistory
 id layoutSectionMovieHistory
@@ -4158,7 +4157,8 @@ id line3
 id linear
 id listMode
 id list_item
-id livePipPlayerView
+id livePlayerContainer
+id livePlayerView
 id logo
 id m3_side_sheet
 id main
@@ -4294,6 +4294,7 @@ id peekHeight
 id percent
 id picker
 id pin
+id pipAnchor
 id playback_controls_dock
 id playback_fragment_background
 id playback_fragment_root
@@ -4340,6 +4341,7 @@ id right
 id rightToLeft
 id right_icon
 id right_side
+id rootLiveTv
 id rounded
 id row_content
 id row_header
@@ -4500,7 +4502,6 @@ id txtPreviewTime
 id txtPreviewTitle
 id txtScrubSpeed
 id txtScrubTargetTime
-id txtSearchHint
 id txtSearchTitle
 id txtSeasonName
 id txtSeriesCategoryTitle

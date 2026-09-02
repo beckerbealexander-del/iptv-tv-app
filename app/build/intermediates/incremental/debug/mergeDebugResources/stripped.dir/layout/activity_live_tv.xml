@@ -1,198 +1,208 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/rootLiveTv"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#000000"
-    android:orientation="horizontal">
+    android:background="#000000">
 
-    <!-- Linke Spalte: Suche + Filter + TV-Kategorien -->
+    <!-- 1. Die vollständige 2-Spalten Live TV Übersicht -->
     <LinearLayout
-        android:layout_width="210dp"
+        android:id="@+id/layoutOverview"
+        android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#0B0B0B"
-        android:orientation="vertical"
-        android:padding="8dp">
+        android:background="#000000"
+        android:orientation="horizontal">
 
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="TV-Kategorien"
-            android:textColor="@color/text_primary"
-            android:textSize="14sp"
-            android:textStyle="bold"
-            android:layout_marginBottom="6dp" />
-
-        <!-- Such-Button öffnet Vollbild-Suche mit Historie -->
-        <TextView
-            android:id="@+id/btnOpenLiveSearch"
-            android:layout_width="match_parent"
-            android:layout_height="34dp"
-            android:background="@drawable/card_focus_selector"
-            android:clickable="true"
-            android:focusable="true"
-            android:gravity="center_vertical"
-            android:paddingHorizontal="10dp"
-            android:text="🔍 Sender suchen..."
-            android:textColor="@color/text_primary"
-            android:textSize="11.5sp"
-            android:textStyle="bold"
-            android:layout_marginBottom="8dp" />
-
-        <ProgressBar
-            android:id="@+id/progressCategories"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:visibility="gone" />
-
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/recyclerCategories"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:descendantFocusability="afterDescendants" />
-    </LinearLayout>
-
-    <!-- Rechte Spalte: TiviMate Style EPG Timeline Grid + PIP Mini-Player -->
-    <LinearLayout
-        android:layout_width="0dp"
-        android:layout_height="match_parent"
-        android:layout_weight="1"
-        android:orientation="vertical"
-        android:padding="8dp">
-
-        <!-- 1. Obere Leiste: PIP Mini-Player (Live TV Vorschau mit Audio) + Sendungsinfos -->
+        <!-- Linke Spalte: Suche + TV-Kategorien -->
         <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="115dp"
-            android:background="#121212"
-            android:orientation="horizontal"
-            android:padding="6dp"
-            android:layout_marginBottom="6dp">
+            android:layout_width="210dp"
+            android:layout_height="match_parent"
+            android:background="#0B0B0B"
+            android:orientation="vertical"
+            android:padding="8dp">
 
-            <!-- PIP Mini-Player Card -->
-            <androidx.cardview.widget.CardView
-                android:layout_width="190dp"
-                android:layout_height="match_parent"
-                android:layout_marginEnd="10dp"
-                app:cardCornerRadius="6dp"
-                app:cardBackgroundColor="#000000">
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="TV-Kategorien"
+                android:textColor="@color/text_primary"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="6dp" />
 
-                <androidx.media3.ui.PlayerView
-                    android:id="@+id/livePipPlayerView"
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    app:use_controller="false"
-                    app:resize_mode="zoom" />
-            </androidx.cardview.widget.CardView>
+            <!-- Such-Button öffnet Vollbild-Suche -->
+            <TextView
+                android:id="@+id/btnOpenLiveSearch"
+                android:layout_width="match_parent"
+                android:layout_height="34dp"
+                android:background="@drawable/card_focus_selector"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="10dp"
+                android:text="🔍 Sender suchen..."
+                android:textColor="@color/text_primary"
+                android:textSize="11.5sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="8dp" />
 
-            <!-- Sendungsinfos -->
-            <LinearLayout
+            <ProgressBar
+                android:id="@+id/progressCategories"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:visibility="gone" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/recyclerCategories"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:orientation="vertical">
+                android:descendantFocusability="afterDescendants" />
+        </LinearLayout>
 
+        <!-- Rechte Spalte: TiviMate Style EPG Grid + PIP Mini-Player Anchor -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:padding="8dp">
+
+            <!-- 1. Obere Leiste: PIP Mini-Player Anker + Sendungsinfos -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="115dp"
+                android:background="#121212"
+                android:orientation="horizontal"
+                android:padding="6dp"
+                android:layout_marginBottom="6dp">
+
+                <!-- PIP Player Anker (wird zur exakten Positionierung des Player-Containers genutzt) -->
+                <FrameLayout
+                    android:id="@+id/pipAnchor"
+                    android:layout_width="190dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginEnd="10dp" />
+
+                <!-- Sendungsinfos -->
                 <LinearLayout
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
+                    android:layout_height="match_parent"
+                    android:orientation="vertical">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:id="@+id/txtPreviewTitle"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:ellipsize="end"
+                            android:maxLines="1"
+                            android:text="Wähle einen Sender"
+                            android:textColor="@color/text_primary"
+                            android:textSize="14sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/txtPreviewTime"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text=""
+                            android:textColor="@color/netflix_red"
+                            android:textSize="11sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
 
                     <TextView
-                        android:id="@+id/txtPreviewTitle"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
+                        android:id="@+id/txtPreviewDesc"
+                        android:layout_width="match_parent"
+                        android:layout_height="0dp"
                         android:layout_weight="1"
+                        android:layout_marginTop="2dp"
                         android:ellipsize="end"
-                        android:maxLines="1"
-                        android:text="Wähle einen Sender"
-                        android:textColor="@color/text_primary"
-                        android:textSize="14sp"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:id="@+id/txtPreviewTime"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text=""
-                        android:textColor="@color/netflix_red"
-                        android:textSize="11sp"
-                        android:textStyle="bold" />
+                        android:maxLines="3"
+                        android:text="Drücke OK auf der Fernbedienung, um den Sender im Vollbild zu starten."
+                        android:textColor="@color/text_secondary"
+                        android:textSize="10.5sp" />
                 </LinearLayout>
+            </LinearLayout>
+
+            <!-- 2. TiviMate Zeitstrahl-Kopfleiste (Jetzt & Zukunft) -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="24dp"
+                android:background="#181818"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingHorizontal="8dp"
+                android:layout_marginBottom="3dp">
 
                 <TextView
-                    android:id="@+id/txtPreviewDesc"
-                    android:layout_width="match_parent"
-                    android:layout_height="0dp"
-                    android:layout_weight="1"
-                    android:layout_marginTop="2dp"
-                    android:ellipsize="end"
-                    android:maxLines="3"
-                    android:text="Drücke OK auf der Fernbedienung, um den Sender im Vollbild zu starten."
+                    android:id="@+id/txtCurrentLiveTime"
+                    android:layout_width="280dp"
+                    android:layout_height="wrap_content"
+                    android:text="🔴 LIVE TV GUIDE"
+                    android:textColor="@color/netflix_red"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    android:layout_marginEnd="4dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="🔴 JETZT"
+                    android:textColor="@color/netflix_red"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    android:layout_marginEnd="20dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Als Nächstes ▶"
                     android:textColor="@color/text_secondary"
-                    android:textSize="10.5sp" />
+                    android:textSize="11sp" />
             </LinearLayout>
+
+            <ProgressBar
+                android:id="@+id/progressChannels"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:visibility="gone" />
+
+            <!-- 3. Senderzeilen mit horizontalem EPG Timeline Zeitstrahl -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/recyclerChannels"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:descendantFocusability="afterDescendants" />
         </LinearLayout>
 
-        <!-- 2. TiviMate Zeitstrahl-Kopfleiste (Vergangenheit bis Zukunft) -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="24dp"
-            android:background="#181818"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:paddingHorizontal="8dp"
-            android:layout_marginBottom="3dp">
-
-            <TextView
-                android:id="@+id/txtCurrentLiveTime"
-                android:layout_width="280dp"
-                android:layout_height="wrap_content"
-                android:text="🔴 LIVE TV GUIDE"
-                android:textColor="@color/netflix_red"
-                android:textSize="11sp"
-                android:textStyle="bold"
-                android:layout_marginEnd="4dp" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="◀ Vergangenheit"
-                android:textColor="@color/text_secondary"
-                android:textSize="10sp"
-                android:layout_marginEnd="16dp" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="🔴 JETZT"
-                android:textColor="@color/netflix_red"
-                android:textSize="11sp"
-                android:textStyle="bold"
-                android:layout_marginEnd="16dp" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Zukunft ▶"
-                android:textColor="@color/text_secondary"
-                android:textSize="10sp" />
-        </LinearLayout>
-
-        <ProgressBar
-            android:id="@+id/progressChannels"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:visibility="gone" />
-
-        <!-- 3. Senderzeilen mit horizontalem EPG Timeline Zeitstrahl -->
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/recyclerChannels"
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1"
-            android:descendantFocusability="afterDescendants" />
     </LinearLayout>
 
-</LinearLayout>
+    <!-- 2. Gemeinsamer Player-Container (Skaliert nahtlos zwischen Mini-PIP und Vollbild) -->
+    <FrameLayout
+        android:id="@+id/livePlayerContainer"
+        android:layout_width="190dp"
+        android:layout_height="103dp"
+        android:background="@drawable/card_focus_selector"
+        android:clickable="true"
+        android:focusable="true">
+
+        <androidx.media3.ui.PlayerView
+            android:id="@+id/livePlayerView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            app:use_controller="false"
+            app:resize_mode="zoom" />
+    </FrameLayout>
+
+</FrameLayout>
