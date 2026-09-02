@@ -11,13 +11,13 @@
         android:id="@+id/txtSearchTitle"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="🔍 Live TV Dual-Suche"
+        android:text="🔍 Live TV Suche"
         android:textColor="@color/text_primary"
         android:textSize="22sp"
         android:textStyle="bold"
         android:layout_marginBottom="16dp" />
 
-    <!-- Vollbreite Suchleiste: Tastatur-Enter löst Suche direkt aus -->
+    <!-- Vollbreite Suchleiste -->
     <EditText
         android:id="@+id/editSearchQuery"
         android:layout_width="match_parent"
@@ -30,64 +30,48 @@
         android:paddingHorizontal="18dp"
         android:inputType="text"
         android:imeOptions="actionSearch"
-        android:nextFocusDown="@+id/layoutTabs"
         android:layout_marginBottom="16dp" />
 
-    <!-- Filter-Tabs direkt unter dem Suchfeld -->
+    <!-- Filter-Tabs direkt unter dem Suchfeld (nur Sender und Live-Programm, "Alle" entfernt) -->
     <LinearLayout
         android:id="@+id/layoutTabs"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:layout_marginBottom="14dp"
+        android:layout_marginBottom="16dp"
         android:visibility="gone">
-
-        <TextView
-            android:id="@+id/btnTabAll"
-            android:layout_width="wrap_content"
-            android:layout_height="32dp"
-            android:background="@drawable/card_focus_selector"
-            android:clickable="true"
-            android:focusable="true"
-            android:gravity="center"
-            android:paddingHorizontal="14dp"
-            android:text="⭐ Alle Treffer"
-            android:textColor="@color/text_primary"
-            android:textSize="12sp"
-            android:textStyle="bold"
-            android:layout_marginEnd="10dp" />
 
         <TextView
             android:id="@+id/btnTabChannels"
             android:layout_width="wrap_content"
-            android:layout_height="32dp"
-            android:background="@drawable/card_focus_selector"
+            android:layout_height="36dp"
+            android:background="@drawable/card_focus_border_red"
             android:clickable="true"
             android:focusable="true"
             android:gravity="center"
-            android:paddingHorizontal="14dp"
+            android:paddingHorizontal="18dp"
             android:text="📺 Sender (0)"
             android:textColor="@color/text_primary"
-            android:textSize="12sp"
+            android:textSize="13sp"
             android:textStyle="bold"
-            android:layout_marginEnd="10dp" />
+            android:layout_marginEnd="12dp" />
 
         <TextView
             android:id="@+id/btnTabPrograms"
             android:layout_width="wrap_content"
-            android:layout_height="32dp"
+            android:layout_height="36dp"
             android:background="@drawable/card_focus_selector"
             android:clickable="true"
             android:focusable="true"
             android:gravity="center"
-            android:paddingHorizontal="14dp"
+            android:paddingHorizontal="18dp"
             android:text="🔴 Live-Programm (0)"
             android:textColor="@color/text_primary"
-            android:textSize="12sp"
+            android:textSize="13sp"
             android:textStyle="bold" />
     </LinearLayout>
 
-    <!-- Such-Historie Sektion (wird angezeigt wenn Suchfeld leer ist) -->
+    <!-- Such-Historie Sektion -->
     <LinearLayout
         android:id="@+id/layoutSearchHistory"
         android:layout_width="match_parent"

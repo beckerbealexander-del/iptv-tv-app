@@ -23,9 +23,6 @@ public final class ActivitySearchBinding implements ViewBinding {
   private final LinearLayout rootView;
 
   @NonNull
-  public final TextView btnTabAll;
-
-  @NonNull
   public final TextView btnTabChannels;
 
   @NonNull
@@ -58,15 +55,13 @@ public final class ActivitySearchBinding implements ViewBinding {
   @NonNull
   public final TextView txtSearchTitle;
 
-  private ActivitySearchBinding(@NonNull LinearLayout rootView, @NonNull TextView btnTabAll,
-      @NonNull TextView btnTabChannels, @NonNull TextView btnTabPrograms,
-      @NonNull EditText editSearchQuery, @NonNull LinearLayout layoutSearchHistory,
-      @NonNull LinearLayout layoutTabs, @NonNull ProgressBar progressSearch,
-      @NonNull RecyclerView recyclerSearchHistory, @NonNull RecyclerView recyclerSearchResults,
-      @NonNull TextView txtHistoryHeader, @NonNull TextView txtNoResults,
-      @NonNull TextView txtSearchTitle) {
+  private ActivitySearchBinding(@NonNull LinearLayout rootView, @NonNull TextView btnTabChannels,
+      @NonNull TextView btnTabPrograms, @NonNull EditText editSearchQuery,
+      @NonNull LinearLayout layoutSearchHistory, @NonNull LinearLayout layoutTabs,
+      @NonNull ProgressBar progressSearch, @NonNull RecyclerView recyclerSearchHistory,
+      @NonNull RecyclerView recyclerSearchResults, @NonNull TextView txtHistoryHeader,
+      @NonNull TextView txtNoResults, @NonNull TextView txtSearchTitle) {
     this.rootView = rootView;
-    this.btnTabAll = btnTabAll;
     this.btnTabChannels = btnTabChannels;
     this.btnTabPrograms = btnTabPrograms;
     this.editSearchQuery = editSearchQuery;
@@ -107,12 +102,6 @@ public final class ActivitySearchBinding implements ViewBinding {
     // This is done to optimize the compiled bytecode for size and performance.
     int id;
     missingId: {
-      id = R.id.btnTabAll;
-      TextView btnTabAll = ViewBindings.findChildViewById(rootView, id);
-      if (btnTabAll == null) {
-        break missingId;
-      }
-
       id = R.id.btnTabChannels;
       TextView btnTabChannels = ViewBindings.findChildViewById(rootView, id);
       if (btnTabChannels == null) {
@@ -179,10 +168,9 @@ public final class ActivitySearchBinding implements ViewBinding {
         break missingId;
       }
 
-      return new ActivitySearchBinding((LinearLayout) rootView, btnTabAll, btnTabChannels,
-          btnTabPrograms, editSearchQuery, layoutSearchHistory, layoutTabs, progressSearch,
-          recyclerSearchHistory, recyclerSearchResults, txtHistoryHeader, txtNoResults,
-          txtSearchTitle);
+      return new ActivitySearchBinding((LinearLayout) rootView, btnTabChannels, btnTabPrograms,
+          editSearchQuery, layoutSearchHistory, layoutTabs, progressSearch, recyclerSearchHistory,
+          recyclerSearchResults, txtHistoryHeader, txtNoResults, txtSearchTitle);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));

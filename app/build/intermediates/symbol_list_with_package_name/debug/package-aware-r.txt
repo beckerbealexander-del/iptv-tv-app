@@ -3862,7 +3862,6 @@ id btnSortDefault
 id btnSortRating
 id btnSortYear
 id btnSubtitles
-id btnTabAll
 id btnTabChannels
 id btnTabPrograms
 id button

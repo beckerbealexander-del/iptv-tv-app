@@ -925,40 +925,35 @@ class LiveTvActivity : AppCompatActivity() {
             }
         }
 
-        // 1. OPTIK: Roter Indikator-Punkt für Playing Category, dezente Tönung für Browsing Category
+        // 1. OPTIK: Roter Indikator-Punkt für Playing Category, nur Browsing Category hat rote Tönung
         private fun applyCategoryStyle(holder: ViewHolder, cat: Category) {
             val isPlaying = (cat.id == playingCategoryId)
             val isBrowsing = (cat.id == browsingCategoryId)
             val isFocused = holder.itemView.isFocused
 
-            // 1. DYNAMISCHER ROTER PUNKT: Exakt an der Kategorie des aktiven Streams
+            // 1. DYNAMISCHER ROTER PUNKT: Signalisiert den laufenden Stream (NUR DER PUNKT, KEINE ROTE FÜLLUNG!)
             holder.dot.visibility = if (isPlaying) View.VISIBLE else View.GONE
             holder.txtName.text = cat.name
-            holder.txtName.setTextColor(if (isFocused || isBrowsing || isPlaying) Color.parseColor("#FFFFFF") else Color.parseColor("#B0B0B0"))
+            holder.txtName.setTextColor(if (isFocused || isBrowsing) Color.parseColor("#FFFFFF") else Color.parseColor("#B0B0B0"))
 
             val drawable = GradientDrawable().apply {
                 cornerRadius = dpToPx(6).toFloat()
                 when {
                     // D-Pad Cursor: Reiner roter Fokusrahmen (Border), kein Vollflächen-Knallrot
                     isFocused -> {
-                        when {
-                            isBrowsing -> setColor(Color.parseColor("#701A22"))
-                            isPlaying -> setColor(Color.parseColor("#2C1014"))
-                            else -> setColor(Color.parseColor("#1C1C1C"))
+                        if (isBrowsing) {
+                            setColor(Color.parseColor("#701A22"))
+                        } else {
+                            setColor(Color.parseColor("#1C1C1C"))
                         }
                         setStroke(dpToPx(3), Color.parseColor("#E50914"))
                     }
-                    // Browsing Category: Sichtbare matte rote Tönung (bleibt stabil beim Drüber-Navigieren!)
+                    // Browsing Category (die gerade durchsucht wird): Sichtbare matte rote Tönung
                     isBrowsing -> {
                         setColor(Color.parseColor("#701A22"))
                         setStroke(dpToPx(1.5f.toInt()), Color.parseColor("#90202A"))
                     }
-                    // Playing Category (wo der Stream herkommt): Dunklere dezente Akzentuierung
-                    isPlaying -> {
-                        setColor(Color.parseColor("#2C1014"))
-                        setStroke(dpToPx(1), Color.parseColor("#5A161B"))
-                    }
-                    // Normal / Inaktiv
+                    // Playing Category & Normal: Neutral dunkel, KEINE zusätzliche rote Füllung! (Nur der rote Punkt!)
                     else -> {
                         setColor(Color.parseColor("#141414"))
                         setStroke(dpToPx(1), Color.parseColor("#222222"))
@@ -1010,7 +1005,7 @@ class LiveTvActivity : AppCompatActivity() {
 
             holder.txtName.text = s.name
 
-            // 1. DYNAMISCHER ROTER PUNKT: Exakt neben dem aktuell laufenden Sender
+            // 1. DYNAMISCHER ROTER PUNKT: Signalisiert den laufenden Stream (NUR DER PUNKT, KEINE ROTE FÜLLUNG!)
             holder.dot.visibility = if (isPlaying) View.VISIBLE else View.GONE
 
             if (isPlaying) {
@@ -1076,20 +1071,11 @@ class LiveTvActivity : AppCompatActivity() {
                 cornerRadius = dpToPx(6).toFloat()
                 when {
                     // Cursor: Reiner roter Fokusrahmen
-                    isFocused && isPlaying -> {
-                        setColor(Color.parseColor("#701A22"))
-                        setStroke(dpToPx(3), Color.parseColor("#E50914"))
-                    }
                     isFocused -> {
                         setColor(Color.parseColor("#1C1C1C"))
                         setStroke(dpToPx(3), Color.parseColor("#E50914"))
                     }
-                    // Aktuell laufender Sender: Dezente Tönung
-                    isPlaying -> {
-                        setColor(Color.parseColor("#341216"))
-                        setStroke(dpToPx(1), Color.parseColor("#7A1C24"))
-                    }
-                    // Normal / Inaktiv
+                    // Normal & Aktuell laufender Sender: Neutral dunkel, KEINE rote Füllung! (Nur der rote Punkt!)
                     else -> {
                         setColor(Color.parseColor("#141414"))
                         setStroke(dpToPx(1), Color.parseColor("#222222"))
