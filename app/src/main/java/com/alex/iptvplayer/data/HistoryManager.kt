@@ -25,7 +25,8 @@ data class HistoryItem(
     var durationMs: Long = 0L,
     val season: Int = 1,
     val episodeNum: Int = 1,
-    var timestamp: Long = System.currentTimeMillis()
+    var timestamp: Long = System.currentTimeMillis(),
+    val seriesId: Int = 0
 ) : Serializable {
     val progressPercent: Int
         get() = if (durationMs > 0) ((positionMs * 100) / durationMs).toInt().coerceIn(0, 100) else 0
@@ -35,6 +36,7 @@ data class CloudSyncPayload(
     val user: String,
     val history: List<HistoryItem>,
     val recentChannels: List<LiveStream>? = null,
+    val searchHistory: Map<String, List<String>>? = null,
     val settings: Map<String, String>? = null
 )
 
@@ -44,8 +46,8 @@ class HistoryManager(context: Context) {
         context.getSharedPreferences("alex_iptv_history", Context.MODE_PRIVATE)
     private val gson = Gson()
     private val httpClient = OkHttpClient.Builder()
-        .connectTimeout(6, TimeUnit.SECONDS)
-        .readTimeout(6, TimeUnit.SECONDS)
+        .connectTimeout(25, TimeUnit.SECONDS)
+        .readTimeout(25, TimeUnit.SECONDS)
         .build()
 
     private val cloudSyncUrl = "https://iptvproxy-x8rs.onrender.com/api/sync"
@@ -60,18 +62,22 @@ class HistoryManager(context: Context) {
         positionMs: Long,
         durationMs: Long,
         season: Int = 1,
-        episodeNum: Int = 1
+        episodeNum: Int = 1,
+        seriesId: Int = 0
     ) {
-        if (positionMs < 5000 && type != "LIVE") return
+        if (type == "LIVE" || streamUrl.contains("/live/")) return
+        if (positionMs < 5000 && durationMs <= 0) return
 
         val list = getHistory().toMutableList()
-        list.removeAll { it.id == id || (it.streamUrl == streamUrl && streamUrl.isNotEmpty()) }
-
-        if (durationMs > 0 && (positionMs.toFloat() / durationMs.toFloat()) > 0.92f) {
-            saveList(list)
-            uploadToCloud()
-            return
+        list.removeAll { 
+            it.id == id || 
+            (it.streamUrl.isNotEmpty() && it.streamUrl == streamUrl) ||
+            (seriesId > 0 && it.seriesId == seriesId && it.season == season && it.episodeNum == episodeNum)
         }
+
+        // Wenn >= 90% geschaut wurde, gilt der Titel als vollständig gesehen (100% Fortschrittsbalken)
+        val isCompleted = durationMs > 0 && (positionMs.toFloat() / durationMs.toFloat()) >= 0.90f
+        val finalPositionMs = if (isCompleted) durationMs else positionMs
 
         val item = HistoryItem(
             id = id,
@@ -80,15 +86,16 @@ class HistoryManager(context: Context) {
             posterUrl = posterUrl,
             type = type,
             streamId = streamId,
-            positionMs = positionMs,
+            positionMs = finalPositionMs,
             durationMs = durationMs,
             season = season,
             episodeNum = episodeNum,
-            timestamp = System.currentTimeMillis()
+            timestamp = System.currentTimeMillis(),
+            seriesId = seriesId
         )
         list.add(0, item)
 
-        val trimmed = if (list.size > 50) list.take(50) else list
+        val trimmed = if (list.size > 2000) list.take(2000) else list
         saveList(trimmed)
         uploadToCloud()
     }
@@ -123,8 +130,17 @@ class HistoryManager(context: Context) {
         }
     }
 
-    fun getResumePosition(streamUrl: String): Long {
-        val item = getHistory().firstOrNull { it.streamUrl == streamUrl }
+    fun getResumePosition(streamUrl: String, streamId: Int = -1): Long {
+        if (streamUrl.contains("/live/")) return 0L
+        val item = getHistory().firstOrNull { 
+            (streamId > 0 && it.streamId == streamId) || 
+            (streamUrl.isNotEmpty() && it.streamUrl == streamUrl) 
+        }
+        if (item?.type == "LIVE") return 0L
+        // Wenn bereits fertig geschaut (>= 90%), von vorne (0s) starten
+        if (item != null && item.durationMs > 0 && (item.positionMs.toFloat() / item.durationMs.toFloat()) >= 0.90f) {
+            return 0L
+        }
         return item?.positionMs ?: 0L
     }
 
@@ -143,18 +159,28 @@ class HistoryManager(context: Context) {
         }
     }
 
+    fun getAllSearchHistory(): Map<String, List<String>> {
+        return mapOf(
+            "LIVE" to getSearchHistory("LIVE"),
+            "VOD" to getSearchHistory("VOD"),
+            "SERIES" to getSearchHistory("SERIES")
+        )
+    }
+
     fun addSearchQuery(type: String, query: String) {
         val q = query.trim()
         if (q.isEmpty()) return
         val list = getSearchHistory(type).toMutableList()
         list.remove(q)
         list.add(0, q)
-        val trimmed = if (list.size > 20) list.take(20) else list
+        val trimmed = if (list.size > 50) list.take(50) else list
         prefs.edit().putString("search_history_$type", gson.toJson(trimmed)).apply()
+        uploadToCloud()
     }
 
     // Bidirektionale Synchronisation mit der Cloud
     fun syncWithCloud(user: String, onComplete: (() -> Unit)? = null) {
+        prefs.edit().putString("sync_username", user).apply()
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 // 1. Zuerst aktuelle Cloud-Daten abrufen
@@ -168,33 +194,68 @@ class HistoryManager(context: Context) {
                         if (!body.isNullOrEmpty()) {
                             val payload = gson.fromJson(body, CloudSyncPayload::class.java)
 
-                            // Historie mergen
+                            // Historie intelligent mergen: Neuere Zeitstempel überschreiben ältere lokale Stände
                             val local = getHistory().toMutableList()
                             var changed = false
                             payload?.history?.forEach { cloudItem ->
-                                if (local.none { it.id == cloudItem.id }) {
+                                val existingIndex = local.indexOfFirst {
+                                    it.id == cloudItem.id ||
+                                    (it.seriesId > 0 && it.seriesId == cloudItem.seriesId && it.season == cloudItem.season && it.episodeNum == cloudItem.episodeNum) ||
+                                    (it.streamUrl.isNotEmpty() && it.streamUrl == cloudItem.streamUrl)
+                                }
+                                if (existingIndex >= 0) {
+                                    val localItem = local[existingIndex]
+                                    val cloudCompleted = cloudItem.durationMs > 0 && (cloudItem.positionMs.toFloat() / cloudItem.durationMs.toFloat()) >= 0.90f
+                                    val localCompleted = localItem.durationMs > 0 && (localItem.positionMs.toFloat() / localItem.durationMs.toFloat()) >= 0.90f
+                                    if (cloudItem.timestamp > localItem.timestamp || (cloudCompleted && !localCompleted)) {
+                                        local[existingIndex] = cloudItem
+                                        changed = true
+                                    }
+                                } else {
                                     local.add(cloudItem)
                                     changed = true
                                 }
                             }
                             if (changed) {
                                 local.sortByDescending { it.timestamp }
-                                saveList(local.take(50))
+                                val trimmed = if (local.size > 2000) local.take(2000) else local
+                                saveList(trimmed)
                             }
 
                             // Zuletzt gesehene TV-Sender mergen
                             if (!payload?.recentChannels.isNullOrEmpty()) {
                                 val localChans = getRecentLiveChannels().toMutableList()
-                                var chanChanged = false
+                                val mergedChans = mutableListOf<LiveStream>()
+                                // Erst die aus der Cloud
                                 payload?.recentChannels?.forEach { c ->
-                                    if (localChans.none { it.streamId == c.streamId }) {
-                                        localChans.add(c)
-                                        chanChanged = true
+                                    if (mergedChans.none { it.streamId == c.streamId }) {
+                                        mergedChans.add(c)
                                     }
                                 }
-                                if (chanChanged) {
-                                    val trimmed = if (localChans.size > 10) localChans.take(10) else localChans
-                                    prefs.edit().putString("recent_live_channels", gson.toJson(trimmed)).apply()
+                                // Dann die lokalen ergänzen
+                                localChans.forEach { c ->
+                                    if (mergedChans.none { it.streamId == c.streamId }) {
+                                        mergedChans.add(c)
+                                    }
+                                }
+                                val trimmed = if (mergedChans.size > 20) mergedChans.take(20) else mergedChans
+                                val json = gson.toJson(trimmed)
+                                prefs.edit().putString("recent_live_channels", json).apply()
+                            }
+
+                            // 3. Suchverlauf mergen (Live, VOD, SERIES)
+                            payload?.searchHistory?.forEach { (type, cloudQueries) ->
+                                val localQueries = getSearchHistory(type).toMutableList()
+                                var searchChanged = false
+                                cloudQueries.reversed().forEach { q ->
+                                    if (!localQueries.contains(q)) {
+                                        localQueries.add(0, q)
+                                        searchChanged = true
+                                    }
+                                }
+                                if (searchChanged) {
+                                    val trimmed = if (localQueries.size > 50) localQueries.take(50) else localQueries
+                                    prefs.edit().putString("search_history_$type", gson.toJson(trimmed)).apply()
                                 }
                             }
                         }
@@ -204,7 +265,7 @@ class HistoryManager(context: Context) {
                 // 2. Lokale Daten nach oben pushen
                 uploadToCloudDirect(user)
             } catch (e: Exception) {
-                // Offline Fallback
+                com.alex.iptvplayer.util.AppLogger.e("HistoryManager", "syncWithCloud error: ${e.message}", e)
             } finally {
                 onComplete?.invoke()
             }
@@ -212,7 +273,8 @@ class HistoryManager(context: Context) {
     }
 
     fun uploadToCloud() {
-        uploadToCloudDirect("fb5940d0a3a0")
+        val user = prefs.getString("sync_username", "fb5940d0a3a0") ?: "fb5940d0a3a0"
+        uploadToCloudDirect(user)
     }
 
     private fun uploadToCloudDirect(user: String) {
@@ -220,12 +282,14 @@ class HistoryManager(context: Context) {
             try {
                 val list = getHistory()
                 val channels = getRecentLiveChannels()
-                if (list.isEmpty() && channels.isEmpty()) return@launch
+                val search = getAllSearchHistory()
+                if (list.isEmpty() && channels.isEmpty() && search.values.all { it.isEmpty() }) return@launch
 
                 val payload = CloudSyncPayload(
                     user = user,
                     history = list,
-                    recentChannels = channels
+                    recentChannels = channels,
+                    searchHistory = search
                 )
                 val json = gson.toJson(payload)
                 val body = json.toRequestBody("application/json; charset=utf-8".toMediaType())
@@ -235,7 +299,7 @@ class HistoryManager(context: Context) {
                     .build()
                 httpClient.newCall(req).execute().close()
             } catch (e: Exception) {
-                // Silent
+                com.alex.iptvplayer.util.AppLogger.e("HistoryManager", "uploadToCloud error: ${e.message}", e)
             }
         }
     }

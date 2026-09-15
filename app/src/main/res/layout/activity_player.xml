@@ -14,7 +14,8 @@
         android:layout_height="match_parent"
         android:focusable="true"
         app:use_controller="false"
-        app:resize_mode="fit" />
+        app:resize_mode="fit"
+        app:surface_type="surface_view" />
 
     <!-- Lade-Spinner -->
     <ProgressBar
@@ -22,6 +23,21 @@
         android:layout_width="56dp"
         android:layout_height="56dp"
         android:layout_gravity="center"
+        android:visibility="gone" />
+
+    <!-- Auto-Retry / Connection Waiting Status Banner -->
+    <TextView
+        android:id="@+id/txtPlayerRetryBanner"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:background="#D9000000"
+        android:paddingHorizontal="20dp"
+        android:paddingVertical="12dp"
+        android:text="⏳ Warte auf Stream-Freigabe..."
+        android:textColor="#FFD700"
+        android:textSize="16sp"
+        android:textStyle="bold"
         android:visibility="gone" />
 
     <!-- Netflix-Style Mittlerer Spul-Indikator -->
@@ -55,6 +71,25 @@
             android:textColor="@color/text_primary"
             android:textSize="18sp" />
     </LinearLayout>
+
+    <!-- Pause-Symbol in der Bildschirmmitte -->
+    <FrameLayout
+        android:id="@+id/layoutCenterPause"
+        android:layout_width="96dp"
+        android:layout_height="96dp"
+        android:layout_gravity="center"
+        android:background="@drawable/bg_pause_circle"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:text="❚❚"
+            android:textColor="#FFFFFF"
+            android:textSize="36sp"
+            android:textStyle="bold" />
+    </FrameLayout>
 
     <!-- Top OSD: Titel & Badges -->
     <LinearLayout
@@ -157,7 +192,6 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:focusable="true"
-                android:nextFocusDown="@+id/btnAudioTracks"
                 android:max="1000"
                 android:progress="0" />
 
@@ -236,6 +270,20 @@
                 android:paddingHorizontal="12dp"
                 android:layout_marginEnd="8dp" />
 
+            <Button
+                android:id="@+id/btnDebugOverlay"
+                android:layout_width="wrap_content"
+                android:layout_height="34dp"
+                android:background="@drawable/card_focus_selector"
+                android:clickable="true"
+                android:focusable="true"
+                android:nextFocusUp="@+id/playerSeekBar"
+                android:text="🛠️ Debug"
+                android:textColor="@color/accent_gold"
+                android:textSize="12sp"
+                android:paddingHorizontal="12dp"
+                android:layout_marginEnd="8dp" />
+
             <TextView
                 android:id="@+id/txtHintControls"
                 android:layout_width="0dp"
@@ -247,6 +295,198 @@
                 android:textSize="12sp" />
         </LinearLayout>
 
+    </LinearLayout>
+
+    <!-- Live-TV Vollbild-OSD (für LiveTV aus der Suche) -->
+    <LinearLayout
+        android:id="@+id/layoutLiveOsd"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:background="#E6101010"
+        android:orientation="vertical"
+        android:padding="18dp"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/txtLiveOsdChannelNum"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="1"
+                android:textColor="@color/netflix_red"
+                android:textSize="22sp"
+                android:textStyle="bold"
+                android:layout_marginEnd="10dp" />
+
+            <TextView
+                android:id="@+id/txtLiveOsdChannelName"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Sendername"
+                android:textColor="@color/text_primary"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <!-- Multi-Stream Quelle Badge -->
+            <TextView
+                android:id="@+id/txtLiveOsdSourceInfo"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="#2E1C0A"
+                android:paddingHorizontal="8dp"
+                android:paddingVertical="4dp"
+                android:layout_marginEnd="8dp"
+                android:text="⚡ Prio 1/3: DVB Satellit (Standard HD)"
+                android:textColor="#FFB84D"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <!-- Tech-Specs Badge -->
+            <TextView
+                android:id="@+id/txtLiveOsdTechSpecs"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="#242424"
+                android:paddingHorizontal="10dp"
+                android:paddingVertical="4dp"
+                android:text="1920x1080 | 50 fps | H.264 | AAC"
+                android:textColor="@color/accent_gold"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/txtLiveOsdProgramTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="🔴 JETZT: Sendungstitel"
+            android:textColor="@color/text_primary"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:layout_marginTop="3dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:layout_marginTop="3dp">
+
+            <ProgressBar
+                android:id="@+id/progressLiveOsdProgram"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="0dp"
+                android:layout_height="4dp"
+                android:layout_weight="1"
+                android:progress="50"
+                android:progressTint="@color/netflix_red"
+                android:layout_marginEnd="12dp" />
+
+            <TextView
+                android:id="@+id/txtLiveOsdProgramTime"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="20:15 - 21:45"
+                android:textColor="@color/text_secondary"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/txtLiveOsdProgramDesc"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Sendungsbeschreibung..."
+            android:textColor="@color/text_secondary"
+            android:textSize="11.5sp"
+            android:maxLines="2"
+            android:ellipsize="end"
+            android:layout_marginTop="3dp" />
+
+        <TextView
+            android:id="@+id/txtLiveOsdHint"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="⚡ Gelbe Taste / ▶: Backup-Quelle | ▲ / ▼: Sender wechseln | ◀ Zurück zur Suche"
+            android:textColor="#C5866D"
+            android:textSize="10.5sp"
+            android:layout_marginTop="4dp" />
+    </LinearLayout>
+
+    <!-- Geheimes Debug-Overlay (Nerd-Stats) -->
+    <LinearLayout
+        android:id="@+id/layoutDebugOverlay"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="20dp"
+        android:layout_marginEnd="20dp"
+        android:background="#E60A0D14"
+        android:padding="12dp"
+        android:orientation="vertical"
+        android:elevation="20dp"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="🛠️ TiviZone Debug Stats"
+            android:textColor="@color/accent_gold"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="4dp" />
+
+        <TextView
+            android:id="@+id/txtDebugState"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="State: READY | Buffer: 12.5s"
+            android:textColor="#EEEEEE"
+            android:textSize="11sp"
+            android:typeface="monospace" />
+
+        <TextView
+            android:id="@+id/txtDebugVideo"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Video: 1920x1080 @ 25fps (AVC)"
+            android:textColor="#CCCCCC"
+            android:textSize="11sp"
+            android:typeface="monospace" />
+
+        <TextView
+            android:id="@+id/txtDebugAudio"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Audio: AAC Stereo"
+            android:textColor="#CCCCCC"
+            android:textSize="11sp"
+            android:typeface="monospace" />
+
+        <TextView
+            android:id="@+id/txtDebugPos"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Pos: 00:22:49 / 00:46:07 (49%)"
+            android:textColor="#AAAAAA"
+            android:textSize="11sp"
+            android:typeface="monospace" />
+
+        <TextView
+            android:id="@+id/txtDebugStreamInfo"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="ID: 870622 | S2E1 | Type: SERIES"
+            android:textColor="#888888"
+            android:textSize="10sp"
+            android:typeface="monospace"
+            android:layout_marginTop="2dp" />
     </LinearLayout>
 
 </FrameLayout>

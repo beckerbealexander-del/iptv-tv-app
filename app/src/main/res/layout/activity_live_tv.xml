@@ -222,7 +222,8 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             app:use_controller="false"
-            app:resize_mode="zoom" />
+            app:resize_mode="zoom"
+            app:surface_type="surface_view" />
 
         <!-- 1. Visueller Fokus-Rahmen ÜBER der SurfaceView -->
         <View
@@ -230,6 +231,21 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:background="@drawable/pip_focus_border"
+            android:visibility="gone" />
+
+        <!-- Auto-Retry / Connection Waiting Status Banner -->
+        <TextView
+            android:id="@+id/txtPlayerRetryBanner"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:background="#D9000000"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="10dp"
+            android:text="⏳ Warte auf Stream-Freigabe..."
+            android:textColor="#FFD700"
+            android:textSize="14sp"
+            android:textStyle="bold"
             android:visibility="gone" />
     </FrameLayout>
 
@@ -268,6 +284,20 @@
                 android:text="Sendername"
                 android:textColor="@color/text_primary"
                 android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <!-- Multi-Stream Quelle Badge -->
+            <TextView
+                android:id="@+id/txtOsdSourceInfo"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="#2E1C0A"
+                android:paddingHorizontal="8dp"
+                android:paddingVertical="4dp"
+                android:layout_marginEnd="8dp"
+                android:text="⚡ Prio 1/3: Prime 60fps"
+                android:textColor="#FFB84D"
+                android:textSize="11sp"
                 android:textStyle="bold" />
 
             <!-- Tech-Specs Badge -->

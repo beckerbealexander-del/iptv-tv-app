@@ -1,6 +1,8 @@
 package com.alex.iptvplayer.ui
 
 import android.content.Intent
+import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.LayoutInflater
@@ -23,27 +25,42 @@ import com.alex.iptvplayer.data.XtreamClient
 import com.alex.iptvplayer.databinding.ActivitySeriesBinding
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+data class SeriesCategoryItem(
+    val id: String,
+    val title: String,
+    val isProviderHeader: Boolean = false,
+    val providerKey: String? = null,
+    val genreKey: String? = null,
+    val isSubItem: Boolean = false
+)
 
 class SeriesActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivitySeriesBinding
     private lateinit var client: XtreamClient
-    private var allCategories: List<Category> = emptyList()
-    private var displayedCategories: List<Category> = emptyList()
+    private var displayedCategories: List<SeriesCategoryItem> = emptyList()
     private var currentSeries: List<SeriesItem> = emptyList()
     private var rawCategorySeries: List<SeriesItem> = emptyList()
     private var allSeriesGlobal: List<SeriesItem> = emptyList()
-    private var selectedCategoryId: String? = null
-    private val categoryCache = HashMap<String, List<SeriesItem>>()
+    private var expandedProviderKey: String? = "netflix"
+    private var selectedCategoryId: String = "netflix_TOP"
+    private val categoryCache get() = com.alex.iptvplayer.data.TmdbProviderCatalogManager.seriesCategoryCache
+    private val categoryCounts get() = com.alex.iptvplayer.data.TmdbProviderCatalogManager.seriesCategoryCounts
 
-    private var currentSortMode: String = "DEFAULT"
     private var currentSearchQuery: String? = null
 
     private var loadJob: Job? = null
     private var heroJob: Job? = null
+
+    private fun dpToPx(dp: Int): Int {
+        return (dp * resources.displayMetrics.density).toInt()
+    }
 
     // Vollbild-Suche Launcher
     private val searchLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -74,6 +91,20 @@ class SeriesActivity : AppCompatActivity() {
             setItemViewCacheSize(80)
         }
 
+        binding.btnOpenSeriesSearch.isFocusable = false
+        binding.btnOpenSeriesSearch.setOnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus) {
+                binding.btnOpenSeriesSearch.isFocusable = false
+            }
+        }
+        binding.btnOpenSeriesSearch.setOnKeyListener { _, keyCode, event ->
+            if (event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+                focusSelectedCategory()
+                return@setOnKeyListener true
+            }
+            false
+        }
+
         binding.btnOpenSeriesSearch.setOnClickListener {
             val intent = Intent(this, SearchActivity::class.java).apply {
                 putExtra("SEARCH_TYPE", "SERIES")
@@ -81,104 +112,230 @@ class SeriesActivity : AppCompatActivity() {
             searchLauncher.launch(intent)
         }
 
-        setupSortButtons()
+        // 1. Sofort aus lokalem Disk-Cache laden (Ladezeit < 10ms)
+        allSeriesGlobal = cachedAllSeriesGlobal ?: client.loadCachedSeriesCatalog().also { cachedAllSeriesGlobal = it }
         loadCategories()
+        // 2. Im Hintergrund synchronisieren falls noetig
         preloadGlobalCatalog()
+        preloadCategoryCounts()
+    }
+
+    companion object {
+        var cachedAllSeriesGlobal: List<SeriesItem>? = null
+
+        val PROVIDERS = listOf(
+            Pair("netflix", "Netflix"),
+            Pair("prime", "Amazon Prime"),
+            Pair("disney", "Disney+"),
+            Pair("apple", "Apple TV+"),
+            Pair("paramount", "Paramount+"),
+            Pair("other", "Weitere Serien")
+        )
+
+        val GENRE_ITEMS = listOf(
+            Pair("ALL", "Alle"),
+            Pair("TOP", "Top"),
+            Pair("ACTION", "Action & Abenteuer"),
+            Pair("COMEDY", "Komödie"),
+            Pair("THRILLER", "Thriller & Krimi"),
+            Pair("HORROR", "Horror & Mystery"),
+            Pair("SCIFI", "Sci-Fi & Fantasy"),
+            Pair("DOCU", "Dokumentation"),
+            Pair("KIDS", "Kinder & Familie")
+        )
+
+        val STATIC_ITEMS = listOf(
+            Pair("GENRE_RUSSIAN", "Russian"),
+            Pair("ALL_SERIES", "Alle Serien")
+        )
     }
 
     private fun preloadGlobalCatalog() {
         lifecycleScope.launch {
             try {
-                allSeriesGlobal = client.getAllSeries()
+                val fresh = client.getGermanSeriesStreamed()
+                if (fresh.isNotEmpty()) {
+                    allSeriesGlobal = fresh
+                    cachedAllSeriesGlobal = fresh
+                    categoryCounts["ALL_SERIES"] = fresh.size
+                    categoryCounts["GENRE_RUSSIAN"] = fresh.count { client.isRussianMedia(it.name, it.categoryId) }
+                    binding.recyclerSeriesCategories.adapter?.notifyDataSetChanged()
+                    preloadCategoryCounts()
+                }
             } catch (e: Exception) {
                 // Silent
             }
         }
     }
 
-    private fun setupSortButtons() {
-        binding.btnSeriesSortDefault.setOnClickListener { applySorting("DEFAULT") }
-        binding.btnSeriesSortRating.setOnClickListener { applySorting("RATING") }
-        binding.btnSeriesSortYear.setOnClickListener { applySorting("YEAR") }
-        binding.btnSeriesSortAlpha.setOnClickListener { applySorting("ALPHA") }
+    private fun preloadCategoryCounts() {
+        lifecycleScope.launch(Dispatchers.Default) {
+            val pool = if (allSeriesGlobal.isNotEmpty()) allSeriesGlobal else client.loadCachedSeriesCatalog()
+            val germanPool = pool.filter { client.isGermanMedia(it.name) }
+            if (germanPool.isEmpty()) return@launch
+
+            val provKey = expandedProviderKey ?: "netflix"
+            for (genre in GENRE_ITEMS) {
+                val cacheKey = "${provKey}_${genre.first}"
+                if (!categoryCounts.containsKey(cacheKey)) {
+                    com.alex.iptvplayer.data.TmdbProviderCatalogManager.filterSeriesByProviderAndGenre(
+                        context = this@SeriesActivity,
+                        providerKey = provKey,
+                        genreKey = genre.first,
+                        germanSeries = germanPool
+                    )
+                }
+            }
+            withContext(Dispatchers.Main) {
+                binding.recyclerSeriesCategories.adapter?.notifyDataSetChanged()
+            }
+        }
     }
 
-    private fun applySorting(mode: String) {
-        currentSortMode = mode
-        if (rawCategorySeries.isEmpty()) return
-
-        val sorted = when (mode) {
-            "RATING" -> rawCategorySeries.sortedByDescending { it.rating?.toFloatOrNull() ?: 0f }
-            "YEAR" -> rawCategorySeries.sortedByDescending { 
-                val year = Regex("\\b(19\\d\\d|20\\d\\d)\\b").find(it.name)?.value?.toIntOrNull() ?: 0
-                year
-            }
-            "ALPHA" -> rawCategorySeries.sortedBy { it.name.lowercase() }
-            else -> rawCategorySeries
+    private fun applySorting() {
+        if (rawCategorySeries.isEmpty()) {
+            binding.txtSeriesCategoryCounter.text = ""
+            return
         }
-        currentSeries = sorted
-        binding.recyclerSeriesGrid.adapter = SeriesAdapter(sorted, { series ->
+        currentSeries = rawCategorySeries
+        binding.txtSeriesCategoryCounter.text = "1 / ${currentSeries.size}"
+        binding.recyclerSeriesGrid.adapter = SeriesAdapter(currentSeries, { series, position ->
+            binding.txtSeriesCategoryCounter.text = "${position + 1} / ${currentSeries.size}"
             updateHeroBannerDebounced(series)
         }, { series ->
             openSeriesDetail(series)
         })
-        if (sorted.isNotEmpty()) {
-            updateHeroBanner(sorted[0])
+        if (currentSeries.isNotEmpty()) {
+            updateHeroBanner(currentSeries[0])
         }
     }
 
-    // 5. SUCHE: DYNAMISCHE KATEGORIE "🔍 Aktuelle Suche" AN INDEX 0
+    // 5. SUCHE: DYNAMISCHE KATEGORIE "Aktuelle Suche" AN INDEX 0
     private fun applySearchQuery(query: String) {
         currentSearchQuery = query
-        val searchCategory = Category(id = "CURRENT_SEARCH", name = "🔍 Aktuelle Suche")
-        val newCategories = mutableListOf(searchCategory)
-        newCategories.addAll(allCategories)
-        displayedCategories = newCategories
         selectedCategoryId = "CURRENT_SEARCH"
-
-        binding.recyclerSeriesCategories.adapter = SeriesCategoryAdapter(newCategories) { cat ->
-            loadSeries(cat)
-        }
+        expandedProviderKey = null
+        displayedCategories = buildCategoryList()
+        (binding.recyclerSeriesCategories.adapter as? SeriesCategoryAdapter)?.updateItems(displayedCategories)
 
         val pool = if (allSeriesGlobal.isNotEmpty()) allSeriesGlobal else currentSeries
         val filtered = pool.filter { it.name.contains(query, ignoreCase = true) }
-        binding.txtSeriesCategoryTitle.text = "Suchergebnisse: „$query“ (${filtered.size})"
+        categoryCounts["CURRENT_SEARCH"] = filtered.size
+        binding.txtSeriesCategoryTitle.text = "Suchergebnisse: „$query“"
+        binding.txtSeriesCategoryCounter.text = if (filtered.isNotEmpty()) "1 / ${filtered.size}" else ""
         rawCategorySeries = filtered
-        applySorting(currentSortMode)
+        binding.recyclerSeriesCategories.adapter?.notifyDataSetChanged()
+        applySorting()
 
         // Fokus sofort auf das erste Suchergebnis
         focusFirstSeries()
     }
 
-    private fun loadCategories() {
-        binding.progressSeriesCats.visibility = View.VISIBLE
-        lifecycleScope.launch {
-            try {
-                val raw = client.getSeriesCategories()
-                val filtered = client.filterCategories(raw, LangFilter.AUTO_DE_RU_ADULT).toMutableList()
-                if (filtered.none { it.id == "ALL_SERIES" }) {
-                    filtered.add(0, Category(id = "ALL_SERIES", name = "✨ Alle Serien"))
-                }
-                allCategories = filtered
-                displayedCategories = filtered
-                binding.progressSeriesCats.visibility = View.GONE
-                binding.recyclerSeriesCategories.adapter = SeriesCategoryAdapter(displayedCategories) { cat ->
-                    loadSeries(cat)
-                }
+    private fun buildCategoryList(): List<SeriesCategoryItem> {
+        val list = mutableListOf<SeriesCategoryItem>()
+        if (currentSearchQuery != null) {
+            list.add(SeriesCategoryItem(id = "CURRENT_SEARCH", title = "Aktuelle Suche"))
+        }
 
-                // 6. STANDARD-KATEGORIE: Beim Start immer "Alle Serien" vorauswählen und laden!
-                if (displayedCategories.isNotEmpty()) {
-                    loadSeries(displayedCategories[0])
+        for (prov in PROVIDERS) {
+            val isExpanded = (expandedProviderKey == prov.first)
+            list.add(
+                SeriesCategoryItem(
+                    id = "prov_${prov.first}",
+                    title = prov.second,
+                    isProviderHeader = true,
+                    providerKey = prov.first
+                )
+            )
+            if (isExpanded) {
+                for (genre in GENRE_ITEMS) {
+                    list.add(
+                        SeriesCategoryItem(
+                            id = "${prov.first}_${genre.first}",
+                            title = genre.second,
+                            isProviderHeader = false,
+                            providerKey = prov.first,
+                            genreKey = genre.first,
+                            isSubItem = true
+                        )
+                    )
                 }
-            } catch (e: Exception) {
-                binding.progressSeriesCats.visibility = View.GONE
-                Toast.makeText(this@SeriesActivity, "Fehler: ${e.message}", Toast.LENGTH_SHORT).show()
             }
+        }
+
+        for (staticCat in STATIC_ITEMS) {
+            list.add(
+                SeriesCategoryItem(
+                    id = staticCat.first,
+                    title = staticCat.second,
+                    isProviderHeader = false
+                )
+            )
+        }
+
+        return list
+    }
+
+    private fun loadCategories() {
+        binding.progressSeriesCats.visibility = View.GONE
+        if (allSeriesGlobal.isNotEmpty()) {
+            categoryCounts["ALL_SERIES"] = allSeriesGlobal.size
+            categoryCounts["GENRE_RUSSIAN"] = allSeriesGlobal.count { client.isRussianMedia(it.name, it.categoryId) }
+        }
+
+        displayedCategories = buildCategoryList()
+        binding.recyclerSeriesCategories.adapter = SeriesCategoryAdapter(displayedCategories) { cat ->
+            onCategoryClicked(cat)
+        }
+
+        // Beim Start immer Netflix Top vorauswählen und laden!
+        val initialItem = displayedCategories.firstOrNull { it.id == "netflix_TOP" }
+            ?: displayedCategories.firstOrNull()
+        if (initialItem != null) {
+            loadSeries(initialItem, autoFocusGrid = false)
+        }
+
+        // Fokus sofort und ruhig auf die ausgewählte Kategorie setzen (ohne Suchen-Feld-Sprung)
+        binding.recyclerSeriesCategories.post {
+            focusSelectedCategory()
         }
     }
 
-    // 6. KEIN SUCH-SPRUNG: Fokus springt immer auf das erste Media-Item der Kategorie (niemals Suchfeld)
-    private fun loadSeries(category: Category) {
+    private fun onCategoryClicked(item: SeriesCategoryItem) {
+        if (item.isProviderHeader) {
+            if (expandedProviderKey == item.providerKey) {
+                // Bei Klick auf bereits geöffneten Anbieter -> Zuklappen
+                expandedProviderKey = null
+                displayedCategories = buildCategoryList()
+                (binding.recyclerSeriesCategories.adapter as? SeriesCategoryAdapter)?.updateItems(displayedCategories)
+            } else {
+                // Anbieter aufklappen und automatisch dessen "Top" Titel laden
+                expandedProviderKey = item.providerKey
+                val topGenreId = "${item.providerKey}_TOP"
+                selectedCategoryId = topGenreId
+                displayedCategories = buildCategoryList()
+                (binding.recyclerSeriesCategories.adapter as? SeriesCategoryAdapter)?.updateItems(displayedCategories)
+
+                val targetItem = displayedCategories.firstOrNull { it.id == topGenreId } ?: item
+                loadSeries(targetItem, autoFocusGrid = false)
+                preloadCategoryCounts()
+            }
+        } else {
+            selectedCategoryId = item.id
+            if (!item.isSubItem && item.id != "CURRENT_SEARCH") {
+                // Bei Klick auf Russian oder Alle Serien -> Provider zuklappen
+                expandedProviderKey = null
+                displayedCategories = buildCategoryList()
+                (binding.recyclerSeriesCategories.adapter as? SeriesCategoryAdapter)?.updateItems(displayedCategories)
+            } else {
+                binding.recyclerSeriesCategories.adapter?.notifyDataSetChanged()
+            }
+            loadSeries(item, autoFocusGrid = false)
+        }
+    }
+
+    // 6. KEIN SUCH-SPRUNG: Fokus springt bei Bedarf auf das erste Media-Item der Kategorie
+    private fun loadSeries(category: SeriesCategoryItem, autoFocusGrid: Boolean = true) {
         if (category.id == "CURRENT_SEARCH" && currentSearchQuery != null) {
             applySearchQuery(currentSearchQuery!!)
             return
@@ -186,27 +343,82 @@ class SeriesActivity : AppCompatActivity() {
 
         selectedCategoryId = category.id
         binding.recyclerSeriesCategories.adapter?.notifyDataSetChanged()
-        binding.txtSeriesCategoryTitle.text = category.name
+
+        val headerTitle = when {
+            category.isProviderHeader -> {
+                val provName = PROVIDERS.firstOrNull { it.first == category.providerKey }?.second ?: category.title
+                "$provName › Top"
+            }
+            category.isSubItem -> {
+                val provName = PROVIDERS.firstOrNull { it.first == category.providerKey }?.second ?: ""
+                val genreName = GENRE_ITEMS.firstOrNull { it.first == category.genreKey }?.second ?: ""
+                "$provName › $genreName"
+            }
+            else -> category.title
+        }
 
         val cached = categoryCache[category.id]
         if (cached != null) {
             rawCategorySeries = cached
+            categoryCounts[category.id] = cached.size
+            binding.txtSeriesCategoryTitle.text = headerTitle
+            binding.txtSeriesCategoryCounter.text = if (cached.isNotEmpty()) "1 / ${cached.size}" else ""
+            binding.recyclerSeriesCategories.adapter?.notifyDataSetChanged()
             binding.progressSeries.visibility = View.GONE
-            applySorting(currentSortMode)
-            focusFirstSeries()
+            applySorting()
+            if (autoFocusGrid) {
+                focusFirstSeries()
+            } else {
+                focusSelectedCategory()
+            }
             return
         }
 
+        binding.txtSeriesCategoryTitle.text = headerTitle
+        binding.txtSeriesCategoryCounter.text = ""
         binding.progressSeries.visibility = View.VISIBLE
         loadJob?.cancel()
         loadJob = lifecycleScope.launch {
             try {
-                val list = client.getSeries(category.id)
-                categoryCache[category.id] = list
-                rawCategorySeries = list
+                val allGlobal = if (allSeriesGlobal.isNotEmpty()) allSeriesGlobal else {
+                    val list = client.getGermanSeriesStreamed()
+                    allSeriesGlobal = list
+                    cachedAllSeriesGlobal = list
+                    list
+                }
+                val germanPool = allGlobal.filter { client.isGermanMedia(it.name) }
+
+                val filtered = when {
+                    category.providerKey != null -> {
+                        val gKey = category.genreKey ?: "TOP"
+                        com.alex.iptvplayer.data.TmdbProviderCatalogManager.filterSeriesByProviderAndGenre(
+                            context = this@SeriesActivity,
+                            providerKey = category.providerKey,
+                            genreKey = gKey,
+                            germanSeries = germanPool
+                        )
+                    }
+                    category.id == "GENRE_RUSSIAN" -> {
+                        val ruList = allGlobal.filter { client.isRussianMedia(it.name, it.categoryId) }
+                        if (ruList.isNotEmpty()) ruList else client.getSeries("1046")
+                    }
+                    category.id == "ALL_SERIES" -> allGlobal
+                    else -> allGlobal
+                }
+
+                categoryCache[category.id] = filtered
+                categoryCounts[category.id] = filtered.size
+                rawCategorySeries = filtered
+                binding.txtSeriesCategoryTitle.text = headerTitle
+                binding.txtSeriesCategoryCounter.text = if (filtered.isNotEmpty()) "1 / ${filtered.size}" else ""
+                binding.recyclerSeriesCategories.adapter?.notifyDataSetChanged()
                 binding.progressSeries.visibility = View.GONE
-                applySorting(currentSortMode)
-                focusFirstSeries()
+                applySorting()
+                if (autoFocusGrid) {
+                    focusFirstSeries()
+                } else {
+                    focusSelectedCategory()
+                }
             } catch (e: Exception) {
                 binding.progressSeries.visibility = View.GONE
                 Toast.makeText(this@SeriesActivity, "Fehler beim Laden: ${e.message}", Toast.LENGTH_SHORT).show()
@@ -231,7 +443,7 @@ class SeriesActivity : AppCompatActivity() {
 
     private fun updateHeroBanner(series: SeriesItem) {
         binding.txtHeroSeriesTitle.text = series.name
-        binding.txtHeroSeriesRating.text = if (!series.rating.isNullOrEmpty()) "⭐ ${series.rating} | Staffeln & Folgen" else "⭐ 8.5 | Staffeln & Folgen"
+        binding.txtHeroSeriesRating.text = if (!series.rating.isNullOrEmpty()) "★ ${series.rating} | Staffeln & Folgen" else "★ 8.5 | Staffeln & Folgen"
 
         if (!series.cover.isNullOrEmpty()) {
             Glide.with(this)
@@ -310,20 +522,9 @@ class SeriesActivity : AppCompatActivity() {
                             binding.recyclerSeriesGrid.post {
                                 binding.recyclerSeriesGrid.findViewHolderForAdapterPosition(prevPos)?.itemView?.requestFocus()
                             }
-                        } else {
-                            // Aus der ersten Reihe nach oben in die integrierte Sortierleiste
-                            binding.btnSeriesSortDefault.requestFocus()
                         }
-                        return true
+                        return true // Fix-Lock oben: Erste Reihe verlässt die Grid nicht!
                     }
-                }
-            } else if (isViewInView(focused, binding.layoutSeriesSortBar)) {
-                if (event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
-                    focusFirstSeries()
-                    return true
-                } else if (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT && focused == binding.btnSeriesSortDefault) {
-                    focusSelectedCategory()
-                    return true
                 }
             }
         }
@@ -353,12 +554,18 @@ class SeriesActivity : AppCompatActivity() {
     }
 
     inner class SeriesCategoryAdapter(
-        private val items: List<Category>,
-        private val onSelect: (Category) -> Unit
+        private var items: List<SeriesCategoryItem>,
+        private val onSelect: (SeriesCategoryItem) -> Unit
     ) : RecyclerView.Adapter<SeriesCategoryAdapter.ViewHolder>() {
+
+        fun updateItems(newItems: List<SeriesCategoryItem>) {
+            items = newItems
+            notifyDataSetChanged()
+        }
 
         inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
             val txtName: TextView = view.findViewById(R.id.txtCategoryName)
+            val txtCount: TextView = view.findViewById(R.id.txtCategoryCount)
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -368,8 +575,11 @@ class SeriesActivity : AppCompatActivity() {
 
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val cat = items[position]
-            holder.txtName.text = cat.name
-            holder.itemView.isSelected = (cat.id == selectedCategoryId)
+            applyCategoryStyle(holder, cat)
+
+            holder.itemView.setOnFocusChangeListener { _, _ ->
+                applyCategoryStyle(holder, cat)
+            }
 
             holder.itemView.setOnClickListener {
                 onSelect(cat)
@@ -391,6 +601,7 @@ class SeriesActivity : AppCompatActivity() {
                         }
                         KeyEvent.KEYCODE_DPAD_UP -> {
                             if (position == 0) {
+                                binding.btnOpenSeriesSearch.isFocusable = true
                                 binding.btnOpenSeriesSearch.requestFocus()
                                 return@setOnKeyListener true
                             }
@@ -406,12 +617,80 @@ class SeriesActivity : AppCompatActivity() {
             }
         }
 
+        private fun applyCategoryStyle(holder: ViewHolder, cat: SeriesCategoryItem) {
+            val isSelected = (cat.id == selectedCategoryId)
+            val isFocused = holder.itemView.isFocused
+
+            if (cat.isProviderHeader) {
+                val isExpanded = (expandedProviderKey == cat.providerKey)
+                val arrow = if (isExpanded) "▾  " else "▸  "
+                holder.txtName.text = arrow + cat.title
+                holder.txtName.textSize = 12.5f
+                holder.txtName.setPadding(dpToPx(4), 0, 0, 0)
+            } else if (cat.isSubItem) {
+                holder.txtName.text = cat.title
+                holder.txtName.textSize = 11.5f
+                holder.txtName.setPadding(dpToPx(16), 0, 0, 0)
+            } else {
+                holder.txtName.text = cat.title
+                holder.txtName.textSize = 12f
+                holder.txtName.setPadding(dpToPx(4), 0, 0, 0)
+            }
+
+            val count = if (cat.isProviderHeader && cat.providerKey != null) {
+                categoryCounts["${cat.providerKey}_TOP"] ?: categoryCounts[cat.id]
+            } else {
+                categoryCounts[cat.id]
+            }
+
+            if (count != null && count > 0) {
+                holder.txtCount.visibility = View.VISIBLE
+                holder.txtCount.text = count.toString()
+                holder.txtCount.setTextColor(
+                    if (isFocused || isSelected) Color.parseColor("#FFFFFF") else Color.parseColor("#8E9297")
+                )
+            } else {
+                holder.txtCount.visibility = View.GONE
+            }
+
+            holder.txtName.setTextColor(
+                if (isFocused || isSelected) Color.parseColor("#FFFFFF") else Color.parseColor("#B0B0B0")
+            )
+
+            val drawable = GradientDrawable().apply {
+                cornerRadius = dpToPx(6).toFloat()
+                when {
+                    isFocused -> {
+                        if (isSelected) {
+                            setColor(Color.parseColor("#3E271E"))
+                        } else {
+                            setColor(Color.parseColor("#2A2B32"))
+                        }
+                        setStroke(dpToPx(3), Color.parseColor("#C5866D"))
+                    }
+                    isSelected -> {
+                        setColor(Color.parseColor("#352219"))
+                        setStroke(dpToPx(1.5f.toInt()), Color.parseColor("#6B3F2E"))
+                    }
+                    cat.isProviderHeader -> {
+                        setColor(Color.parseColor("#1B1C22"))
+                        setStroke(dpToPx(1), Color.parseColor("#292A32"))
+                    }
+                    else -> {
+                        setColor(Color.parseColor("#17181C"))
+                        setStroke(dpToPx(1), Color.parseColor("#23242A"))
+                    }
+                }
+            }
+            holder.itemView.background = drawable
+        }
+
         override fun getItemCount() = items.size
     }
 
     inner class SeriesAdapter(
         private val items: List<SeriesItem>,
-        private val onFocus: (SeriesItem) -> Unit,
+        private val onFocus: (SeriesItem, Int) -> Unit,
         private val onClick: (SeriesItem) -> Unit
     ) : RecyclerView.Adapter<SeriesAdapter.ViewHolder>() {
 
@@ -441,7 +720,8 @@ class SeriesActivity : AppCompatActivity() {
             }
 
             holder.itemView.setOnFocusChangeListener { _, hasFocus ->
-                if (hasFocus) onFocus(s)
+                holder.txtTitle.isSelected = hasFocus
+                if (hasFocus) onFocus(s, position)
             }
 
             holder.itemView.setOnClickListener { onClick(s) }

@@ -19,6 +19,30 @@ data class LiveStream(
     @SerializedName("category_id") val categoryId: String? = null
 ) : Serializable
 
+data class StreamSource(
+    val streamId: Int,
+    val name: String,
+    val label: String,
+    val score: Int,
+    val subcategory: String,
+    val epgChannelId: String? = null
+) : Serializable
+
+data class MultiStreamChannel(
+    val cleanName: String,
+    val originalName: String,
+    val categoryId: String,
+    val categoryName: String,
+    val icon: String? = null,
+    val epgId: String? = null,
+    val epgStreamId: Int? = null,
+    val sources: List<StreamSource> = emptyList()
+) : Serializable {
+    val primarySource: StreamSource?
+        get() = sources.firstOrNull()
+}
+
+
 data class EpgResponse(
     @SerializedName("epg_listings") val listings: List<RawEpgItem>? = null
 ) : Serializable
@@ -48,7 +72,8 @@ data class VodStream(
     @SerializedName("stream_icon") val streamIcon: String? = null,
     @SerializedName("rating") val rating: String? = null,
     @SerializedName("category_id") val categoryId: String? = null,
-    @SerializedName("container_extension") val containerExtension: String? = "mp4"
+    @SerializedName("container_extension") val containerExtension: String? = "mp4",
+    @SerializedName("tmdb") val tmdb: String? = null
 ) : Serializable
 
 data class SeriesItem(
@@ -57,6 +82,10 @@ data class SeriesItem(
     @SerializedName("series_id") val seriesId: Int,
     @SerializedName("cover") val cover: String? = null,
     @SerializedName("plot") val plot: String? = null,
+    @SerializedName("cast") val cast: String? = null,
+    @SerializedName("director") val director: String? = null,
+    @SerializedName("genre") val genre: String? = null,
+    @SerializedName("releaseDate") val releaseDate: String? = null,
     @SerializedName("rating") val rating: String? = null,
     @SerializedName("category_id") val categoryId: String? = null
 ) : Serializable
@@ -67,7 +96,33 @@ data class SeriesDetailsInfo(
     @SerializedName("plot") val plot: String? = null,
     @SerializedName("genre") val genre: String? = null,
     @SerializedName("releaseDate") val releaseDate: String? = null,
-    @SerializedName("rating") val rating: String? = null
+    @SerializedName("rating") val rating: String? = null,
+    @SerializedName("youtube_trailer") val youtubeTrailer: String? = null
+) : Serializable
+
+data class VodInfoResponse(
+    @SerializedName("info") val info: VodDetailsInfo? = null,
+    @SerializedName("movie_data") val movieData: VodMovieData? = null
+) : Serializable
+
+data class VodDetailsInfo(
+    @SerializedName("name") val name: String? = null,
+    @SerializedName("plot") val plot: String? = null,
+    @SerializedName("cast") val cast: String? = null,
+    @SerializedName("director") val director: String? = null,
+    @SerializedName("genre") val genre: String? = null,
+    @SerializedName("release_date") val releaseDate: String? = null,
+    @SerializedName("rating") val rating: String? = null,
+    @SerializedName("duration_secs") val durationSecs: Int? = null,
+    @SerializedName("duration") val duration: String? = null,
+    @SerializedName("movie_image") val movieImage: String? = null,
+    @SerializedName("youtube_trailer") val youtubeTrailer: String? = null
+) : Serializable
+
+data class VodMovieData(
+    @SerializedName("stream_id") val streamId: Int? = null,
+    @SerializedName("name") val name: String? = null,
+    @SerializedName("container_extension") val containerExtension: String? = null
 ) : Serializable
 
 data class SeriesInfoResponse(
@@ -96,3 +151,16 @@ data class EpisodeInfo(
     @SerializedName("duration") val duration: String? = null,
     @SerializedName("movie_image") val movieImage: String? = null
 ) : Serializable
+
+data class TrendingItem(
+    val id: Int,
+    val title: String,
+    val originalTitle: String,
+    val posterUrl: String,
+    val rating: String,
+    val overview: String,
+    val mediaType: String, // "MOVIE" or "SERIES"
+    val matchedMovies: List<VodStream> = emptyList(),
+    val matchedSeries: List<SeriesItem> = emptyList()
+) : Serializable
+

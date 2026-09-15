@@ -2,32 +2,29 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#000000"
+    android:background="@color/bg_dark"
     android:orientation="horizontal">
 
-    <!-- 1. Netflix Symmetrische Sidebar links -->
+    <!-- 1. TiviZone Symmetrische Sidebar links -->
     <LinearLayout
         android:id="@+id/sidebar"
         android:layout_width="140dp"
         android:layout_height="match_parent"
-        android:background="#0A0A0A"
+        android:background="@color/bg_sidebar"
         android:orientation="vertical"
         android:paddingHorizontal="10dp"
         android:paddingVertical="16dp">
 
-        <!-- Netflix Style App Logo -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="ALEX TV"
-            android:textColor="@color/netflix_red"
-            android:textSize="20sp"
-            android:textStyle="bold"
-            android:letterSpacing="0.1"
+        <!-- TiviZone App Logo -->
+        <ImageView
+            android:layout_width="116dp"
+            android:layout_height="32dp"
+            android:src="@drawable/tivizone_logo"
+            android:scaleType="fitCenter"
             android:layout_gravity="center_horizontal"
             android:layout_marginBottom="24dp" />
 
-        <!-- 📺 Live TV -->
+        <!-- Live TV -->
         <LinearLayout
             android:id="@+id/navLiveTv"
             android:layout_width="match_parent"
@@ -37,26 +34,19 @@
             android:focusable="true"
             android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:paddingHorizontal="10dp"
+            android:paddingHorizontal="12dp"
             android:layout_marginBottom="10dp">
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="📺"
-                android:textSize="14sp"
-                android:layout_marginEnd="8dp" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Live TV"
                 android:textColor="@color/text_primary"
-                android:textSize="12sp"
+                android:textSize="13sp"
                 android:textStyle="bold" />
         </LinearLayout>
 
-        <!-- 🎬 Filme -->
+        <!-- Filme -->
         <LinearLayout
             android:id="@+id/navMovies"
             android:layout_width="match_parent"
@@ -66,26 +56,19 @@
             android:focusable="true"
             android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:paddingHorizontal="10dp"
+            android:paddingHorizontal="12dp"
             android:layout_marginBottom="10dp">
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="🎬"
-                android:textSize="14sp"
-                android:layout_marginEnd="8dp" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Filme"
                 android:textColor="@color/text_primary"
-                android:textSize="12sp"
+                android:textSize="13sp"
                 android:textStyle="bold" />
         </LinearLayout>
 
-        <!-- 🍿 Serien -->
+        <!-- Serien -->
         <LinearLayout
             android:id="@+id/navSeries"
             android:layout_width="match_parent"
@@ -95,26 +78,19 @@
             android:focusable="true"
             android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:paddingHorizontal="10dp"
+            android:paddingHorizontal="12dp"
             android:layout_marginBottom="10dp">
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="🍿"
-                android:textSize="14sp"
-                android:layout_marginEnd="8dp" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Serien"
                 android:textColor="@color/text_primary"
-                android:textSize="12sp"
+                android:textSize="13sp"
                 android:textStyle="bold" />
         </LinearLayout>
 
-        <!-- ⚙️ Optionen -->
+        <!-- Optionen -->
         <LinearLayout
             android:id="@+id/navSettings"
             android:layout_width="match_parent"
@@ -124,135 +100,190 @@
             android:focusable="true"
             android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:paddingHorizontal="10dp"
+            android:paddingHorizontal="12dp"
             android:layout_marginBottom="10dp">
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="⚙️"
-                android:textSize="14sp"
-                android:layout_marginEnd="8dp" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Optionen"
                 android:textColor="@color/text_primary"
-                android:textSize="12sp"
+                android:textSize="13sp"
                 android:textStyle="bold" />
         </LinearLayout>
 
     </LinearLayout>
 
-    <!-- 2. Hauptbereich: Perfekt symmetrisch aufgeteilte 3 Verlaufs-Reihen -->
-    <LinearLayout
+    <!-- 2. Hauptbereich: Scrollbare Übersicht mit Verläufen und beliebten Inhalten -->
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/scrollMainContent"
         android:layout_width="0dp"
         android:layout_height="match_parent"
         android:layout_weight="1"
         android:background="#000000"
-        android:orientation="vertical"
-        android:paddingHorizontal="14dp"
-        android:paddingVertical="8dp">
+        android:clipToPadding="false"
+        android:fillViewport="true"
+        android:scrollbars="none">
 
-        <!-- Row 1: 📺 TV-Sender Verlauf (Höhe 78dp) -->
         <LinearLayout
-            android:id="@+id/layoutSectionChannelHistory"
             android:layout_width="match_parent"
-            android:layout_height="78dp"
+            android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:layout_marginBottom="6dp">
+            android:paddingHorizontal="14dp"
+            android:paddingVertical="8dp">
 
-            <TextView
+            <!-- Row 1: 📺 TV-Sender Verlauf (Höhe 78dp) -->
+            <LinearLayout
+                android:id="@+id/layoutSectionChannelHistory"
+                android:layout_width="match_parent"
+                android:layout_height="78dp"
+                android:orientation="vertical"
+                android:layout_marginBottom="6dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Live TV – Verlauf"
+                    android:textColor="@color/text_primary"
+                    android:textSize="12.5sp"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="3dp" />
+
+                <TextView
+                    android:id="@+id/txtNoChannelHistory"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Noch keine TV-Sender geschaut. Klicke links auf 'Live TV', um Sender zu starten."
+                    android:textColor="@color/text_secondary"
+                    android:textSize="10.5sp"
+                    android:visibility="gone" />
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/recyclerChannelHistory"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:orientation="horizontal" />
+            </LinearLayout>
+
+            <!-- Row 2: Serien-Verlauf (Höhe 185dp) -->
+            <LinearLayout
+                android:id="@+id/layoutSectionSeriesHistory"
+                android:layout_width="match_parent"
+                android:layout_height="185dp"
+                android:orientation="vertical"
+                android:layout_marginBottom="6dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Serien – Verlauf"
+                    android:textColor="@color/text_primary"
+                    android:textSize="12.5sp"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="3dp" />
+
+                <TextView
+                    android:id="@+id/txtNoSeriesHistory"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Noch keine Serien geschaut. Klicke links auf 'Serien', um eine Serie zu starten."
+                    android:textColor="@color/text_secondary"
+                    android:textSize="10.5sp"
+                    android:visibility="gone" />
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/recyclerSeriesHistory"
+                    android:layout_width="match_parent"
+                    android:layout_height="160dp"
+                    android:orientation="horizontal" />
+            </LinearLayout>
+
+            <!-- Row 3: Film-Verlauf (Höhe 185dp) -->
+            <LinearLayout
+                android:id="@+id/layoutSectionMovieHistory"
+                android:layout_width="match_parent"
+                android:layout_height="185dp"
+                android:orientation="vertical"
+                android:layout_marginBottom="6dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Filme – Verlauf"
+                    android:textColor="@color/text_primary"
+                    android:textSize="12.5sp"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="3dp" />
+
+                <TextView
+                    android:id="@+id/txtNoMovieHistory"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Noch keine Filme geschaut. Klicke links auf 'Filme', um Filme zu starten."
+                    android:textColor="@color/text_secondary"
+                    android:textSize="10.5sp"
+                    android:visibility="gone" />
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/recyclerMovieHistory"
+                    android:layout_width="match_parent"
+                    android:layout_height="160dp"
+                    android:orientation="horizontal" />
+            </LinearLayout>
+
+            <!-- Row 4: Beliebte Serien -->
+            <LinearLayout
+                android:id="@+id/layoutSectionTrendingSeries"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="📺 Live TV – Zuletzt geschaut"
-                android:textColor="@color/text_primary"
-                android:textSize="12.5sp"
-                android:textStyle="bold"
-                android:layout_marginBottom="3dp" />
+                android:orientation="vertical"
+                android:layout_marginTop="4dp"
+                android:layout_marginBottom="8dp"
+                android:visibility="gone">
 
-            <TextView
-                android:id="@+id/txtNoChannelHistory"
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Top 10 Serien"
+                    android:textColor="@color/text_primary"
+                    android:textSize="12.5sp"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="4dp" />
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/recyclerTrendingSeries"
+                    android:layout_width="match_parent"
+                    android:layout_height="180dp"
+                    android:orientation="horizontal" />
+            </LinearLayout>
+
+            <!-- Row 5: Beliebte Filme -->
+            <LinearLayout
+                android:id="@+id/layoutSectionTrendingMovies"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Noch keine TV-Sender geschaut. Klicke links auf 'Live TV', um Sender zu starten."
-                android:textColor="@color/text_secondary"
-                android:textSize="10.5sp"
-                android:visibility="gone" />
+                android:orientation="vertical"
+                android:layout_marginTop="4dp"
+                android:layout_marginBottom="16dp"
+                android:visibility="gone">
 
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/recyclerChannelHistory"
-                android:layout_width="match_parent"
-                android:layout_height="52dp"
-                android:orientation="horizontal" />
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Top 10 Filme"
+                    android:textColor="@color/text_primary"
+                    android:textSize="12.5sp"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="4dp" />
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/recyclerTrendingMovies"
+                    android:layout_width="match_parent"
+                    android:layout_height="180dp"
+                    android:orientation="horizontal" />
+            </LinearLayout>
+
         </LinearLayout>
-
-        <!-- Row 2: 🍿 Serien-Verlauf & Weiterschauen (Höhe 185dp) -->
-        <LinearLayout
-            android:id="@+id/layoutSectionSeriesHistory"
-            android:layout_width="match_parent"
-            android:layout_height="185dp"
-            android:orientation="vertical"
-            android:layout_marginBottom="6dp">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="🍿 Serien – Weiterschauen &amp; Verlauf"
-                android:textColor="@color/text_primary"
-                android:textSize="12.5sp"
-                android:textStyle="bold"
-                android:layout_marginBottom="3dp" />
-
-            <TextView
-                android:id="@+id/txtNoSeriesHistory"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Noch keine Serien geschaut. Klicke links auf 'Serien', um eine Serie zu starten."
-                android:textColor="@color/text_secondary"
-                android:textSize="10.5sp"
-                android:visibility="gone" />
-
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/recyclerSeriesHistory"
-                android:layout_width="match_parent"
-                android:layout_height="160dp"
-                android:orientation="horizontal" />
-        </LinearLayout>
-
-        <!-- Row 3: 🎬 Film-Verlauf & Weiterschauen (Höhe 185dp) -->
-        <LinearLayout
-            android:id="@+id/layoutSectionMovieHistory"
-            android:layout_width="match_parent"
-            android:layout_height="185dp"
-            android:orientation="vertical">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="🎬 Filme – Weiterschauen &amp; Verlauf"
-                android:textColor="@color/text_primary"
-                android:textSize="12.5sp"
-                android:textStyle="bold"
-                android:layout_marginBottom="3dp" />
-
-            <TextView
-                android:id="@+id/txtNoMovieHistory"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Noch keine Filme geschaut. Klicke links auf 'Filme', um Filme zu starten."
-                android:textColor="@color/text_secondary"
-                android:textSize="10.5sp"
-                android:visibility="gone" />
-
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/recyclerMovieHistory"
-                android:layout_width="match_parent"
-                android:layout_height="160dp"
-                android:orientation="horizontal" />
-        </LinearLayout>
-
-    </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
 
 </LinearLayout>

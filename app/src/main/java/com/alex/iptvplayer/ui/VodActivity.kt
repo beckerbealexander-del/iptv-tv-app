@@ -1,6 +1,8 @@
 package com.alex.iptvplayer.ui
 
 import android.content.Intent
+import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.LayoutInflater
@@ -23,27 +25,41 @@ import com.alex.iptvplayer.data.XtreamClient
 import com.alex.iptvplayer.databinding.ActivityVodBinding
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+data class VodCategoryItem(
+    val id: String,
+    val title: String,
+    val isProviderHeader: Boolean = false,
+    val providerKey: String? = null,
+    val genreKey: String? = null,
+    val isSubItem: Boolean = false
+)
 
 class VodActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityVodBinding
     private lateinit var client: XtreamClient
-    private var allCategories: List<Category> = emptyList()
-    private var displayedCategories: List<Category> = emptyList()
+    private var displayedCategories: List<VodCategoryItem> = emptyList()
     private var currentMovies: List<VodStream> = emptyList()
     private var rawCategoryMovies: List<VodStream> = emptyList()
     private var allMoviesGlobal: List<VodStream> = emptyList()
-    private var selectedCategoryId: String? = null
-    private val categoryCache = HashMap<String, List<VodStream>>()
+    private var expandedProviderKey: String? = "netflix"
+    private var selectedCategoryId: String = "netflix_TOP"
+    private val categoryCache get() = com.alex.iptvplayer.data.TmdbProviderCatalogManager.movieCategoryCache
+    private val categoryCounts get() = com.alex.iptvplayer.data.TmdbProviderCatalogManager.movieCategoryCounts
 
-    private var currentSortMode: String = "DEFAULT"
     private var currentSearchQuery: String? = null
 
     private var loadJob: Job? = null
     private var heroJob: Job? = null
+
+    private fun dpToPx(dp: Int): Int {
+        return (dp * resources.displayMetrics.density).toInt()
+    }
 
     // Vollbild-Suche Launcher
     private val searchLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -74,6 +90,20 @@ class VodActivity : AppCompatActivity() {
             setItemViewCacheSize(80)
         }
 
+        binding.btnOpenVodSearch.isFocusable = false
+        binding.btnOpenVodSearch.setOnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus) {
+                binding.btnOpenVodSearch.isFocusable = false
+            }
+        }
+        binding.btnOpenVodSearch.setOnKeyListener { _, keyCode, event ->
+            if (event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+                focusSelectedCategory()
+                return@setOnKeyListener true
+            }
+            false
+        }
+
         binding.btnOpenVodSearch.setOnClickListener {
             val intent = Intent(this, SearchActivity::class.java).apply {
                 putExtra("SEARCH_TYPE", "VOD")
@@ -81,104 +111,231 @@ class VodActivity : AppCompatActivity() {
             searchLauncher.launch(intent)
         }
 
-        setupSortButtons()
+        // 1. Sofort aus lokalem Disk-Cache laden (Ladezeit < 10ms)
+        allMoviesGlobal = cachedAllMoviesGlobal ?: client.loadCachedVodCatalog().also { cachedAllMoviesGlobal = it }
         loadCategories()
+        // 2. Im Hintergrund synchronisieren falls noetig
         preloadGlobalCatalog()
+        preloadCategoryCounts()
+    }
+
+    companion object {
+        var cachedAllMoviesGlobal: List<VodStream>? = null
+
+        val PROVIDERS = listOf(
+            Pair("netflix", "Netflix"),
+            Pair("prime", "Amazon Prime"),
+            Pair("disney", "Disney+"),
+            Pair("apple", "Apple TV+"),
+            Pair("paramount", "Paramount+"),
+            Pair("other", "Weitere Filme")
+        )
+
+        val GENRE_ITEMS = listOf(
+            Pair("ALL", "Alle"),
+            Pair("TOP", "Top"),
+            Pair("ACTION", "Action & Abenteuer"),
+            Pair("COMEDY", "Komödie"),
+            Pair("THRILLER", "Thriller & Krimi"),
+            Pair("HORROR", "Horror & Mystery"),
+            Pair("SCIFI", "Sci-Fi & Fantasy"),
+            Pair("DOCU", "Dokumentation"),
+            Pair("KIDS", "Kinder & Familie")
+        )
+
+        val STATIC_ITEMS = listOf(
+            Pair("GENRE_RUSSIAN", "Russian"),
+            Pair("ADULT_MOVIES", "Privat"),
+            Pair("ALL_MOVIES", "Alle Filme")
+        )
     }
 
     private fun preloadGlobalCatalog() {
         lifecycleScope.launch {
             try {
-                allMoviesGlobal = client.getAllVodStreams()
+                val fresh = client.getGermanVodStreamsStreamed()
+                if (fresh.isNotEmpty()) {
+                    allMoviesGlobal = fresh
+                    cachedAllMoviesGlobal = fresh
+                    categoryCounts["ALL_MOVIES"] = fresh.size
+                    categoryCounts["GENRE_RUSSIAN"] = fresh.count { client.isRussianMedia(it.name, it.categoryId) }
+                    binding.recyclerVodCategories.adapter?.notifyDataSetChanged()
+                    preloadCategoryCounts()
+                }
             } catch (e: Exception) {
                 // Silent
             }
         }
     }
 
-    private fun setupSortButtons() {
-        binding.btnSortDefault.setOnClickListener { applySorting("DEFAULT") }
-        binding.btnSortRating.setOnClickListener { applySorting("RATING") }
-        binding.btnSortYear.setOnClickListener { applySorting("YEAR") }
-        binding.btnSortAlpha.setOnClickListener { applySorting("ALPHA") }
+    private fun preloadCategoryCounts() {
+        lifecycleScope.launch(Dispatchers.Default) {
+            val pool = if (allMoviesGlobal.isNotEmpty()) allMoviesGlobal else client.loadCachedVodCatalog()
+            val germanPool = pool.filter { client.isGermanMedia(it.name) }
+            if (germanPool.isEmpty()) return@launch
+
+            val provKey = expandedProviderKey ?: "netflix"
+            for (genre in GENRE_ITEMS) {
+                val cacheKey = "${provKey}_${genre.first}"
+                if (!categoryCounts.containsKey(cacheKey)) {
+                    com.alex.iptvplayer.data.TmdbProviderCatalogManager.filterMoviesByProviderAndGenre(
+                        context = this@VodActivity,
+                        providerKey = provKey,
+                        genreKey = genre.first,
+                        germanMovies = germanPool
+                    )
+                }
+            }
+            withContext(Dispatchers.Main) {
+                binding.recyclerVodCategories.adapter?.notifyDataSetChanged()
+            }
+        }
     }
 
-    private fun applySorting(mode: String) {
-        currentSortMode = mode
-        if (rawCategoryMovies.isEmpty()) return
-
-        val sorted = when (mode) {
-            "RATING" -> rawCategoryMovies.sortedByDescending { it.rating?.toFloatOrNull() ?: 0f }
-            "YEAR" -> rawCategoryMovies.sortedByDescending { 
-                val year = Regex("\\b(19\\d\\d|20\\d\\d)\\b").find(it.name)?.value?.toIntOrNull() ?: 0
-                year
-            }
-            "ALPHA" -> rawCategoryMovies.sortedBy { it.name.lowercase() }
-            else -> rawCategoryMovies
+    private fun applySorting() {
+        if (rawCategoryMovies.isEmpty()) {
+            binding.txtVodCategoryCounter.text = ""
+            return
         }
-        currentMovies = sorted
-        binding.recyclerVodGrid.adapter = MovieAdapter(sorted, { movie ->
+        currentMovies = rawCategoryMovies
+        binding.txtVodCategoryCounter.text = "1 / ${currentMovies.size}"
+        binding.recyclerVodGrid.adapter = MovieAdapter(currentMovies, { movie, position ->
+            binding.txtVodCategoryCounter.text = "${position + 1} / ${currentMovies.size}"
             updateHeroBannerDebounced(movie)
         }, { movie ->
             playMovie(movie)
         })
-        if (sorted.isNotEmpty()) {
-            updateHeroBanner(sorted[0])
+        if (currentMovies.isNotEmpty()) {
+            updateHeroBanner(currentMovies[0])
         }
     }
 
-    // 5. SUCHE: DYNAMISCHE KATEGORIE "🔍 Aktuelle Suche" AN INDEX 0
+    // 5. SUCHE: DYNAMISCHE KATEGORIE "Aktuelle Suche" AN INDEX 0
     private fun applySearchQuery(query: String) {
         currentSearchQuery = query
-        val searchCategory = Category(id = "CURRENT_SEARCH", name = "🔍 Aktuelle Suche")
-        val newCategories = mutableListOf(searchCategory)
-        newCategories.addAll(allCategories)
-        displayedCategories = newCategories
         selectedCategoryId = "CURRENT_SEARCH"
-
-        binding.recyclerVodCategories.adapter = VodCategoryAdapter(newCategories) { cat ->
-            loadMovies(cat)
-        }
+        expandedProviderKey = null
+        displayedCategories = buildCategoryList()
+        (binding.recyclerVodCategories.adapter as? VodCategoryAdapter)?.updateItems(displayedCategories)
 
         val pool = if (allMoviesGlobal.isNotEmpty()) allMoviesGlobal else currentMovies
         val filtered = pool.filter { it.name.contains(query, ignoreCase = true) }
-        binding.txtVodCategoryTitle.text = "Suchergebnisse: „$query“ (${filtered.size})"
+        categoryCounts["CURRENT_SEARCH"] = filtered.size
+        binding.txtVodCategoryTitle.text = "Suchergebnisse: „$query“"
+        binding.txtVodCategoryCounter.text = if (filtered.isNotEmpty()) "1 / ${filtered.size}" else ""
         rawCategoryMovies = filtered
-        applySorting(currentSortMode)
+        binding.recyclerVodCategories.adapter?.notifyDataSetChanged()
+        applySorting()
 
         // Fokus sofort auf das erste Suchergebnis
         focusFirstMovie()
     }
 
-    private fun loadCategories() {
-        binding.progressVodCats.visibility = View.VISIBLE
-        lifecycleScope.launch {
-            try {
-                val raw = client.getVodCategories()
-                val filtered = client.filterCategories(raw, LangFilter.AUTO_DE_RU_ADULT).toMutableList()
-                if (filtered.none { it.id == "ALL_MOVIES" }) {
-                    filtered.add(0, Category(id = "ALL_MOVIES", name = "✨ Alle Filme"))
-                }
-                allCategories = filtered
-                displayedCategories = filtered
-                binding.progressVodCats.visibility = View.GONE
-                binding.recyclerVodCategories.adapter = VodCategoryAdapter(displayedCategories) { cat ->
-                    loadMovies(cat)
-                }
+    private fun buildCategoryList(): List<VodCategoryItem> {
+        val list = mutableListOf<VodCategoryItem>()
+        if (currentSearchQuery != null) {
+            list.add(VodCategoryItem(id = "CURRENT_SEARCH", title = "Aktuelle Suche"))
+        }
 
-                // 6. STANDARD-KATEGORIE: Beim Start immer "Alle Filme" vorauswählen und laden!
-                if (displayedCategories.isNotEmpty()) {
-                    loadMovies(displayedCategories[0])
+        for (prov in PROVIDERS) {
+            val isExpanded = (expandedProviderKey == prov.first)
+            list.add(
+                VodCategoryItem(
+                    id = "prov_${prov.first}",
+                    title = prov.second,
+                    isProviderHeader = true,
+                    providerKey = prov.first
+                )
+            )
+            if (isExpanded) {
+                for (genre in GENRE_ITEMS) {
+                    list.add(
+                        VodCategoryItem(
+                            id = "${prov.first}_${genre.first}",
+                            title = genre.second,
+                            isProviderHeader = false,
+                            providerKey = prov.first,
+                            genreKey = genre.first,
+                            isSubItem = true
+                        )
+                    )
                 }
-            } catch (e: Exception) {
-                binding.progressVodCats.visibility = View.GONE
-                Toast.makeText(this@VodActivity, "Fehler: ${e.message}", Toast.LENGTH_SHORT).show()
             }
+        }
+
+        for (staticCat in STATIC_ITEMS) {
+            list.add(
+                VodCategoryItem(
+                    id = staticCat.first,
+                    title = staticCat.second,
+                    isProviderHeader = false
+                )
+            )
+        }
+
+        return list
+    }
+
+    private fun loadCategories() {
+        binding.progressVodCats.visibility = View.GONE
+        if (allMoviesGlobal.isNotEmpty()) {
+            categoryCounts["ALL_MOVIES"] = allMoviesGlobal.size
+            categoryCounts["GENRE_RUSSIAN"] = allMoviesGlobal.count { client.isRussianMedia(it.name, it.categoryId) }
+        }
+
+        displayedCategories = buildCategoryList()
+        binding.recyclerVodCategories.adapter = VodCategoryAdapter(displayedCategories) { cat ->
+            onCategoryClicked(cat)
+        }
+
+        // Beim Start immer Netflix Top vorauswählen und laden!
+        val initialItem = displayedCategories.firstOrNull { it.id == "netflix_TOP" }
+            ?: displayedCategories.firstOrNull()
+        if (initialItem != null) {
+            loadMovies(initialItem, autoFocusGrid = false)
+        }
+
+        // Fokus sofort und ruhig auf die ausgewählte Kategorie setzen (ohne Suchen-Feld-Sprung)
+        binding.recyclerVodCategories.post {
+            focusSelectedCategory()
         }
     }
 
-    // 6. KEIN SUCH-SPRUNG: Fokus springt immer auf das erste Media-Item der Kategorie (niemals Suchfeld)
-    private fun loadMovies(category: Category) {
+    private fun onCategoryClicked(item: VodCategoryItem) {
+        if (item.isProviderHeader) {
+            if (expandedProviderKey == item.providerKey) {
+                // Bei Klick auf bereits geöffneten Anbieter -> Zuklappen
+                expandedProviderKey = null
+                displayedCategories = buildCategoryList()
+                (binding.recyclerVodCategories.adapter as? VodCategoryAdapter)?.updateItems(displayedCategories)
+            } else {
+                // Anbieter aufklappen und automatisch dessen "Top" Titel laden
+                expandedProviderKey = item.providerKey
+                val topGenreId = "${item.providerKey}_TOP"
+                selectedCategoryId = topGenreId
+                displayedCategories = buildCategoryList()
+                (binding.recyclerVodCategories.adapter as? VodCategoryAdapter)?.updateItems(displayedCategories)
+
+                val targetItem = displayedCategories.firstOrNull { it.id == topGenreId } ?: item
+                loadMovies(targetItem, autoFocusGrid = false)
+                preloadCategoryCounts()
+            }
+        } else {
+            selectedCategoryId = item.id
+            if (!item.isSubItem && item.id != "CURRENT_SEARCH") {
+                // Bei Klick auf Russian, Privat oder Alle Filme -> Provider zuklappen
+                expandedProviderKey = null
+                displayedCategories = buildCategoryList()
+                (binding.recyclerVodCategories.adapter as? VodCategoryAdapter)?.updateItems(displayedCategories)
+            } else {
+                binding.recyclerVodCategories.adapter?.notifyDataSetChanged()
+            }
+            loadMovies(item, autoFocusGrid = false)
+        }
+    }
+
+    // 6. KEIN SUCH-SPRUNG: Fokus springt bei Bedarf auf das erste Media-Item der Kategorie
+    private fun loadMovies(category: VodCategoryItem, autoFocusGrid: Boolean = true) {
         if (category.id == "CURRENT_SEARCH" && currentSearchQuery != null) {
             applySearchQuery(currentSearchQuery!!)
             return
@@ -186,32 +343,99 @@ class VodActivity : AppCompatActivity() {
 
         selectedCategoryId = category.id
         binding.recyclerVodCategories.adapter?.notifyDataSetChanged()
-        binding.txtVodCategoryTitle.text = category.name
+
+        val headerTitle = when {
+            category.isProviderHeader -> {
+                val provName = PROVIDERS.firstOrNull { it.first == category.providerKey }?.second ?: category.title
+                "$provName › Top"
+            }
+            category.isSubItem -> {
+                val provName = PROVIDERS.firstOrNull { it.first == category.providerKey }?.second ?: ""
+                val genreName = GENRE_ITEMS.firstOrNull { it.first == category.genreKey }?.second ?: ""
+                "$provName › $genreName"
+            }
+            else -> category.title
+        }
 
         val cached = categoryCache[category.id]
         if (cached != null) {
             rawCategoryMovies = cached
+            categoryCounts[category.id] = cached.size
+            binding.txtVodCategoryTitle.text = headerTitle
+            binding.txtVodCategoryCounter.text = if (cached.isNotEmpty()) "1 / ${cached.size}" else ""
+            binding.recyclerVodCategories.adapter?.notifyDataSetChanged()
             binding.progressVod.visibility = View.GONE
-            applySorting(currentSortMode)
-            focusFirstMovie()
+            applySorting()
+            if (autoFocusGrid) {
+                focusFirstMovie()
+            } else {
+                focusSelectedCategory()
+            }
             return
         }
 
+        binding.txtVodCategoryTitle.text = headerTitle
+        binding.txtVodCategoryCounter.text = ""
         binding.progressVod.visibility = View.VISIBLE
         loadJob?.cancel()
         loadJob = lifecycleScope.launch {
             try {
-                val list = client.getVodStreams(category.id)
+                val list = if (category.id == "ADULT_MOVIES") {
+                    client.getVodStreams("382")
+                } else {
+                    val allGlobal = if (allMoviesGlobal.isNotEmpty()) allMoviesGlobal else {
+                        val streamed = client.getGermanVodStreamsStreamed()
+                        allMoviesGlobal = streamed
+                        cachedAllMoviesGlobal = streamed
+                        streamed
+                    }
+                    val germanPool = allGlobal.filter { client.isGermanMedia(it.name) }
+
+                    when {
+                        category.providerKey != null -> {
+                            val gKey = category.genreKey ?: "TOP"
+                            com.alex.iptvplayer.data.TmdbProviderCatalogManager.filterMoviesByProviderAndGenre(
+                                context = this@VodActivity,
+                                providerKey = category.providerKey,
+                                genreKey = gKey,
+                                germanMovies = germanPool
+                            )
+                        }
+                        category.id == "GENRE_RUSSIAN" -> {
+                            val ruList = allGlobal.filter { client.isRussianMedia(it.name, it.categoryId) }
+                            if (ruList.isNotEmpty()) ruList else {
+                                val cat81 = client.getVodStreams("81")
+                                cat81
+                            }
+                        }
+                        category.id == "ALL_MOVIES" -> allGlobal
+                        else -> allGlobal
+                    }
+                }
+
                 categoryCache[category.id] = list
+                categoryCounts[category.id] = list.size
                 rawCategoryMovies = list
+                binding.txtVodCategoryTitle.text = headerTitle
+                binding.txtVodCategoryCounter.text = if (list.isNotEmpty()) "1 / ${list.size}" else ""
+                binding.recyclerVodCategories.adapter?.notifyDataSetChanged()
                 binding.progressVod.visibility = View.GONE
-                applySorting(currentSortMode)
-                focusFirstMovie()
+                applySorting()
+                if (autoFocusGrid) {
+                    focusFirstMovie()
+                } else {
+                    focusSelectedCategory()
+                }
             } catch (e: Exception) {
                 binding.progressVod.visibility = View.GONE
                 Toast.makeText(this@VodActivity, "Fehler beim Laden: ${e.message}", Toast.LENGTH_SHORT).show()
             }
         }
+    }
+
+    private fun matchesKeywords(name: String, keywords: List<String>): Boolean {
+        val lower = name.lowercase()
+        return keywords.any { lower.contains(it) }
     }
 
     private fun focusFirstMovie() {
@@ -231,7 +455,7 @@ class VodActivity : AppCompatActivity() {
 
     private fun updateHeroBanner(movie: VodStream) {
         binding.txtHeroTitle.text = movie.name
-        binding.txtHeroRating.text = if (!movie.rating.isNullOrEmpty()) "⭐ ${movie.rating} | VOD" else "⭐ 8.0 | VOD"
+        binding.txtHeroRating.text = if (!movie.rating.isNullOrEmpty()) "★ ${movie.rating} | VOD" else "★ 8.0 | VOD"
 
         if (!movie.streamIcon.isNullOrEmpty()) {
             Glide.with(this)
@@ -246,12 +470,12 @@ class VodActivity : AppCompatActivity() {
     }
 
     private fun playMovie(movie: VodStream) {
-        val intent = Intent(this, PlayerActivity::class.java).apply {
-            putExtra("STREAM_URL", client.getVodStreamUrl(movie.streamId, movie.containerExtension ?: "mp4"))
+        val intent = Intent(this, MovieDetailActivity::class.java).apply {
+            putExtra("VOD_STREAM", movie)
+            putExtra("STREAM_ID", movie.streamId)
             putExtra("STREAM_NAME", movie.name)
             putExtra("POSTER_URL", movie.streamIcon)
-            putExtra("STREAM_ID", movie.streamId)
-            putExtra("STREAM_TYPE", "VOD")
+            putExtra("CONTAINER_EXT", movie.containerExtension ?: "mp4")
         }
         startActivity(intent)
     }
@@ -314,20 +538,9 @@ class VodActivity : AppCompatActivity() {
                             binding.recyclerVodGrid.post {
                                 binding.recyclerVodGrid.findViewHolderForAdapterPosition(prevPos)?.itemView?.requestFocus()
                             }
-                        } else {
-                            // Aus der ersten Reihe nach oben in die integrierte Sortierleiste
-                            binding.btnSortDefault.requestFocus()
                         }
-                        return true
+                        return true // Fix-Lock oben: Erste Reihe verlässt die Grid nicht!
                     }
-                }
-            } else if (isViewInView(focused, binding.layoutVodSortBar)) {
-                if (event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
-                    focusFirstMovie()
-                    return true
-                } else if (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT && focused == binding.btnSortDefault) {
-                    focusSelectedCategory()
-                    return true
                 }
             }
         }
@@ -357,12 +570,18 @@ class VodActivity : AppCompatActivity() {
     }
 
     inner class VodCategoryAdapter(
-        private val items: List<Category>,
-        private val onSelect: (Category) -> Unit
+        private var items: List<VodCategoryItem>,
+        private val onSelect: (VodCategoryItem) -> Unit
     ) : RecyclerView.Adapter<VodCategoryAdapter.ViewHolder>() {
+
+        fun updateItems(newItems: List<VodCategoryItem>) {
+            items = newItems
+            notifyDataSetChanged()
+        }
 
         inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
             val txtName: TextView = view.findViewById(R.id.txtCategoryName)
+            val txtCount: TextView = view.findViewById(R.id.txtCategoryCount)
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -372,8 +591,11 @@ class VodActivity : AppCompatActivity() {
 
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val cat = items[position]
-            holder.txtName.text = cat.name
-            holder.itemView.isSelected = (cat.id == selectedCategoryId)
+            applyCategoryStyle(holder, cat)
+
+            holder.itemView.setOnFocusChangeListener { _, _ ->
+                applyCategoryStyle(holder, cat)
+            }
 
             holder.itemView.setOnClickListener {
                 onSelect(cat)
@@ -395,6 +617,7 @@ class VodActivity : AppCompatActivity() {
                         }
                         KeyEvent.KEYCODE_DPAD_UP -> {
                             if (position == 0) {
+                                binding.btnOpenVodSearch.isFocusable = true
                                 binding.btnOpenVodSearch.requestFocus()
                                 return@setOnKeyListener true
                             }
@@ -410,12 +633,80 @@ class VodActivity : AppCompatActivity() {
             }
         }
 
+        private fun applyCategoryStyle(holder: ViewHolder, cat: VodCategoryItem) {
+            val isSelected = (cat.id == selectedCategoryId)
+            val isFocused = holder.itemView.isFocused
+
+            if (cat.isProviderHeader) {
+                val isExpanded = (expandedProviderKey == cat.providerKey)
+                val arrow = if (isExpanded) "▾  " else "▸  "
+                holder.txtName.text = arrow + cat.title
+                holder.txtName.textSize = 12.5f
+                holder.txtName.setPadding(dpToPx(4), 0, 0, 0)
+            } else if (cat.isSubItem) {
+                holder.txtName.text = cat.title
+                holder.txtName.textSize = 11.5f
+                holder.txtName.setPadding(dpToPx(16), 0, 0, 0)
+            } else {
+                holder.txtName.text = cat.title
+                holder.txtName.textSize = 12f
+                holder.txtName.setPadding(dpToPx(4), 0, 0, 0)
+            }
+
+            val count = if (cat.isProviderHeader && cat.providerKey != null) {
+                categoryCounts["${cat.providerKey}_TOP"] ?: categoryCounts[cat.id]
+            } else {
+                categoryCounts[cat.id]
+            }
+
+            if (count != null && count > 0) {
+                holder.txtCount.visibility = View.VISIBLE
+                holder.txtCount.text = count.toString()
+                holder.txtCount.setTextColor(
+                    if (isFocused || isSelected) Color.parseColor("#FFFFFF") else Color.parseColor("#8E9297")
+                )
+            } else {
+                holder.txtCount.visibility = View.GONE
+            }
+
+            holder.txtName.setTextColor(
+                if (isFocused || isSelected) Color.parseColor("#FFFFFF") else Color.parseColor("#B0B0B0")
+            )
+
+            val drawable = GradientDrawable().apply {
+                cornerRadius = dpToPx(6).toFloat()
+                when {
+                    isFocused -> {
+                        if (isSelected) {
+                            setColor(Color.parseColor("#3E271E"))
+                        } else {
+                            setColor(Color.parseColor("#2A2B32"))
+                        }
+                        setStroke(dpToPx(3), Color.parseColor("#C5866D"))
+                    }
+                    isSelected -> {
+                        setColor(Color.parseColor("#352219"))
+                        setStroke(dpToPx(1.5f.toInt()), Color.parseColor("#6B3F2E"))
+                    }
+                    cat.isProviderHeader -> {
+                        setColor(Color.parseColor("#1B1C22"))
+                        setStroke(dpToPx(1), Color.parseColor("#292A32"))
+                    }
+                    else -> {
+                        setColor(Color.parseColor("#17181C"))
+                        setStroke(dpToPx(1), Color.parseColor("#23242A"))
+                    }
+                }
+            }
+            holder.itemView.background = drawable
+        }
+
         override fun getItemCount() = items.size
     }
 
     inner class MovieAdapter(
         private val items: List<VodStream>,
-        private val onFocus: (VodStream) -> Unit,
+        private val onFocus: (VodStream, Int) -> Unit,
         private val onClick: (VodStream) -> Unit
     ) : RecyclerView.Adapter<MovieAdapter.ViewHolder>() {
 
@@ -445,7 +736,8 @@ class VodActivity : AppCompatActivity() {
             }
 
             holder.itemView.setOnFocusChangeListener { _, hasFocus ->
-                if (hasFocus) onFocus(movie)
+                holder.txtTitle.isSelected = hasFocus
+                if (hasFocus) onFocus(movie, position)
             }
 
             holder.itemView.setOnClickListener { onClick(movie) }

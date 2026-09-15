@@ -1,6 +1,9 @@
 package com.alex.iptvplayer.ui
 
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
@@ -18,6 +21,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.common.VideoSize
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -25,46 +31,98 @@ import com.alex.iptvplayer.R
 import com.alex.iptvplayer.data.Category
 import com.alex.iptvplayer.data.EpgProgram
 import com.alex.iptvplayer.data.HistoryManager
-import com.alex.iptvplayer.data.LangFilter
+import com.alex.iptvplayer.data.LiveTvCacheManager
 import com.alex.iptvplayer.data.LiveStream
+import com.alex.iptvplayer.data.MultiStreamChannel
+import com.alex.iptvplayer.data.MultiStreamManager
+import com.alex.iptvplayer.data.QualityPreferenceManager
+import com.alex.iptvplayer.data.StreamSource
 import com.alex.iptvplayer.data.XtreamClient
 import com.alex.iptvplayer.databinding.ActivityLiveTvBinding
+import com.alex.iptvplayer.util.AppLogger
 import com.alex.iptvplayer.util.PlayerUtils
 import com.bumptech.glide.Glide
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.util.concurrent.ConcurrentHashMap
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
 data class ChannelWithEpg(
-    val stream: LiveStream,
+    val channel: MultiStreamChannel,
     var epgList: List<EpgProgram> = emptyList()
-)
+) {
+    constructor(stream: LiveStream, epgList: List<EpgProgram> = emptyList()) : this(
+        channel = MultiStreamChannel(
+            cleanName = stream.name,
+            originalName = stream.name,
+            categoryId = stream.categoryId ?: "",
+            categoryName = "",
+            icon = stream.streamIcon,
+            epgId = stream.epgChannelId,
+            sources = listOf(
+                StreamSource(
+                    streamId = stream.streamId,
+                    name = stream.name,
+                    label = "Standard Stream",
+                    score = 50,
+                    subcategory = ""
+                )
+            )
+        ),
+        epgList = epgList
+    )
+
+    val stream: LiveStream
+        get() = LiveStream(
+            streamId = channel.primarySource?.streamId ?: 0,
+            name = channel.cleanName,
+            streamIcon = channel.icon,
+            epgChannelId = channel.epgId,
+            categoryId = channel.categoryId
+        )
+}
 
 class LiveTvActivity : AppCompatActivity() {
 
     companion object {
-        val categoryChannelMap = HashMap<String, List<ChannelWithEpg>>()
+        val categoryChannelMap = ConcurrentHashMap<String, List<ChannelWithEpg>>()
         var allLiveStreamsCache: List<LiveStream> = emptyList()
+        val multiStreamCategoriesMap = ConcurrentHashMap<String, List<MultiStreamChannel>>()
+        val epgGlobalCache = ConcurrentHashMap<String, List<EpgProgram>>()
+        val rawCategoryStreamsCache = ConcurrentHashMap<String, List<LiveStream>>()
+        var rawCategoriesCache: List<Category> = emptyList()
     }
 
     private lateinit var binding: ActivityLiveTvBinding
     private lateinit var client: XtreamClient
     private lateinit var historyManager: HistoryManager
+    private lateinit var cacheManager: LiveTvCacheManager
 
     private var allCategories: List<Category> = emptyList()
     private var displayedCategories: List<Category> = emptyList()
     private var currentChannelItems: List<ChannelWithEpg> = emptyList()
     private var allLiveStreamsGlobal: List<LiveStream> = emptyList()
 
-    // 1. Zwei-Stufen-Logik: Playing Category vs. Browsing Category
+    // Zwei-Stufen-Logik: Playing Category vs. Browsing Category
     private var playingCategoryId: String? = null
     private var browsingCategoryId: String? = null
     private var nowPlayingStreamId: Int? = null
 
+    // Multi-Stream State
+    private var activeChannel: MultiStreamChannel? = null
+    private var activeSourceIndex: Int = 0
+
     // Sperre gegen Fokus-Zwischensprung in die Suche
     private var isSwitchingCategories = false
+    private var isPlayingJustStarted = false
 
     // Playlist-Kontext (z. B. Kategorie-Senderliste)
     private var activePlaylist: List<ChannelWithEpg> = emptyList()
@@ -81,46 +139,133 @@ class LiveTvActivity : AppCompatActivity() {
     private var activeStream: LiveStream? = null
     private var activeStreamEpg: EpgProgram? = null
 
+    // Asynchrone Jobs für Zappen & EPG
+    private var streamJob: Job? = null
+    private var epgFetchJob: Job? = null
+
+    // Fast Auto-Retry für Verbindungslimit (401/403/429/Timeout)
+    private val retryHandler = Handler(Looper.getMainLooper())
+    private var retryRunnable: Runnable? = null
+    private var retryCount = 0
+    private val resetRetryRunnable = Runnable { retryCount = 0 }
+    private val MAX_STREAM_RETRIES = 6
+
+    // Standby-Erkennung (HDMI / Display Off)
+    private val screenOffReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == Intent.ACTION_SCREEN_OFF) {
+                AppLogger.logLifecycle("LiveTvActivity", "ACTION_SCREEN_OFF: Standby erkannt -> Beende alle Stream-Verbindungen sofort")
+                watchdogHandler.removeCallbacks(bufferWatchdogRunnable)
+                retryRunnable?.let { retryHandler.removeCallbacks(it) }
+                streamJob?.cancel()
+                epgFetchJob?.cancel()
+                PlayerUtils.releaseStreamConnections(livePlayer)
+            }
+        }
+    }
+
+    // Watchdog für hängenden Puffer (Auto-Failover nach 6 Sekunden Buffering)
+    private val watchdogHandler = Handler(Looper.getMainLooper())
+    private val bufferWatchdogRunnable = Runnable {
+        if (livePlayer != null && livePlayer?.playbackState == Player.STATE_BUFFERING) {
+            triggerAutoFailover("Lade-Timeout")
+        }
+    }
+
     // OSD Timer
     private val osdHandler = Handler(Looper.getMainLooper())
     private val hideOsdRunnable = Runnable {
         binding.layoutFullscreenOsd.visibility = View.GONE
     }
 
-    // 3. SUCHE DIREKT IM SUCHFENSTER: Treffer starten den Sender sofort, KEINE temporäre Kategorie mehr!
+    // SUCHE DIREKT IM SUCHFENSTER: Treffer starten den Sender sofort!
     private val searchLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == RESULT_OK) {
             val streamId = result.data?.getIntExtra("SELECTED_STREAM_ID", -1) ?: -1
             val startFullscreen = result.data?.getBooleanExtra("START_FULLSCREEN", true) ?: true
 
             if (streamId != -1) {
-                val targetStream = allLiveStreamsGlobal.firstOrNull { it.streamId == streamId }
-                    ?: currentChannelItems.firstOrNull { it.stream.streamId == streamId }?.stream
-
-                if (targetStream != null) {
-                    val catId = targetStream.categoryId
-                    if (!catId.isNullOrEmpty()) {
-                        val cat = displayedCategories.firstOrNull { it.id == catId }
-                        if (cat != null) {
-                            loadChannels(cat, preselectedStreamId = targetStream.streamId)
-                        }
-                    }
-                    playLiveStream(targetStream)
-                    if (startFullscreen) {
-                        setFullscreenMode()
-                    }
-                }
+                playTargetStreamById(streamId, startFullscreen)
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        val targetStreamId = intent.getIntExtra("TARGET_STREAM_ID", -1).takeIf { it != -1 }
+        val startFullscreen = intent.getBooleanExtra("START_FULLSCREEN", false)
+        if (targetStreamId != null) {
+            playTargetStreamById(targetStreamId, startFullscreen)
+        }
+    }
+
+    private fun playTargetStreamById(streamId: Int, startFullscreen: Boolean) {
+        val matchingChannel = multiStreamCategoriesMap.values.flatten()
+            .firstOrNull { ch -> ch.sources.any { it.streamId == streamId } || ch.cleanName.equals(currentChannelItems.firstOrNull { it.stream.streamId == streamId }?.channel?.cleanName, ignoreCase = true) }
+
+        if (matchingChannel != null) {
+            val cat = displayedCategories.firstOrNull { it.id == matchingChannel.categoryId }
+            if (cat != null) {
+                browsingCategoryId = cat.id
+                playingCategoryId = cat.id
+                categoryAdapter?.updateCategoryStates(playingCategoryId, browsingCategoryId)
+                val catPos = displayedCategories.indexOf(cat)
+                if (catPos >= 0) {
+                    binding.recyclerCategories.scrollToPosition(catPos)
+                }
+                loadChannels(cat, preselectedStreamId = streamId)
+            }
+            val srcIdx = matchingChannel.sources.indexOfFirst { it.streamId == streamId }.coerceAtLeast(0)
+            playMultiStreamChannel(matchingChannel, srcIdx)
+        } else {
+            val targetStream = allLiveStreamsGlobal.firstOrNull { it.streamId == streamId }
+                ?: allLiveStreamsCache.firstOrNull { it.streamId == streamId }
+                ?: currentChannelItems.firstOrNull { it.stream.streamId == streamId }?.stream
+
+            val targetCatId = if (targetStream != null) {
+                MultiStreamManager.resolveMainCategoryIdForStream(targetStream, rawCategoriesCache)
+            } else {
+                "MAIN_FREETV"
+            }
+            val cat = displayedCategories.firstOrNull { it.id == targetCatId }
+            if (cat != null) {
+                browsingCategoryId = cat.id
+                playingCategoryId = cat.id
+                categoryAdapter?.updateCategoryStates(playingCategoryId, browsingCategoryId)
+                val catPos = displayedCategories.indexOf(cat)
+                if (catPos >= 0) {
+                    binding.recyclerCategories.scrollToPosition(catPos)
+                }
+                loadChannels(cat, preselectedStreamId = streamId)
+            }
+            if (targetStream != null) {
+                playLiveStream(targetStream)
+            }
+        }
+
+        if (startFullscreen) {
+            setFullscreenMode()
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        AppLogger.init(this)
+        AppLogger.logLifecycle("LiveTvActivity", "onCreate")
+
+        // Bildschirmschoner / Standby auf TV während LiveTV verhindern
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         binding = ActivityLiveTvBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        binding.livePlayerView.keepScreenOn = true
+
+        val filter = IntentFilter(Intent.ACTION_SCREEN_OFF)
+        registerReceiver(screenOffReceiver, filter)
 
         client = XtreamClient(this)
         historyManager = HistoryManager(this)
+        cacheManager = LiveTvCacheManager(this)
 
         setupLivePlayer()
         updateLiveTimeHeader()
@@ -145,13 +290,13 @@ class LiveTvActivity : AppCompatActivity() {
 
         setupSearchAndPipRouting()
         setupPipFocusVisuals()
+        setupLivePlayerInteractions()
 
         binding.root.post {
             updatePipPosition()
         }
 
         loadCategories()
-        preloadGlobalChannels()
     }
 
     private fun setupPipFocusVisuals() {
@@ -183,10 +328,14 @@ class LiveTvActivity : AppCompatActivity() {
             searchLauncher.launch(intent)
         }
 
-        // Fokus-Schutz: Falls während eines Kategoriewechsels die Suche Fokus erhält, sofort auf Sender leiten
+        // Fokus-Schutz: Falls während eines Senderspielens oder Kategoriewechsels die Suche Fokus erhält, sofort auf Sender leiten
         binding.btnOpenLiveSearch.setOnFocusChangeListener { _, hasFocus ->
-            if (hasFocus && isSwitchingCategories) {
-                focusTargetChannel(0)
+            if (hasFocus) {
+                if (isSwitchingCategories) {
+                    focusTargetChannel(0)
+                } else if (isPlayingJustStarted && activePlaylistIndex in currentChannelItems.indices) {
+                    focusTargetChannel(activePlaylistIndex)
+                }
             }
         }
 
@@ -206,7 +355,9 @@ class LiveTvActivity : AppCompatActivity() {
             }
             false
         }
+    }
 
+    private fun setupLivePlayerInteractions() {
         binding.livePlayerContainer.setOnClickListener {
             if (!isFullscreen) setFullscreenMode()
         }
@@ -226,43 +377,246 @@ class LiveTvActivity : AppCompatActivity() {
                         binding.btnOpenLiveSearch.requestFocus()
                         return@setOnKeyListener true
                     }
+                    KeyEvent.KEYCODE_PROG_YELLOW, KeyEvent.KEYCODE_BUTTON_Y -> {
+                        cycleToNextSourceManually()
+                        return@setOnKeyListener true
+                    }
                 }
             }
             false
         }
     }
 
-    private fun preloadGlobalChannels() {
-        lifecycleScope.launch {
-            try {
-                allLiveStreamsGlobal = client.getAllLiveStreams()
-                allLiveStreamsCache = allLiveStreamsGlobal
-            } catch (e: Exception) {
-                // Fallback
-            }
+    private fun setupLivePlayer() {
+        livePlayer = PlayerUtils.createExoPlayer(this, isLive = true).apply {
+            binding.livePlayerView.player = this
+            playWhenReady = true
+            addListener(object : Player.Listener {
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    when (playbackState) {
+                        Player.STATE_BUFFERING -> {
+                            watchdogHandler.removeCallbacks(bufferWatchdogRunnable)
+                            watchdogHandler.postDelayed(bufferWatchdogRunnable, 6000)
+                            AppLogger.logPlayerState("LiveTv", "BUFFERING")
+                        }
+                        Player.STATE_READY -> {
+                            watchdogHandler.removeCallbacks(bufferWatchdogRunnable)
+                            retryRunnable?.let { retryHandler.removeCallbacks(it) }
+                            hideRetryBanner()
+                            updateOsdSourceBadge()
+                            AppLogger.logPlayerState("LiveTv", "READY (Playing stream $nowPlayingStreamId)")
+                        }
+                        Player.STATE_ENDED -> {
+                            watchdogHandler.removeCallbacks(bufferWatchdogRunnable)
+                            retryHandler.removeCallbacks(resetRetryRunnable)
+                            AppLogger.logPlayerState("LiveTv", "ENDED")
+                        }
+                        Player.STATE_IDLE -> {
+                            AppLogger.logPlayerState("LiveTv", "IDLE")
+                        }
+                    }
+                }
+
+                override fun onIsPlayingChanged(isPlaying: Boolean) {
+                    if (isPlaying) {
+                        retryHandler.removeCallbacks(resetRetryRunnable)
+                        retryHandler.postDelayed(resetRetryRunnable, 3000)
+                    } else {
+                        retryHandler.removeCallbacks(resetRetryRunnable)
+                    }
+                }
+
+                override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
+                    AppLogger.logFormatChange("LiveTv", livePlayer?.videoFormat, livePlayer?.audioFormat)
+                }
+
+                override fun onVideoSizeChanged(videoSize: VideoSize) {
+                    checkAndCacheQuality(videoSize.width, videoSize.height)
+                }
+
+                override fun onPlayerError(error: PlaybackException) {
+                    watchdogHandler.removeCallbacks(bufferWatchdogRunnable)
+                    retryHandler.removeCallbacks(resetRetryRunnable)
+                    AppLogger.logError("LiveTvPlayer", "Player error: ${error.errorCodeName} (${error.errorCode})", error)
+
+                    if (error.errorCode == PlaybackException.ERROR_CODE_AUDIO_TRACK_INIT_FAILED ||
+                        error.errorCode == PlaybackException.ERROR_CODE_DECODER_INIT_FAILED) {
+                        hideRetryBanner()
+                        Toast.makeText(this@LiveTvActivity, "Audio-/Decoder-Fehler: Format wird vom Gerät nicht unterstützt", Toast.LENGTH_LONG).show()
+                        return
+                    }
+
+                    val cause = error.cause
+                    val isHttpAuthOrRateLimit = when (cause) {
+                        is androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException -> {
+                            cause.responseCode in listOf(401, 403, 408, 429, 503)
+                        }
+                        else -> error.errorCode == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS
+                    }
+                    val isTimeoutOrConnFailed = error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED ||
+                            error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ||
+                            cause is java.net.SocketTimeoutException ||
+                            cause is java.net.ConnectException
+
+                    if ((isHttpAuthOrRateLimit || isTimeoutOrConnFailed) && retryCount < MAX_STREAM_RETRIES) {
+                        retryCount++
+                        val msg = "⏳ Warte auf Stream-Freigabe... ($retryCount/$MAX_STREAM_RETRIES)"
+                        showRetryBanner(msg)
+                        AppLogger.logNetwork("Auto-Retry #$retryCount in 2.5s waiting for stream socket ($nowPlayingStreamId)")
+                        retryRunnable?.let { retryHandler.removeCallbacks(it) }
+                        retryRunnable = Runnable {
+                            activeChannel?.let { ch ->
+                                playStreamSource(ch, activeSourceIndex)
+                            }
+                        }
+                        retryHandler.postDelayed(retryRunnable!!, 2500)
+                        return
+                    }
+
+                    hideRetryBanner()
+                    val errorMsg = error.cause?.message ?: error.message ?: "Wiedergabefehler"
+                    triggerAutoFailover(errorMsg)
+                }
+            })
         }
     }
 
-    private fun setupLivePlayer() {
-        livePlayer = PlayerUtils.createExoPlayer(this).apply {
-            binding.livePlayerView.player = this
-            playWhenReady = true
+    private fun showRetryBanner(text: String) {
+        binding.txtPlayerRetryBanner.text = text
+        binding.txtPlayerRetryBanner.visibility = View.VISIBLE
+    }
+
+    private fun hideRetryBanner() {
+        binding.txtPlayerRetryBanner.visibility = View.GONE
+    }
+
+    private var hasTestedSourcesCount = 0
+
+    private fun checkAndCacheQuality(width: Int, height: Int) {
+        val ch = activeChannel ?: return
+        if (ch.sources.size <= 1) return
+        if (QualityPreferenceManager.hasPreference(this, ch.cleanName)) return
+
+        val currentSource = ch.sources.getOrNull(activeSourceIndex) ?: return
+
+        if (width >= 1920 && height >= 1080) {
+            QualityPreferenceManager.savePreferredStream(
+                this,
+                ch.cleanName,
+                currentSource.streamId,
+                "${width}x${height}"
+            )
+        } else if (width > 0 && width < 1920 && hasTestedSourcesCount < 2 && activeSourceIndex + 1 < ch.sources.size) {
+            hasTestedSourcesCount++
+            activeSourceIndex++
+            playStreamSource(ch, activeSourceIndex)
+        } else if (width > 0) {
+            QualityPreferenceManager.savePreferredStream(
+                this,
+                ch.cleanName,
+                currentSource.streamId,
+                "${width}x${height}"
+            )
         }
+    }
+
+    // Automatisches Failover auf die nächste verfügbare Quelle
+    private fun triggerAutoFailover(reason: String) {
+        val ch = activeChannel ?: return
+        if (ch.sources.size <= 1) {
+            Toast.makeText(this, "⚠️ Keine alternativen Quellen für ${ch.cleanName}", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        if (activeSourceIndex + 1 < ch.sources.size) {
+            activeSourceIndex++
+            val nextSource = ch.sources[activeSourceIndex]
+            Toast.makeText(
+                this,
+                "🔄 Failover ($reason):\nWechsle zu Quelle ${activeSourceIndex + 1}/${ch.sources.size}: ${nextSource.label}",
+                Toast.LENGTH_LONG
+            ).show()
+            playStreamSource(ch, activeSourceIndex)
+        } else {
+            Toast.makeText(
+                this,
+                "❌ Alle ${ch.sources.size} Quellen für ${ch.cleanName} sind derzeit nicht erreichbar.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
+    // Manuelles Durchwechseln der Quellen (Gelbe Taste auf TV-Fernbedienung oder DPAD_RIGHT im OSD)
+    private fun cycleToNextSourceManually() {
+        val ch = activeChannel ?: return
+        if (ch.sources.size <= 1) return
+        activeSourceIndex = (activeSourceIndex + 1) % ch.sources.size
+        val nextSource = ch.sources[activeSourceIndex]
+        QualityPreferenceManager.savePreferredStream(
+            this,
+            ch.cleanName,
+            nextSource.streamId,
+            nextSource.label
+        )
+        playStreamSource(ch, activeSourceIndex)
+        showOsd()
     }
 
     override fun onResume() {
         super.onResume()
-        // Falls in der Suche oder im Player ein anderer Sender gestartet wurde, synchronisieren:
         val lastWatched = historyManager.getRecentLiveChannels().firstOrNull()
-        if (lastWatched != null && lastWatched.streamId != nowPlayingStreamId) {
-            val cat = displayedCategories.firstOrNull { it.id == lastWatched.categoryId }
-            if (cat != null) {
-                browsingCategoryId = cat.id
-                playingCategoryId = cat.id
-                categoryAdapter?.updateCategoryStates(playingCategoryId, browsingCategoryId)
-                loadChannels(cat, preselectedStreamId = lastWatched.streamId)
+        if (lastWatched != null) {
+            val matchingChannel = multiStreamCategoriesMap.values.flatten()
+                .firstOrNull { ch -> ch.sources.any { it.streamId == lastWatched.streamId } || ch.cleanName.equals(lastWatched.name, ignoreCase = true) }
+
+            val targetCatId = if (matchingChannel != null && matchingChannel.categoryId.isNotEmpty()) {
+                matchingChannel.categoryId
+            } else if (!lastWatched.categoryId.isNullOrEmpty() && displayedCategories.any { it.id == lastWatched.categoryId }) {
+                lastWatched.categoryId
+            } else {
+                val rawStream = allLiveStreamsGlobal.firstOrNull { it.streamId == lastWatched.streamId }
+                    ?: allLiveStreamsCache.firstOrNull { it.streamId == lastWatched.streamId }
+                if (rawStream != null) {
+                    MultiStreamManager.resolveMainCategoryIdForStream(rawStream, rawCategoriesCache)
+                } else {
+                    MultiStreamManager.findMainCategoryByChannelName(lastWatched.name)
+                }
             }
-            playLiveStream(lastWatched)
+
+            val targetCat = displayedCategories.firstOrNull { it.id == targetCatId }
+
+            if (lastWatched.streamId != nowPlayingStreamId) {
+                if (targetCat != null) {
+                    browsingCategoryId = targetCat.id
+                    playingCategoryId = targetCat.id
+                    categoryAdapter?.updateCategoryStates(playingCategoryId, browsingCategoryId)
+                    val catPos = displayedCategories.indexOf(targetCat)
+                    if (catPos >= 0) {
+                        binding.recyclerCategories.scrollToPosition(catPos)
+                    }
+                    loadChannels(targetCat, preselectedStreamId = lastWatched.streamId)
+                }
+                if (matchingChannel != null) {
+                    val srcIdx = matchingChannel.sources.indexOfFirst { it.streamId == lastWatched.streamId }.coerceAtLeast(0)
+                    playMultiStreamChannel(matchingChannel, srcIdx)
+                } else {
+                    playLiveStream(lastWatched)
+                }
+            } else {
+                if (targetCat != null && browsingCategoryId != targetCat.id) {
+                    browsingCategoryId = targetCat.id
+                    playingCategoryId = targetCat.id
+                    categoryAdapter?.updateCategoryStates(playingCategoryId, browsingCategoryId)
+                    val catPos = displayedCategories.indexOf(targetCat)
+                    if (catPos >= 0) {
+                        binding.recyclerCategories.scrollToPosition(catPos)
+                    }
+                    loadChannels(targetCat, preselectedStreamId = lastWatched.streamId)
+                }
+                if (livePlayer != null && activeStream != null && !livePlayer!!.isPlaying) {
+                    livePlayer?.play()
+                }
+            }
         } else if (livePlayer != null && activeStream != null && !livePlayer!!.isPlaying) {
             livePlayer?.play()
         }
@@ -273,55 +627,208 @@ class LiveTvActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
-        livePlayer?.pause()
+        AppLogger.logLifecycle("LiveTvActivity", "onPause -> Releasing stream connections")
+        watchdogHandler.removeCallbacks(bufferWatchdogRunnable)
+        retryRunnable?.let { retryHandler.removeCallbacks(it) }
+        streamJob?.cancel()
+        epgFetchJob?.cancel()
+        PlayerUtils.releaseStreamConnections(livePlayer)
     }
 
     override fun onStop() {
         super.onStop()
-        livePlayer?.pause()
+        AppLogger.logLifecycle("LiveTvActivity", "onStop -> Releasing stream connections")
+        watchdogHandler.removeCallbacks(bufferWatchdogRunnable)
+        retryRunnable?.let { retryHandler.removeCallbacks(it) }
+        streamJob?.cancel()
+        epgFetchJob?.cancel()
+        PlayerUtils.releaseStreamConnections(livePlayer)
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        AppLogger.logLifecycle("LiveTvActivity", "onDestroy")
+        try {
+            unregisterReceiver(screenOffReceiver)
+        } catch (e: Exception) {}
+        watchdogHandler.removeCallbacks(bufferWatchdogRunnable)
         osdHandler.removeCallbacks(hideOsdRunnable)
+        retryRunnable?.let { retryHandler.removeCallbacks(it) }
+        streamJob?.cancel()
+        epgFetchJob?.cancel()
+        PlayerUtils.releaseStreamConnections(livePlayer)
         livePlayer?.release()
         livePlayer = null
     }
 
-    // 1. Sender starten: Roter Punkt wandert sofort zum neuen Sender und zu dessen Kategorie mit!
-    private fun playLiveStream(stream: LiveStream) {
-        nowPlayingStreamId = stream.streamId
+    // Startet einen Kanal mit automatischer Priorisierung
+    fun playMultiStreamChannel(channel: MultiStreamChannel, sourceIndex: Int = 0) {
+        // Zappen State-Collision-Fix: Alle vorherigen Lade-Jobs & Timeouts hart abbrechen
+        streamJob?.cancel()
+        epgFetchJob?.cancel()
+        watchdogHandler.removeCallbacks(bufferWatchdogRunnable)
+        retryRunnable?.let { retryHandler.removeCallbacks(it) }
+        retryCount = 0
+        hideRetryBanner()
 
-        // Ermittle Ursprungskategorie des Senders
-        val targetCatId = stream.categoryId ?: browsingCategoryId
-        playingCategoryId = targetCatId
+        // Vor dem Laden stets stop() & clearMediaItems()
+        livePlayer?.stop()
+        livePlayer?.clearMediaItems()
+        PlayerUtils.cancelPendingMediaRequests()
 
+        val prevIdx = currentChannelItems.indexOfFirst {
+            it.channel.cleanName == activeChannel?.cleanName || it.channel.sources.any { s -> s.streamId == nowPlayingStreamId }
+        }
+
+        val ch = MultiStreamManager.applyPreferredSources(this, channel)
+        activeChannel = ch
+        activeSourceIndex = sourceIndex.coerceIn(0, (ch.sources.size - 1).coerceAtLeast(0))
+        val currentSource = ch.sources.getOrNull(activeSourceIndex)
+        val streamId = currentSource?.streamId ?: 0
+
+        nowPlayingStreamId = streamId
+        playingCategoryId = ch.categoryId
+
+        val stream = LiveStream(
+            streamId = streamId,
+            name = ch.cleanName,
+            streamIcon = ch.icon,
+            epgChannelId = ch.epgId,
+            categoryId = ch.categoryId
+        )
         activeStream = stream
         historyManager.saveLiveChannel(stream)
 
-        channelAdapter?.notifyDataSetChanged()
+        val newIdx = currentChannelItems.indexOfFirst {
+            it.channel.cleanName == ch.cleanName || it.channel.sources.any { s -> s.streamId == streamId }
+        }
+        if (prevIdx != -1 && prevIdx != newIdx) {
+            channelAdapter?.notifyItemChanged(prevIdx)
+        }
+        if (newIdx != -1) {
+            channelAdapter?.notifyItemChanged(newIdx)
+        }
         categoryAdapter?.updateCategoryStates(playingId = playingCategoryId, newBrowsingId = browsingCategoryId)
 
-        val url = client.getLiveStreamUrl(stream.streamId)
-        val mediaItem = MediaItem.fromUri(url)
-        livePlayer?.setMediaItem(mediaItem)
-        livePlayer?.prepare()
-        livePlayer?.playWhenReady = true
+        isPlayingJustStarted = true
+        binding.recyclerChannels.postDelayed({
+            isPlayingJustStarted = false
+        }, 300)
 
-        lifecycleScope.launch {
-            val cachedEpg = currentChannelItems.firstOrNull { it.stream.streamId == stream.streamId }?.epgList
-            val epg = if (!cachedEpg.isNullOrEmpty()) cachedEpg else client.getEpg(stream.streamId)
-            activeStreamEpg = epg.firstOrNull()
+        // Wichtig: activeStreamEpg sofort zurücksetzen, damit niemals der EPG des vorherigen Senders gezeigt wird!
+        activeStreamEpg = null
+
+        playStreamSource(ch, activeSourceIndex)
+
+        val cachedEpg = epgGlobalCache[channel.cleanName] ?: currentChannelItems.firstOrNull { it.channel.cleanName == channel.cleanName }?.epgList?.filter { it.title != "Lade EPG..." }
+        if (!cachedEpg.isNullOrEmpty()) {
+            activeStreamEpg = cachedEpg.firstOrNull()
             updatePipProgramInfo(stream, activeStreamEpg)
             if (isFullscreen) {
                 updateOsdContent(stream, activeStreamEpg)
             }
+        } else {
+            // Kein EPG vorhanden: Sofort saubere OSD- und PIP-Ansicht ohne alten EPG anzeigen
+            updatePipProgramInfo(stream, null)
+            if (isFullscreen) {
+                updateOsdContent(stream, null)
+            }
+
+            epgFetchJob = lifecycleScope.launch {
+                val currentPlayingStreamId = nowPlayingStreamId
+                var fetched: List<EpgProgram> = emptyList()
+                val candidates = mutableListOf<Int>()
+                channel.epgStreamId?.let { candidates.add(it) }
+                channel.sources.forEach { if (!candidates.contains(it.streamId)) candidates.add(it.streamId) }
+                for (sid in candidates) {
+                    val res = client.getEpg(sid)
+                    if (res.isNotEmpty()) {
+                        fetched = res
+                        break
+                    }
+                }
+                if (fetched.isNotEmpty() && nowPlayingStreamId == currentPlayingStreamId) {
+                    epgGlobalCache[channel.cleanName] = fetched
+                    activeStreamEpg = fetched.firstOrNull()
+                    updatePipProgramInfo(stream, activeStreamEpg)
+                    if (isFullscreen) {
+                        updateOsdContent(stream, activeStreamEpg)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun playStreamSource(channel: MultiStreamChannel, sourceIndex: Int) {
+        val source = channel.sources.getOrNull(sourceIndex) ?: return
+        watchdogHandler.removeCallbacks(bufferWatchdogRunnable)
+        retryRunnable?.let { retryHandler.removeCallbacks(it) }
+
+        // Vorherigen Stream-Ladevorgang hart abbrechen
+        streamJob?.cancel()
+
+        nowPlayingStreamId = source.streamId
+        AppLogger.logPlayerState("LiveTv", "Zapping to stream ${source.streamId} (${source.label}) for channel ${channel.cleanName}")
+
+        streamJob = lifecycleScope.launch {
+            val url = client.getLiveStreamUrl(source.streamId)
+            val mediaItem = MediaItem.fromUri(url)
+
+            livePlayer?.stop()
+            livePlayer?.clearMediaItems()
+            livePlayer?.setMediaItem(mediaItem)
+            livePlayer?.prepare()
+            livePlayer?.playWhenReady = true
+
+            // 6s Puffer-Watchdog starten
+            watchdogHandler.postDelayed(bufferWatchdogRunnable, 6000)
+
+            updateOsdSourceBadge()
+            if (activeStream != null) {
+                updatePipProgramInfo(activeStream!!, activeStreamEpg)
+            }
+        }
+    }
+
+    // Rückwärtskompatible Methode
+    private fun playLiveStream(stream: LiveStream) {
+        val matchingChannel = multiStreamCategoriesMap.values.flatten()
+            .firstOrNull { ch -> ch.sources.any { it.streamId == stream.streamId } || ch.cleanName.equals(stream.name, ignoreCase = true) }
+
+        if (matchingChannel != null) {
+            val srcIndex = matchingChannel.sources.indexOfFirst { it.streamId == stream.streamId }.coerceAtLeast(0)
+            playMultiStreamChannel(matchingChannel, srcIndex)
+        } else {
+            val synthChannel = MultiStreamChannel(
+                cleanName = stream.name,
+                originalName = stream.name,
+                categoryId = stream.categoryId ?: "",
+                categoryName = "",
+                icon = stream.streamIcon,
+                epgId = stream.epgChannelId,
+                sources = listOf(
+                    StreamSource(
+                        streamId = stream.streamId,
+                        name = stream.name,
+                        label = "Standard Stream",
+                        score = 50,
+                        subcategory = ""
+                    )
+                )
+            )
+            playMultiStreamChannel(synthChannel, 0)
         }
     }
 
     private fun updatePipProgramInfo(stream: LiveStream, program: EpgProgram?) {
+        val sourceInfo = if (activeChannel != null && activeChannel!!.sources.size > 1) {
+            activeChannel?.sources?.getOrNull(activeSourceIndex)?.name ?: ""
+        } else ""
+        val displayName = activeChannel?.cleanName ?: stream.name
+        val titleText = if (sourceInfo.isNotEmpty()) "$displayName [$sourceInfo]" else displayName
+
         if (program != null) {
-            binding.txtPreviewTitle.text = "${stream.name} – ${program.title}"
+            binding.txtPreviewTitle.text = "$titleText – ${program.title}"
             binding.txtPreviewTime.text = "${program.start} - ${program.end}"
             binding.txtPreviewDesc.text = if (program.description.isNotEmpty()) program.description else "Keine Programmbeschreibung vorhanden."
 
@@ -329,9 +836,9 @@ class LiveTvActivity : AppCompatActivity() {
             binding.progressCurrentProgram.progress = progress
             binding.progressCurrentProgram.visibility = View.VISIBLE
         } else {
-            binding.txtPreviewTitle.text = stream.name
+            binding.txtPreviewTitle.text = titleText
             binding.txtPreviewTime.text = "🔴 LIVE"
-            binding.txtPreviewDesc.text = "Drücke OK auf der Fernbedienung, um den Sender im Vollbild zu starten."
+            binding.txtPreviewDesc.text = "OK = Vollbild. Gelbe Taste = Backup-Quelle wechseln (${activeChannel?.sources?.size ?: 1} verf.)."
             binding.progressCurrentProgram.visibility = View.GONE
         }
     }
@@ -392,6 +899,10 @@ class LiveTvActivity : AppCompatActivity() {
         binding.livePlayerContainer.scaleX = 1.0f
         binding.livePlayerContainer.scaleY = 1.0f
 
+        // Focus lock: Block DPAD focus on background elements
+        binding.layoutOverview.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+        binding.layoutOverview.isFocusable = false
+
         val lp = FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.MATCH_PARENT
@@ -411,6 +922,11 @@ class LiveTvActivity : AppCompatActivity() {
         isFullscreen = false
         binding.layoutFullscreenOsd.visibility = View.GONE
         osdHandler.removeCallbacks(hideOsdRunnable)
+
+        // Restore focusability on background elements
+        binding.layoutOverview.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+        binding.layoutOverview.isFocusable = false
+
         updatePipPosition()
         focusTargetChannel(activePlaylistIndex)
     }
@@ -434,9 +950,25 @@ class LiveTvActivity : AppCompatActivity() {
         }
     }
 
+    private fun updateOsdSourceBadge() {
+        val ch = activeChannel ?: return
+        val src = ch.sources.getOrNull(activeSourceIndex) ?: return
+        val count = ch.sources.size
+        val badge = if (count > 1) {
+            "⚡ Quelle ${activeSourceIndex + 1}/$count: ${src.label}"
+        } else {
+            "⚡ ${src.label}"
+        }
+        binding.txtOsdSourceInfo.text = badge
+        binding.txtOsdSourceInfo.visibility = View.VISIBLE
+    }
+
     private fun updateOsdContent(stream: LiveStream, program: EpgProgram?) {
         binding.txtOsdChannelNum.text = "${activePlaylistIndex + 1}"
-        binding.txtOsdChannelName.text = stream.name
+        val displayName = activeChannel?.cleanName ?: stream.name
+        binding.txtOsdChannelName.text = displayName
+
+        updateOsdSourceBadge()
 
         val videoFormat = livePlayer?.videoFormat
         val audioFormat = livePlayer?.audioFormat
@@ -454,7 +986,7 @@ class LiveTvActivity : AppCompatActivity() {
 
         binding.txtOsdTechSpecs.text = "$res | $fps | $vCodec | $aCodec"
 
-        if (program != null) {
+        if (program != null && program.title != "Lade EPG...") {
             binding.txtOsdProgramTitle.text = "🔴 JETZT: ${program.title}"
             binding.txtOsdProgramTime.text = "${program.start} - ${program.end}"
             binding.txtOsdProgramDesc.text = if (program.description.isNotEmpty()) program.description else "Keine Programmbeschreibung vorhanden."
@@ -464,7 +996,7 @@ class LiveTvActivity : AppCompatActivity() {
         } else {
             binding.txtOsdProgramTitle.text = "🔴 LIVE TV"
             binding.txtOsdProgramTime.text = ""
-            binding.txtOsdProgramDesc.text = "Live Stream aktiv"
+            binding.txtOsdProgramDesc.text = ""
             binding.progressOsdProgram.visibility = View.GONE
         }
     }
@@ -479,44 +1011,147 @@ class LiveTvActivity : AppCompatActivity() {
     }
 
     private fun loadCategories() {
-        binding.progressCategories.visibility = View.VISIBLE
-        lifecycleScope.launch {
-            try {
-                val raw = client.getLiveCategories()
-                allCategories = client.filterCategories(raw, LangFilter.AUTO_DE_RU_ADULT)
-                displayedCategories = allCategories
-                binding.progressCategories.visibility = View.GONE
-                categoryAdapter = CategoryAdapter(displayedCategories) { category ->
-                    loadChannels(category)
-                }
-                binding.recyclerCategories.adapter = categoryAdapter
+        binding.progressCategories.visibility = View.GONE
+        displayedCategories = MultiStreamManager.MAIN_CATEGORIES
+        allCategories = displayedCategories
 
-                val lastWatched = historyManager.getRecentLiveChannels().firstOrNull()
-                if (lastWatched != null && !lastWatched.categoryId.isNullOrEmpty()) {
-                    val matchingCat = displayedCategories.firstOrNull { it.id == lastWatched.categoryId }
-                    if (matchingCat != null) {
-                        playingCategoryId = matchingCat.id
-                        browsingCategoryId = matchingCat.id
-                        categoryAdapter?.updateCategoryStates(playingCategoryId, browsingCategoryId)
-                        loadChannels(matchingCat, preselectedStreamId = lastWatched.streamId)
-                        return@launch
+        categoryAdapter = CategoryAdapter(displayedCategories) { category ->
+            loadChannels(category)
+        }
+        binding.recyclerCategories.adapter = categoryAdapter
+
+        // 1. OFFLINE-FIRST: Sofort aus lokalem Disk-Cache laden (Ladezeit ~50 ms)
+        val diskBundled = cacheManager.loadBundledChannels()
+        val diskRawCats = cacheManager.loadRawCategories()
+        if (!diskRawCats.isNullOrEmpty()) {
+            rawCategoriesCache = diskRawCats
+        }
+        if (!diskBundled.isNullOrEmpty()) {
+            diskBundled.forEach { (catId, list) ->
+                multiStreamCategoriesMap[catId] = list
+                categoryChannelMap[catId] = list.map { ChannelWithEpg(channel = it) }
+            }
+        }
+
+        val targetStreamId = intent.getIntExtra("TARGET_STREAM_ID", -1).takeIf { it != -1 }
+        val startFullscreen = intent.getBooleanExtra("START_FULLSCREEN", false)
+
+        val lastWatched = if (targetStreamId != null) {
+            historyManager.getRecentLiveChannels().firstOrNull { it.streamId == targetStreamId }
+                ?: allLiveStreamsGlobal.firstOrNull { it.streamId == targetStreamId }
+                ?: LiveStream(name = "", streamId = targetStreamId)
+        } else {
+            historyManager.getRecentLiveChannels().firstOrNull()
+        }
+
+        val targetCatId = if (lastWatched != null) {
+            if (!lastWatched.categoryId.isNullOrEmpty() && displayedCategories.any { it.id == lastWatched.categoryId }) {
+                lastWatched.categoryId
+            } else {
+                val rawStream = allLiveStreamsGlobal.firstOrNull { it.streamId == lastWatched.streamId }
+                    ?: allLiveStreamsCache.firstOrNull { it.streamId == lastWatched.streamId }
+                if (rawStream != null) {
+                    MultiStreamManager.resolveMainCategoryIdForStream(rawStream, rawCategoriesCache)
+                } else {
+                    MultiStreamManager.findMainCategoryByChannelName(lastWatched.name)
+                }
+            }
+        } else {
+            "MAIN_FREETV"
+        }
+
+        val targetCategory = displayedCategories.firstOrNull { it.id == targetCatId } ?: displayedCategories[0]
+
+        playingCategoryId = targetCategory.id
+        browsingCategoryId = targetCategory.id
+        categoryAdapter?.updateCategoryStates(playingCategoryId, browsingCategoryId)
+        val catPos = displayedCategories.indexOf(targetCategory)
+        if (catPos >= 0) {
+            binding.recyclerCategories.scrollToPosition(catPos)
+        }
+        loadChannels(targetCategory, preselectedStreamId = lastWatched?.streamId)
+
+        if (startFullscreen) {
+            setFullscreenMode()
+        }
+
+        // 2. STILLES HINTERGRUND-UPDATE: Falls Cache fehlt oder älter als 12 Stunden ist
+        if (!cacheManager.isCacheValid(maxAgeHours = 12)) {
+            syncLiveTvInBackground(forceRefresh = false)
+        }
+    }
+
+    private var isSyncingLiveTv = false
+
+    private fun syncLiveTvInBackground(forceRefresh: Boolean = false) {
+        if (isSyncingLiveTv) return
+        isSyncingLiveTv = true
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val freshCats = client.getLiveCategories()
+                if (freshCats.isNotEmpty()) {
+                    rawCategoriesCache = freshCats
+                    cacheManager.saveRawCategories(freshCats)
+                }
+
+                val allRawIdsToFetch = MultiStreamManager.MAIN_CATEGORIES.flatMap { mainCat ->
+                    MultiStreamManager.getRawCategoryIdsForMain(mainCat.id, rawCategoriesCache)
+                }.distinct()
+
+                val allStreams = coroutineScope {
+                    allRawIdsToFetch.map { cid ->
+                        async {
+                            try {
+                                val sList = client.getLiveStreams(cid)
+                                rawCategoryStreamsCache[cid] = sList
+                                sList
+                            } catch (e: Exception) {
+                                emptyList()
+                            }
+                        }
+                    }.awaitAll().flatten()
+                }
+
+                if (allStreams.isNotEmpty()) {
+                    val bundledMap = MultiStreamManager.buildMultiStreamCategories(allStreams, rawCategoriesCache, this@LiveTvActivity)
+                    cacheManager.saveBundledChannels(bundledMap)
+
+                    withContext(Dispatchers.Main) {
+                        bundledMap.forEach { (catId, list) ->
+                            multiStreamCategoriesMap[catId] = list
+                            categoryChannelMap[catId] = list.map { ChannelWithEpg(channel = it) }
+                        }
+                        allLiveStreamsGlobal = rawCategoryStreamsCache.values.flatten().distinctBy { it.streamId }
+                        allLiveStreamsCache = allLiveStreamsGlobal
+
+                        val currentBrowsing = browsingCategoryId
+                        if (currentBrowsing != null) {
+                            val updated = categoryChannelMap[currentBrowsing] ?: emptyList()
+                            if (updated.isNotEmpty() && currentChannelItems.isEmpty()) {
+                                currentChannelItems = updated
+                                activePlaylist = updated
+                                binding.progressChannels.visibility = View.GONE
+                                channelAdapter?.updateItems(updated)
+                            }
+                        }
+                        if (forceRefresh) {
+                            Toast.makeText(this@LiveTvActivity, "✅ Senderliste erfolgreich aktualisiert!", Toast.LENGTH_SHORT).show()
+                        }
                     }
                 }
-
-                if (displayedCategories.isNotEmpty()) {
-                    playingCategoryId = displayedCategories[0].id
-                    browsingCategoryId = displayedCategories[0].id
-                    categoryAdapter?.updateCategoryStates(playingCategoryId, browsingCategoryId)
-                    loadChannels(displayedCategories[0])
-                }
             } catch (e: Exception) {
-                binding.progressCategories.visibility = View.GONE
-                Toast.makeText(this@LiveTvActivity, "Fehler: ${e.message}", Toast.LENGTH_SHORT).show()
+                if (forceRefresh) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(this@LiveTvActivity, "Aktualisierung fehlgeschlagen: ${e.message}", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } finally {
+                isSyncingLiveTv = false
             }
         }
     }
 
-    // 1. & 2. KATEGORIEWECHSEL & SENDER-RESTORE
     private fun loadChannels(category: Category, preselectedStreamId: Int? = null) {
         if (browsingCategoryId == category.id && preselectedStreamId == null && currentChannelItems.isNotEmpty()) {
             focusTargetChannelForCategory(category)
@@ -527,61 +1162,63 @@ class LiveTvActivity : AppCompatActivity() {
         val oldBrowsingId = browsingCategoryId
         browsingCategoryId = category.id
 
-        // Aktualisiere Kategorie-States
         categoryAdapter?.updateCategoryStates(
             playingId = playingCategoryId,
             newBrowsingId = browsingCategoryId,
             oldBrowsingId = oldBrowsingId
         )
 
-        // Cache-Check
-        val cached = categoryChannelMap[category.id]
-        if (cached != null && preselectedStreamId == null) {
-            currentChannelItems = cached
-            activePlaylist = cached
+        val cachedChannels = categoryChannelMap[category.id]
+        if (!cachedChannels.isNullOrEmpty()) {
+            currentChannelItems = cachedChannels
+            activePlaylist = cachedChannels
             binding.progressChannels.visibility = View.GONE
-            channelAdapter?.updateItems(cached)
-            if (cached.isNotEmpty()) {
-                // 2. Sender-Restore: Wenn Rücksprung in die Playing Category -> Sender mit rotem Punkt fokussieren!
-                val restoreIndex = if (category.id == playingCategoryId && nowPlayingStreamId != null) {
-                    val idx = cached.indexOfFirst { it.stream.streamId == nowPlayingStreamId }
-                    if (idx != -1) idx else 0
-                } else 0
-
-                showChannelPreview(cached[restoreIndex].stream, cached[restoreIndex].epgList.firstOrNull())
-                focusTargetChannel(restoreIndex)
-            }
+            channelAdapter?.updateItems(cachedChannels)
+            selectTargetChannelInList(category, preselectedStreamId)
             return
         }
 
         binding.progressChannels.visibility = View.VISIBLE
+        channelAdapter?.updateItems(emptyList())
+
         lifecycleScope.launch {
             try {
-                val streams = client.getLiveStreams(category.id)
-                val channelList = streams.map { ChannelWithEpg(it) }
-                categoryChannelMap[category.id] = channelList
-                currentChannelItems = channelList
-                activePlaylist = channelList
-                binding.progressChannels.visibility = View.GONE
-                channelAdapter?.updateItems(channelList)
-
-                val targetItem = if (preselectedStreamId != null) {
-                    currentChannelItems.firstOrNull { it.stream.streamId == preselectedStreamId } ?: currentChannelItems.firstOrNull()
-                } else if (category.id == playingCategoryId && nowPlayingStreamId != null) {
-                    currentChannelItems.firstOrNull { it.stream.streamId == nowPlayingStreamId } ?: currentChannelItems.firstOrNull()
-                } else {
-                    currentChannelItems.firstOrNull()
+                if (rawCategoriesCache.isEmpty()) {
+                    rawCategoriesCache = withContext(Dispatchers.IO) { client.getLiveCategories() }
                 }
 
-                if (targetItem != null) {
-                    showChannelPreview(targetItem.stream, null)
-                    if (isInitialLoad) {
-                        isInitialLoad = false
-                        playLiveStream(targetItem.stream)
+                val rawIds = MultiStreamManager.getRawCategoryIdsForMain(category.id, rawCategoriesCache)
+                val streams = withContext(Dispatchers.IO) {
+                    coroutineScope {
+                        rawIds.map { cid ->
+                            async {
+                                rawCategoryStreamsCache.getOrPut(cid) {
+                                    try {
+                                        client.getLiveStreams(cid)
+                                    } catch (e: Exception) {
+                                        emptyList()
+                                    }
+                                }
+                            }
+                        }.awaitAll().flatten()
                     }
+                }
 
-                    val targetPos = currentChannelItems.indexOf(targetItem).coerceAtLeast(0)
-                    focusTargetChannel(targetPos)
+                val bundledMap = MultiStreamManager.buildMultiStreamCategories(streams, rawCategoriesCache, this@LiveTvActivity)
+                val bundledList = bundledMap[category.id] ?: emptyList()
+                multiStreamCategoriesMap[category.id] = bundledList
+                val channelList = bundledList.map { ChannelWithEpg(channel = it) }
+                categoryChannelMap[category.id] = channelList
+
+                allLiveStreamsGlobal = rawCategoryStreamsCache.values.flatten().distinctBy { it.streamId }
+                allLiveStreamsCache = allLiveStreamsGlobal
+
+                if (browsingCategoryId == category.id) {
+                    binding.progressChannels.visibility = View.GONE
+                    currentChannelItems = channelList
+                    activePlaylist = channelList
+                    channelAdapter?.updateItems(channelList)
+                    selectTargetChannelInList(category, preselectedStreamId)
                 }
             } catch (e: Exception) {
                 binding.progressChannels.visibility = View.GONE
@@ -590,7 +1227,29 @@ class LiveTvActivity : AppCompatActivity() {
         }
     }
 
-    // 2. SENDER-RESTORE: Springt und scrollt exakt auf den Sender mit dem roten Punkt (mit Offset)
+    private fun selectTargetChannelInList(category: Category, preselectedStreamId: Int?) {
+        val targetItem = if (preselectedStreamId != null) {
+            currentChannelItems.firstOrNull { item ->
+                item.channel.sources.any { it.streamId == preselectedStreamId } || item.channel.cleanName.equals(activeStream?.name, ignoreCase = true)
+            } ?: currentChannelItems.firstOrNull()
+        } else if (category.id == playingCategoryId && activeChannel != null) {
+            currentChannelItems.firstOrNull { it.channel.cleanName == activeChannel?.cleanName } ?: currentChannelItems.firstOrNull()
+        } else {
+            currentChannelItems.firstOrNull()
+        }
+
+        if (targetItem != null) {
+            showChannelPreview(targetItem.stream, null)
+            if (isInitialLoad) {
+                isInitialLoad = false
+                playMultiStreamChannel(targetItem.channel, 0)
+            }
+
+            val targetPos = currentChannelItems.indexOf(targetItem).coerceAtLeast(0)
+            focusTargetChannel(targetPos)
+        }
+    }
+
     private fun focusTargetChannel(position: Int) {
         activePlaylistIndex = position
         val lm = binding.recyclerChannels.layoutManager as? LinearLayoutManager
@@ -612,14 +1271,33 @@ class LiveTvActivity : AppCompatActivity() {
     }
 
     private fun focusTargetChannelForCategory(cat: Category) {
-        if (cat.id == playingCategoryId && nowPlayingStreamId != null) {
-            val targetIndex = currentChannelItems.indexOfFirst { it.stream.streamId == nowPlayingStreamId }
+        if (cat.id != browsingCategoryId) {
+            val browsingIndex = displayedCategories.indexOfFirst { it.id == browsingCategoryId }
+            if (browsingIndex >= 0) {
+                val lm = binding.recyclerCategories.layoutManager as? LinearLayoutManager
+                lm?.scrollToPositionWithOffset(browsingIndex, dpToPx(40)) ?: binding.recyclerCategories.scrollToPosition(browsingIndex)
+                categoryAdapter?.updateCategoryStates(playingCategoryId, browsingCategoryId)
+            }
+            if (activePlaylistIndex in currentChannelItems.indices) {
+                focusTargetChannel(activePlaylistIndex)
+            } else {
+                focusTargetChannel(0)
+            }
+            return
+        }
+
+        if (cat.id == playingCategoryId && activeChannel != null) {
+            val targetIndex = currentChannelItems.indexOfFirst { it.channel.cleanName == activeChannel?.cleanName }
             if (targetIndex != -1) {
                 focusTargetChannel(targetIndex)
                 return
             }
         }
-        focusTargetChannel(0)
+        if (activePlaylistIndex in currentChannelItems.indices) {
+            focusTargetChannel(activePlaylistIndex)
+        } else {
+            focusTargetChannel(0)
+        }
     }
 
     private fun focusCurrentCategory() {
@@ -634,26 +1312,33 @@ class LiveTvActivity : AppCompatActivity() {
     }
 
     private fun showChannelPreview(stream: LiveStream, program: EpgProgram?) {
-        if (program != null) {
-            binding.txtPreviewTitle.text = "${stream.name} – ${program.title}"
+        val ch = currentChannelItems.firstOrNull { it.channel.cleanName == stream.name }?.channel
+        val sourceInfo = ch?.primarySource?.label ?: ""
+        val displayName = ch?.cleanName ?: stream.name
+        val titleText = if (sourceInfo.isNotEmpty()) "$displayName [$sourceInfo]" else displayName
+
+        if (program != null && program.title != "Lade EPG...") {
+            binding.txtPreviewTitle.text = "$titleText – ${program.title}"
             binding.txtPreviewTime.text = "${program.start} - ${program.end}"
             binding.txtPreviewDesc.text = if (program.description.isNotEmpty()) program.description else "Keine Programmbeschreibung vorhanden."
             val prog = calculateProgress(program.start, program.end)
             binding.progressCurrentProgram.progress = prog
             binding.progressCurrentProgram.visibility = View.VISIBLE
         } else {
-            val cached = currentChannelItems.firstOrNull { it.stream.streamId == stream.streamId }?.epgList?.firstOrNull()
-            if (cached != null) {
-                binding.txtPreviewTitle.text = "${stream.name} – ${cached.title}"
+            val cached = epgGlobalCache[displayName]?.firstOrNull()
+                ?: currentChannelItems.firstOrNull { it.stream.streamId == stream.streamId }?.epgList?.firstOrNull { it.title != "Lade EPG..." }
+            if (cached != null && cached.title != "Lade EPG...") {
+                binding.txtPreviewTitle.text = "$titleText – ${cached.title}"
                 binding.txtPreviewTime.text = "${cached.start} - ${cached.end}"
                 binding.txtPreviewDesc.text = if (cached.description.isNotEmpty()) cached.description else "Keine Programmbeschreibung vorhanden."
                 val prog = calculateProgress(cached.start, cached.end)
                 binding.progressCurrentProgram.progress = prog
                 binding.progressCurrentProgram.visibility = View.VISIBLE
             } else {
-                binding.txtPreviewTitle.text = stream.name
+                binding.txtPreviewTitle.text = titleText
                 binding.txtPreviewTime.text = "🔴 LIVE"
-                binding.txtPreviewDesc.text = "Drücke OK auf der Fernbedienung, um den Sender im Vollbild zu starten."
+                val count = ch?.sources?.size ?: 1
+                binding.txtPreviewDesc.text = "Drücke OK für Vollbild. $count Quelle(n) gebündelt mit Auto-Failover."
                 binding.progressCurrentProgram.visibility = View.GONE
             }
         }
@@ -677,6 +1362,34 @@ class LiveTvActivity : AppCompatActivity() {
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.action == KeyEvent.ACTION_DOWN) {
+            val viewName = try {
+                currentFocus?.let { resources.getResourceEntryName(it.id) } ?: "null"
+            } catch (e: Exception) {
+                currentFocus?.javaClass?.simpleName ?: "unknown"
+            }
+            AppLogger.logFocus(event.keyCode, KeyEvent.keyCodeToString(event.keyCode), viewName)
+
+            // Taste Suche auf Fernbedienung öffnet Suche
+            if (event.keyCode == KeyEvent.KEYCODE_SEARCH) {
+                val intent = Intent(this, SearchActivity::class.java).apply {
+                    putExtra("SEARCH_TYPE", "LIVE")
+                }
+                searchLauncher.launch(intent)
+                return true
+            }
+
+            // Farbtaste Gelb (Remote Key) wechselt manuell die Quelle
+            if (event.keyCode == KeyEvent.KEYCODE_PROG_YELLOW || event.keyCode == KeyEvent.KEYCODE_BUTTON_Y) {
+                cycleToNextSourceManually()
+                return true
+            }
+            // Farbtaste Blau (Remote Key) aktualisiert die Senderliste
+            if (event.keyCode == KeyEvent.KEYCODE_PROG_BLUE || event.keyCode == KeyEvent.KEYCODE_BUTTON_B) {
+                Toast.makeText(this, "🔄 Senderliste wird im Hintergrund aktualisiert...", Toast.LENGTH_SHORT).show()
+                syncLiveTvInBackground(forceRefresh = true)
+                return true
+            }
+
             // Im Vollbildmodus
             if (isFullscreen) {
                 when (event.keyCode) {
@@ -688,11 +1401,17 @@ class LiveTvActivity : AppCompatActivity() {
                         toggleOsd()
                         return true
                     }
+                    KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                        if (binding.layoutFullscreenOsd.visibility == View.VISIBLE) {
+                            cycleToNextSourceManually()
+                            return true
+                        }
+                    }
                     KeyEvent.KEYCODE_DPAD_UP -> {
                         if (activePlaylistIndex > 0) {
                             activePlaylistIndex--
                             val item = activePlaylist[activePlaylistIndex]
-                            playLiveStream(item.stream)
+                            playMultiStreamChannel(item.channel, 0)
                             showOsd()
                         }
                         return true
@@ -701,7 +1420,7 @@ class LiveTvActivity : AppCompatActivity() {
                         if (activePlaylistIndex < activePlaylist.size - 1) {
                             activePlaylistIndex++
                             val item = activePlaylist[activePlaylistIndex]
-                            playLiveStream(item.stream)
+                            playMultiStreamChannel(item.channel, 0)
                             showOsd()
                         }
                         return true
@@ -747,11 +1466,25 @@ class LiveTvActivity : AppCompatActivity() {
                         if (channelPos < currentChannelItems.size - 1) {
                             val nextPos = channelPos + 1
                             activePlaylistIndex = nextPos
-                            (binding.recyclerChannels.layoutManager as? LinearLayoutManager)
-                                ?.scrollToPositionWithOffset(nextPos, dpToPx(40))
-                                ?: binding.recyclerChannels.scrollToPosition(nextPos)
 
-                            binding.recyclerChannels.post {
+                            val lm = binding.recyclerChannels.layoutManager as? LinearLayoutManager
+                            val lastCompletelyVisible = lm?.findLastCompletelyVisibleItemPosition() ?: -1
+
+                            if (nextPos > lastCompletelyVisible) {
+                                // Erst wenn der letzte sichtbare Sender erreicht ist, rutscht die Liste nach unten
+                                binding.recyclerChannels.scrollToPosition(nextPos)
+                                binding.recyclerChannels.post {
+                                    val holder = binding.recyclerChannels.findViewHolderForAdapterPosition(nextPos) as? ChannelAdapter.ViewHolder
+                                    if (onEpg) {
+                                        val epgPos = getFocusedEpgPosition(focused).coerceAtLeast(0)
+                                        holder?.recyclerPrograms?.findViewHolderForAdapterPosition(epgPos)?.itemView?.requestFocus()
+                                            ?: holder?.header?.requestFocus()
+                                    } else {
+                                        holder?.header?.requestFocus()
+                                    }
+                                }
+                            } else {
+                                // Nächster Sender ist BEREITS VOLLSTÄNDIG SICHTBAR: Kein Scrollen, nur Highlight wandert!
                                 val holder = binding.recyclerChannels.findViewHolderForAdapterPosition(nextPos) as? ChannelAdapter.ViewHolder
                                 if (onEpg) {
                                     val epgPos = getFocusedEpgPosition(focused).coerceAtLeast(0)
@@ -771,11 +1504,25 @@ class LiveTvActivity : AppCompatActivity() {
                         } else {
                             val prevPos = channelPos - 1
                             activePlaylistIndex = prevPos
-                            (binding.recyclerChannels.layoutManager as? LinearLayoutManager)
-                                ?.scrollToPositionWithOffset(prevPos, dpToPx(40))
-                                ?: binding.recyclerChannels.scrollToPosition(prevPos)
 
-                            binding.recyclerChannels.post {
+                            val lm = binding.recyclerChannels.layoutManager as? LinearLayoutManager
+                            val firstCompletelyVisible = lm?.findFirstCompletelyVisibleItemPosition() ?: -1
+
+                            if (prevPos < firstCompletelyVisible) {
+                                // Erst wenn der oberste sichtbare Sender erreicht ist, rutscht die Liste nach oben
+                                binding.recyclerChannels.scrollToPosition(prevPos)
+                                binding.recyclerChannels.post {
+                                    val holder = binding.recyclerChannels.findViewHolderForAdapterPosition(prevPos) as? ChannelAdapter.ViewHolder
+                                    if (onEpg) {
+                                        val epgPos = getFocusedEpgPosition(focused).coerceAtLeast(0)
+                                        holder?.recyclerPrograms?.findViewHolderForAdapterPosition(epgPos)?.itemView?.requestFocus()
+                                            ?: holder?.header?.requestFocus()
+                                    } else {
+                                        holder?.header?.requestFocus()
+                                    }
+                                }
+                            } else {
+                                // Vorheriger Sender ist BEREITS VOLLSTÄNDIG SICHTBAR: Kein Scrollen, nur Highlight wandert!
                                 val holder = binding.recyclerChannels.findViewHolderForAdapterPosition(prevPos) as? ChannelAdapter.ViewHolder
                                 if (onEpg) {
                                     val epgPos = getFocusedEpgPosition(focused).coerceAtLeast(0)
@@ -865,19 +1612,7 @@ class LiveTvActivity : AppCompatActivity() {
         fun updateCategoryStates(playingId: String?, newBrowsingId: String?, oldBrowsingId: String? = null) {
             playingCategoryId = playingId
             browsingCategoryId = newBrowsingId
-
-            val toUpdate = mutableSetOf<Int>()
-            items.indexOfFirst { it.id == oldBrowsingId }.takeIf { it != -1 }?.let { toUpdate.add(it) }
-            items.indexOfFirst { it.id == newBrowsingId }.takeIf { it != -1 }?.let { toUpdate.add(it) }
-            items.indexOfFirst { it.id == playingId }.takeIf { it != -1 }?.let { toUpdate.add(it) }
-
-            if (toUpdate.isNotEmpty()) {
-                for (pos in toUpdate) {
-                    notifyItemChanged(pos)
-                }
-            } else {
-                notifyDataSetChanged()
-            }
+            notifyDataSetChanged()
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -908,7 +1643,6 @@ class LiveTvActivity : AppCompatActivity() {
                             return@setOnKeyListener true
                         }
                         KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                            // 2. Sender-Restore: DPAD_RIGHT in die Senderliste springt direkt zum Sender mit dem roten Punkt!
                             focusTargetChannelForCategory(cat)
                             return@setOnKeyListener true
                         }
@@ -932,38 +1666,36 @@ class LiveTvActivity : AppCompatActivity() {
             }
         }
 
-        // 1. OPTIK: Roter Indikator-Punkt für Playing Category, nur Browsing Category hat rote Tönung
         private fun applyCategoryStyle(holder: ViewHolder, cat: Category) {
             val isPlaying = (cat.id == playingCategoryId)
             val isBrowsing = (cat.id == browsingCategoryId)
             val isFocused = holder.itemView.isFocused
 
-            // 1. DYNAMISCHER ROTER PUNKT: Signalisiert den laufenden Stream (NUR DER PUNKT, KEINE ROTE FÜLLUNG!)
+            // Nur die aktuell spielende Kategorie zeigt den roten Punkt!
             holder.dot.visibility = if (isPlaying) View.VISIBLE else View.GONE
             holder.txtName.text = cat.name
-            holder.txtName.setTextColor(if (isFocused || isBrowsing) Color.parseColor("#FFFFFF") else Color.parseColor("#B0B0B0"))
+            holder.txtName.setTextColor(
+                if (isFocused || isBrowsing) Color.parseColor("#FFFFFF") else Color.parseColor("#B0B0B0")
+            )
 
             val drawable = GradientDrawable().apply {
                 cornerRadius = dpToPx(6).toFloat()
                 when {
-                    // D-Pad Cursor: Reiner roter Fokusrahmen (Border), kein Vollflächen-Knallrot
                     isFocused -> {
                         if (isBrowsing) {
-                            setColor(Color.parseColor("#701A22"))
+                            setColor(Color.parseColor("#3E271E"))
                         } else {
-                            setColor(Color.parseColor("#1C1C1C"))
+                            setColor(Color.parseColor("#2A2B32"))
                         }
-                        setStroke(dpToPx(3), Color.parseColor("#E50914"))
+                        setStroke(dpToPx(3), Color.parseColor("#C5866D"))
                     }
-                    // Browsing Category (die gerade durchsucht wird): Sichtbare matte rote Tönung
                     isBrowsing -> {
-                        setColor(Color.parseColor("#701A22"))
-                        setStroke(dpToPx(1.5f.toInt()), Color.parseColor("#90202A"))
+                        setColor(Color.parseColor("#352219"))
+                        setStroke(dpToPx(1.5f.toInt()), Color.parseColor("#6B3F2E"))
                     }
-                    // Playing Category & Normal: Neutral dunkel, KEINE zusätzliche rote Füllung! (Nur der rote Punkt!)
                     else -> {
-                        setColor(Color.parseColor("#141414"))
-                        setStroke(dpToPx(1), Color.parseColor("#222222"))
+                        setColor(Color.parseColor("#17181C"))
+                        setStroke(dpToPx(1), Color.parseColor("#23242A"))
                     }
                 }
             }
@@ -981,7 +1713,7 @@ class LiveTvActivity : AppCompatActivity() {
         override fun getItemCount() = items.size
     }
 
-    // --- Adapter 2: Senderzeilen mit dynamischem rotem Punkt ---
+    // --- Adapter 2: Senderzeilen mit dynamischem rotem Punkt & Multi-Stream Badge ---
     inner class ChannelAdapter(
         private var items: List<ChannelWithEpg>
     ) : RecyclerView.Adapter<ChannelAdapter.ViewHolder>() {
@@ -992,6 +1724,7 @@ class LiveTvActivity : AppCompatActivity() {
             val imgLogo: ImageView = view.findViewById(R.id.imgChannelLogo)
             val dot: View = view.findViewById(R.id.dotChannelIndicator)
             val txtName: TextView = view.findViewById(R.id.txtChannelName)
+            val txtSourceBadge: TextView = view.findViewById(R.id.txtSourceBadge)
             val recyclerPrograms: RecyclerView = view.findViewById(R.id.recyclerChannelPrograms)
         }
 
@@ -1007,17 +1740,26 @@ class LiveTvActivity : AppCompatActivity() {
 
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val item = items[position]
+            val ch = item.channel
             val s = item.stream
-            val isPlaying = (s.streamId == nowPlayingStreamId)
+            val isPlaying = (activeChannel?.cleanName == ch.cleanName || ch.sources.any { it.streamId == nowPlayingStreamId })
 
-            holder.txtName.text = s.name
+            holder.txtName.text = ch.cleanName
 
-            // 1. DYNAMISCHER ROTER PUNKT: Signalisiert den laufenden Stream (NUR DER PUNKT, KEINE ROTE FÜLLUNG!)
+            // Multi-Stream Badge (z. B. "3 Q.")
+            if (ch.sources.size > 1) {
+                holder.txtSourceBadge.text = "${ch.sources.size} Q."
+                holder.txtSourceBadge.visibility = View.VISIBLE
+            } else {
+                holder.txtSourceBadge.visibility = View.GONE
+            }
+
+            // Dynamischer roter Punkt für aktuell laufenden Sender
             holder.dot.visibility = if (isPlaying) View.VISIBLE else View.GONE
 
             if (isPlaying) {
                 holder.txtNum.text = "${position + 1}"
-                holder.txtNum.setTextColor(Color.parseColor("#E50914"))
+                holder.txtNum.setTextColor(Color.parseColor("#C5866D"))
                 holder.txtName.setTextColor(Color.parseColor("#FFFFFF"))
             } else {
                 holder.txtNum.text = "${position + 1}"
@@ -1031,23 +1773,36 @@ class LiveTvActivity : AppCompatActivity() {
                 holder.imgLogo.setImageResource(R.drawable.tv_banner)
             }
 
-            applyChannelHeaderStyle(holder, isPlaying)
+            applyChannelHeaderStyle(holder)
 
             holder.header.setOnFocusChangeListener { _, _ ->
-                applyChannelHeaderStyle(holder, isPlaying)
+                applyChannelHeaderStyle(holder)
                 if (holder.header.isFocused) {
+                    holder.txtName.isSelected = true
                     activePlaylistIndex = position
                     showChannelPreview(s, item.epgList.firstOrNull())
-                } else if (activeStream != null) {
-                    updatePipProgramInfo(activeStream!!, activeStreamEpg)
+                } else {
+                    holder.txtName.isSelected = false
+                    if (activeStream != null) {
+                        updatePipProgramInfo(activeStream!!, activeStreamEpg)
+                    }
                 }
             }
 
             holder.header.setOnClickListener {
-                activePlaylist = currentChannelItems
-                activePlaylistIndex = position
-                playLiveStream(s)
-                setFullscreenMode()
+                val isCurrentlyPlaying = (activeChannel?.cleanName.equals(ch.cleanName, ignoreCase = true) ||
+                        ch.sources.any { it.streamId == nowPlayingStreamId }) && livePlayer != null
+
+                if (isCurrentlyPlaying) {
+                    setFullscreenMode()
+                } else {
+                    activePlaylist = currentChannelItems
+                    activePlaylistIndex = position
+                    playMultiStreamChannel(ch, 0)
+                    holder.header.post {
+                        holder.header.requestFocus()
+                    }
+                }
             }
 
             holder.recyclerPrograms.apply {
@@ -1055,37 +1810,55 @@ class LiveTvActivity : AppCompatActivity() {
                 setHasFixedSize(true)
             }
 
-            // EPG-Cache
-            if (item.epgList.isNotEmpty()) {
-                holder.recyclerPrograms.adapter = ProgramTimelineAdapter(s, position, item.epgList, holder)
+            // EPG Laden: Erst aus globalem Cache oder Quellenauswahl mit vorhandenem EPG
+            val cachedPrograms = epgGlobalCache[ch.cleanName] ?: item.epgList
+            if (cachedPrograms.isNotEmpty()) {
+                item.epgList = cachedPrograms
+                holder.recyclerPrograms.adapter = ProgramTimelineAdapter(ch, position, cachedPrograms, holder)
             } else {
                 val fallback = listOf(EpgProgram("Lade EPG...", "", "Jetzt", "", true))
-                holder.recyclerPrograms.adapter = ProgramTimelineAdapter(s, position, fallback, holder)
+                holder.recyclerPrograms.adapter = ProgramTimelineAdapter(ch, position, fallback, holder)
 
                 lifecycleScope.launch {
-                    val epgList = client.getEpg(s.streamId)
-                    if (epgList.isNotEmpty()) {
-                        item.epgList = epgList
-                        holder.recyclerPrograms.adapter = ProgramTimelineAdapter(s, position, epgList, holder)
+                    var fetchedEpg: List<EpgProgram> = emptyList()
+                    val candidates = mutableListOf<Int>()
+                    ch.epgStreamId?.let { candidates.add(it) }
+                    ch.sources.forEach { if (!candidates.contains(it.streamId)) candidates.add(it.streamId) }
+
+                    for (candidateId in candidates) {
+                        val list = client.getEpg(candidateId)
+                        if (list.isNotEmpty()) {
+                            fetchedEpg = list
+                            break
+                        }
+                    }
+
+                    if (fetchedEpg.isNotEmpty()) {
+                        epgGlobalCache[ch.cleanName] = fetchedEpg
+                        item.epgList = fetchedEpg
+                        holder.recyclerPrograms.adapter = ProgramTimelineAdapter(ch, position, fetchedEpg, holder)
+                        if (activeChannel?.cleanName == ch.cleanName && activeStreamEpg == null) {
+                            activeStreamEpg = fetchedEpg.firstOrNull()
+                            activeStream?.let { updatePipProgramInfo(it, activeStreamEpg) }
+                        }
                     }
                 }
             }
         }
 
-        private fun applyChannelHeaderStyle(holder: ViewHolder, isPlaying: Boolean) {
+        private fun applyChannelHeaderStyle(holder: ViewHolder) {
             val isFocused = holder.header.isFocused
+            holder.txtName.isSelected = isFocused
             val drawable = GradientDrawable().apply {
                 cornerRadius = dpToPx(6).toFloat()
                 when {
-                    // Cursor: Reiner roter Fokusrahmen
                     isFocused -> {
-                        setColor(Color.parseColor("#1C1C1C"))
-                        setStroke(dpToPx(3), Color.parseColor("#E50914"))
+                        setColor(Color.parseColor("#2A2B32"))
+                        setStroke(dpToPx(3), Color.parseColor("#C5866D"))
                     }
-                    // Normal & Aktuell laufender Sender: Neutral dunkel, KEINE rote Füllung! (Nur der rote Punkt!)
                     else -> {
-                        setColor(Color.parseColor("#141414"))
-                        setStroke(dpToPx(1), Color.parseColor("#222222"))
+                        setColor(Color.parseColor("#17181C"))
+                        setStroke(dpToPx(1), Color.parseColor("#23242A"))
                     }
                 }
             }
@@ -1097,7 +1870,7 @@ class LiveTvActivity : AppCompatActivity() {
 
     // --- Adapter 3: Horizontale EPG-Sendungsblöcke (Timeline) ---
     inner class ProgramTimelineAdapter(
-        private val stream: LiveStream,
+        private val channel: MultiStreamChannel,
         private val channelIndex: Int,
         private val programs: List<EpgProgram>,
         private val channelHolder: ChannelAdapter.ViewHolder
@@ -1125,16 +1898,34 @@ class LiveTvActivity : AppCompatActivity() {
             }
 
             holder.itemView.setOnFocusChangeListener { _, hasFocus ->
+                channelHolder.txtName.isSelected = hasFocus
+                holder.txtTitle.isSelected = hasFocus
                 if (hasFocus) {
-                    showChannelPreview(stream, p)
+                    val s = LiveStream(
+                        streamId = channel.primarySource?.streamId ?: 0,
+                        name = channel.cleanName,
+                        streamIcon = channel.icon,
+                        epgChannelId = channel.epgId,
+                        categoryId = channel.categoryId
+                    )
+                    showChannelPreview(s, p)
                 }
             }
 
             holder.itemView.setOnClickListener {
-                activePlaylist = currentChannelItems
-                activePlaylistIndex = channelIndex
-                playLiveStream(stream)
-                setFullscreenMode()
+                val isCurrentlyPlaying = (activeChannel?.cleanName.equals(channel.cleanName, ignoreCase = true) ||
+                        channel.sources.any { it.streamId == nowPlayingStreamId }) && livePlayer != null
+
+                if (isCurrentlyPlaying) {
+                    setFullscreenMode()
+                } else {
+                    activePlaylist = currentChannelItems
+                    activePlaylistIndex = channelIndex
+                    playMultiStreamChannel(channel, 0)
+                    holder.itemView.post {
+                        holder.itemView.requestFocus()
+                    }
+                }
             }
 
             holder.itemView.setOnKeyListener { _, keyCode, event ->

@@ -17,20 +17,43 @@
         android:textStyle="bold"
         android:layout_marginBottom="16dp" />
 
-    <!-- Vollbreite Suchleiste -->
-    <EditText
-        android:id="@+id/editSearchQuery"
+    <!-- Suchleiste mit Leeren-Button -->
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="50dp"
-        android:background="@drawable/card_focus_selector"
-        android:hint="Sendername oder Live-Sendung eingeben (z. B. Sky, ZDF, Fußball, Tatort)..."
-        android:textColor="@color/text_primary"
-        android:textColorHint="@color/text_secondary"
-        android:textSize="15sp"
-        android:paddingHorizontal="18dp"
-        android:inputType="text"
-        android:imeOptions="actionSearch"
-        android:layout_marginBottom="16dp" />
+        android:orientation="horizontal"
+        android:layout_marginBottom="16dp">
+
+        <EditText
+            android:id="@+id/editSearchQuery"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="@drawable/card_focus_selector"
+            android:hint="Sendername oder Live-Sendung eingeben (z. B. Sky, ZDF, Fußball, Tatort)..."
+            android:textColor="@color/text_primary"
+            android:textColorHint="@color/text_secondary"
+            android:textSize="15sp"
+            android:paddingHorizontal="18dp"
+            android:inputType="text"
+            android:imeOptions="actionSearch" />
+
+        <TextView
+            android:id="@+id/btnClearSearch"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:layout_marginStart="10dp"
+            android:background="@drawable/card_focus_selector"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:paddingHorizontal="16dp"
+            android:text="✕ Leeren"
+            android:textColor="@color/text_primary"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+    </LinearLayout>
 
     <!-- Filter-Tabs direkt unter dem Suchfeld (nur Sender und Live-Programm, "Alle" entfernt) -->
     <LinearLayout

@@ -60,10 +60,15 @@
         </LinearLayout>
 
         <ScrollView
+            android:id="@+id/scrollDetailSeriesPlot"
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
-            android:layout_marginTop="12dp">
+            android:layout_marginTop="12dp"
+            android:background="@drawable/card_focus_selector"
+            android:padding="8dp"
+            android:focusable="true"
+            android:focusableInTouchMode="true">
 
             <TextView
                 android:id="@+id/txtDetailSeriesPlot"
@@ -74,6 +79,19 @@
                 android:textSize="13sp"
                 android:lineSpacingMultiplier="1.2" />
         </ScrollView>
+
+        <Button
+            android:id="@+id/btnDetailSeriesTrailer"
+            android:layout_width="match_parent"
+            android:layout_height="38dp"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/card_focus_selector"
+            android:clickable="true"
+            android:focusable="true"
+            android:text="🎬 Trailer ansehen"
+            android:textColor="@color/text_primary"
+            android:textSize="13sp"
+            android:textStyle="bold" />
 
     </LinearLayout>
 

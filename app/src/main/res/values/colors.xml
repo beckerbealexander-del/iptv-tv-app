@@ -1,13 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Offizielle Netflix Farbpalette -->
-    <color name="bg_dark">#141414</color>
-    <color name="bg_card">#1F1F1F</color>
-    <color name="bg_card_focused">#2C2C2C</color>
-    <color name="netflix_red">#E50914</color>
-    <color name="accent_blue">#E50914</color> <!-- Umgestellt auf Netflix-Rot -->
-    <color name="accent_gold">#FFA000</color>
+    <!-- TiviZone Farbpalette: Warmes Kupfer / Roségold & Edles Graphit -->
+    <color name="bg_dark">#121214</color>
+    <color name="bg_sidebar">#18181B</color>
+    <color name="bg_card">#1E1F24</color>
+    <color name="bg_card_focused">#2A2B32</color>
+    <color name="accent_copper">#C5866D</color>
+    <color name="accent_copper_light">#DDA185</color>
+    <color name="accent_copper_dark">#3E271E</color>
+    <color name="netflix_red">#C5866D</color>
+    <color name="accent_blue">#C5866D</color>
+    <color name="accent_gold">#E5A97D</color>
     <color name="text_primary">#FFFFFF</color>
-    <color name="text_secondary">#9E9E9E</color>
-    <color name="border_focused">#E50914</color>
+    <color name="text_secondary">#9E9EA4</color>
+    <color name="border_focused">#C5866D</color>
 </resources>

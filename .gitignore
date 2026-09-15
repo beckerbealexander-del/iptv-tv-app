@@ -1,0 +1,24 @@
+﻿# Gradle & Build outputs
+.gradle/
+build/
+app/build/
+*.apk
+*.ap_
+*.dex
+*.class
+
+# Android Studio & IDE
+.idea/
+*.iml
+local.properties
+.DS_Store
+
+# Temporary dump files & screenshots in root
+/*.png
+/*.jpg
+/*.jpeg
+bedroom_*.xml
+*.log
+scratch/
+*.xlsx
+*.csv

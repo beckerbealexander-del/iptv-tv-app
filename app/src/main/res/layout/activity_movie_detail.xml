@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_dark"
+    android:orientation="horizontal"
+    android:padding="28dp">
+
+    <!-- Linke Spalte: Filmcover & Aktionsbuttons -->
+    <LinearLayout
+        android:layout_width="320dp"
+        android:layout_height="match_parent"
+        android:background="#12161D"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <ImageView
+            android:id="@+id/imgMovieCover"
+            android:layout_width="match_parent"
+            android:layout_height="320dp"
+            android:scaleType="centerCrop"
+            android:src="@drawable/tv_banner"
+            android:layout_marginBottom="16dp" />
+
+        <!-- Aktions-Buttons -->
+        <Button
+            android:id="@+id/btnPlayMovie"
+            android:layout_width="match_parent"
+            android:layout_height="42dp"
+            android:background="@drawable/card_focus_selector"
+            android:clickable="true"
+            android:focusable="true"
+            android:text="▶ Film abspielen"
+            android:textColor="@color/text_primary"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="10dp" />
+
+        <Button
+            android:id="@+id/btnMovieTrailer"
+            android:layout_width="match_parent"
+            android:layout_height="40dp"
+            android:background="@drawable/card_focus_selector"
+            android:clickable="true"
+            android:focusable="true"
+            android:text="🎬 Trailer ansehen"
+            android:textColor="@color/text_primary"
+            android:textSize="13sp"
+            android:layout_marginBottom="10dp" />
+
+        <Button
+            android:id="@+id/btnMovieBack"
+            android:layout_width="match_parent"
+            android:layout_height="36dp"
+            android:background="@drawable/card_focus_selector"
+            android:clickable="true"
+            android:focusable="true"
+            android:text="Zurück"
+            android:textColor="@color/text_secondary"
+            android:textSize="13sp" />
+    </LinearLayout>
+
+    <!-- Rechte Spalte: Titel, Metadaten & Beschreibung -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:paddingStart="28dp">
+
+        <TextView
+            android:id="@+id/txtMovieTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="2"
+            android:text="Filmtitel"
+            android:textColor="@color/text_primary"
+            android:textSize="26sp"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/txtMovieRating"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="⭐ 8.2"
+                android:textColor="@color/accent_gold"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:layout_marginEnd="14dp" />
+
+            <TextView
+                android:id="@+id/txtMovieYear"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="2024"
+                android:textColor="@color/text_primary"
+                android:textSize="14sp"
+                android:layout_marginEnd="14dp" />
+
+            <TextView
+                android:id="@+id/txtMovieDuration"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="1 Std. 54 Min."
+                android:textColor="@color/text_secondary"
+                android:textSize="14sp"
+                android:layout_marginEnd="14dp" />
+
+            <TextView
+                android:id="@+id/txtMovieGenre"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Action, Thriller"
+                android:textColor="@color/accent_blue"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <ProgressBar
+            android:id="@+id/progressMovieDetail"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_marginTop="16dp"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/txtMovieCast"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Besetzung: ..."
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/txtMovieDirector"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Regie: ..."
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp"
+            android:visibility="gone" />
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#20FFFFFF"
+            android:layout_marginVertical="14dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Handlung"
+            android:textColor="@color/accent_gold"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="6dp" />
+
+        <ScrollView
+            android:id="@+id/scrollMoviePlot"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:background="@drawable/card_focus_selector"
+            android:padding="10dp"
+            android:focusable="true"
+            android:focusableInTouchMode="true">
+
+            <TextView
+                android:id="@+id/txtMoviePlot"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Filmbeschreibung wird geladen..."
+                android:textColor="@color/text_primary"
+                android:textSize="14sp"
+                android:lineSpacingMultiplier="1.25" />
+        </ScrollView>
+
+    </LinearLayout>
+
+</LinearLayout>

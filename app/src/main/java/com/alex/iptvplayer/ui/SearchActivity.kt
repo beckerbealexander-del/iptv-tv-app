@@ -21,12 +21,19 @@ import com.alex.iptvplayer.R
 import com.alex.iptvplayer.data.EpgProgram
 import com.alex.iptvplayer.data.HistoryManager
 import com.alex.iptvplayer.data.LiveStream
+import com.alex.iptvplayer.data.LiveTvCacheManager
+import com.alex.iptvplayer.data.MultiStreamChannel
+import com.alex.iptvplayer.data.MultiStreamManager
+import com.alex.iptvplayer.data.StreamSource
 import com.alex.iptvplayer.data.XtreamClient
 import com.alex.iptvplayer.databinding.ActivitySearchBinding
 import com.bumptech.glide.Glide
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -35,33 +42,36 @@ private const val TYPE_CHANNEL = 1
 private const val TYPE_PROGRAM = 2
 
 sealed class SearchResultItem {
-    data class ChannelItem(val stream: LiveStream) : SearchResultItem()
-    data class ProgramItem(val program: EpgProgram, val stream: LiveStream) : SearchResultItem()
+    data class ChannelItem(val channel: MultiStreamChannel) : SearchResultItem()
+    data class ProgramItem(val program: EpgProgram, val channel: MultiStreamChannel) : SearchResultItem()
 }
 
 class SearchActivity : AppCompatActivity() {
 
     companion object {
         var cachedQuery: String = ""
-        var cachedChannels: List<LiveStream> = emptyList()
-        var cachedPrograms: List<Pair<EpgProgram, LiveStream>> = emptyList()
+        var cachedChannels: List<MultiStreamChannel> = emptyList()
+        var cachedPrograms: List<Pair<EpgProgram, MultiStreamChannel>> = emptyList()
         var cachedTab: String = "CHANNELS"
         var lastSelectedStreamId: Int? = null
         var isReturningFromPlayer: Boolean = false
+        var globalLiveStreamsCache: List<LiveStream> = emptyList()
     }
 
     private lateinit var binding: ActivitySearchBinding
     private lateinit var historyManager: HistoryManager
     private lateinit var client: XtreamClient
+    private lateinit var cacheManager: LiveTvCacheManager
 
     private var searchType: String = "LIVE"
-    private var allLiveStreams: List<LiveStream> = emptyList()
+    private var allCachedChannels: List<MultiStreamChannel> = emptyList()
 
-    private var foundChannels: List<LiveStream> = emptyList()
-    private var foundPrograms: List<Pair<EpgProgram, LiveStream>> = emptyList()
+    private var foundChannels: List<MultiStreamChannel> = emptyList()
+    private var foundPrograms: List<Pair<EpgProgram, MultiStreamChannel>> = emptyList()
 
     private var activeFilterTab: String = "CHANNELS"
     private var searchJob: Job? = null
+    private var progressiveEpgJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -70,6 +80,7 @@ class SearchActivity : AppCompatActivity() {
 
         client = XtreamClient(this)
         historyManager = HistoryManager(this)
+        cacheManager = LiveTvCacheManager(this)
         searchType = intent.getStringExtra("SEARCH_TYPE") ?: "LIVE"
 
         val title = when (searchType) {
@@ -86,9 +97,10 @@ class SearchActivity : AppCompatActivity() {
             LinearLayoutManager(this, LinearLayoutManager.VERTICAL, false)
 
         setupTabs()
+        setupClearButton()
 
         if (searchType == "LIVE") {
-            loadGlobalStreams()
+            loadGlobalChannels()
         }
 
         // Falls Cache existiert (nach Rückkehr oder Recreation): Treffer sofort wiederherstellen!
@@ -98,41 +110,65 @@ class SearchActivity : AppCompatActivity() {
             activeFilterTab = cachedTab
             binding.editSearchQuery.setText(cachedQuery)
             binding.editSearchQuery.setSelection(cachedQuery.length)
+            binding.btnClearSearch.visibility = View.VISIBLE
             updateTabStyles()
             renderSearchResults()
+            binding.editSearchQuery.post {
+                hideKeyboard()
+            }
             if (isReturningFromPlayer) {
                 isReturningFromPlayer = false
-                hideKeyboard()
                 focusSearchResultItem(lastSelectedStreamId)
+            } else {
+                binding.editSearchQuery.requestFocus()
             }
         } else {
+            binding.btnClearSearch.visibility = View.GONE
             loadSearchHistory()
             binding.editSearchQuery.post {
                 binding.editSearchQuery.requestFocus()
-                val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-                imm.showSoftInput(binding.editSearchQuery, InputMethodManager.SHOW_IMPLICIT)
+                hideKeyboard()
             }
         }
 
-        // Live-Suche während der Eingabe (Debounce 300ms)
+        // Tastatur erst auf expliziten Klick auf das Suchfeld öffnen
+        binding.editSearchQuery.setOnClickListener {
+            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+            imm.showSoftInput(binding.editSearchQuery, InputMethodManager.SHOW_IMPLICIT)
+        }
+
+        // Live-Suche während der Eingabe (Debounce 250ms)
         binding.editSearchQuery.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {
+                if (isReturningFromPlayer) return
                 val query = s?.toString()?.trim() ?: ""
                 if (query.isEmpty()) {
+                    binding.btnClearSearch.visibility = View.GONE
+                    searchJob?.cancel()
+                    progressiveEpgJob?.cancel()
                     cachedQuery = ""
                     cachedChannels = emptyList()
                     cachedPrograms = emptyList()
+                    foundChannels = emptyList()
+                    foundPrograms = emptyList()
                     showHistoryView()
-                } else if (searchType == "LIVE") {
-                    // Verhindert Re-Triggering beim Wiederherstellen des Query-Texts
-                    if (query == cachedQuery && (foundChannels.isNotEmpty() || foundPrograms.isNotEmpty())) {
-                        return
-                    }
-                    searchJob?.cancel()
-                    searchJob = lifecycleScope.launch {
-                        delay(300)
-                        performDualSearch(query)
+                } else {
+                    binding.btnClearSearch.visibility = View.VISIBLE
+                    if (query.length < 2) {
+                        // Sobald weniger als 2 Zeichen: Suche abbrechen und Verlauf anzeigen!
+                        searchJob?.cancel()
+                        progressiveEpgJob?.cancel()
+                        showHistoryView()
+                    } else if (searchType == "LIVE") {
+                        if (query == cachedQuery && (foundChannels.isNotEmpty() || foundPrograms.isNotEmpty())) {
+                            return
+                        }
+                        searchJob?.cancel()
+                        searchJob = lifecycleScope.launch {
+                            delay(250)
+                            performDualSearch(query)
+                        }
                     }
                 }
             }
@@ -144,7 +180,7 @@ class SearchActivity : AppCompatActivity() {
             if (actionId == EditorInfo.IME_ACTION_SEARCH || actionId == EditorInfo.IME_ACTION_DONE || actionId == EditorInfo.IME_ACTION_GO ||
                 (event != null && event.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN)) {
                 val q = binding.editSearchQuery.text.toString().trim()
-                if (q.isNotEmpty()) {
+                if (q.length >= 2) {
                     if (searchType == "LIVE") {
                         hideKeyboard()
                         performDualSearch(q)
@@ -156,20 +192,36 @@ class SearchActivity : AppCompatActivity() {
             } else false
         }
 
-        // Navigation aus der Suchleiste nach UNTEN -> Fokus auf aktiven Filter-Tab
+        // Navigation aus der Suchleiste
         binding.editSearchQuery.setOnKeyListener { _, keyCode, event ->
-            if (event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
-                if (binding.layoutTabs.visibility == View.VISIBLE) {
-                    if (activeFilterTab == "PROGRAMS") {
-                        binding.btnTabPrograms.requestFocus()
-                    } else {
-                        binding.btnTabChannels.requestFocus()
+            if (event.action == KeyEvent.ACTION_DOWN) {
+                when (keyCode) {
+                    KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
+                        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+                        imm.showSoftInput(binding.editSearchQuery, InputMethodManager.SHOW_IMPLICIT)
+                        return@setOnKeyListener true
                     }
-                    return@setOnKeyListener true
-                } else if (binding.layoutSearchHistory.visibility == View.VISIBLE) {
-                    val holder = binding.recyclerSearchHistory.findViewHolderForAdapterPosition(0)
-                    holder?.itemView?.requestFocus()
-                    return@setOnKeyListener true
+                    KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                        if (binding.btnClearSearch.visibility == View.VISIBLE) {
+                            binding.btnClearSearch.requestFocus()
+                            return@setOnKeyListener true
+                        }
+                    }
+                    KeyEvent.KEYCODE_DPAD_DOWN -> {
+                        hideKeyboard()
+                        if (binding.layoutTabs.visibility == View.VISIBLE) {
+                            if (activeFilterTab == "PROGRAMS") {
+                                binding.btnTabPrograms.requestFocus()
+                            } else {
+                                binding.btnTabChannels.requestFocus()
+                            }
+                            return@setOnKeyListener true
+                        } else if (binding.layoutSearchHistory.visibility == View.VISIBLE) {
+                            val holder = binding.recyclerSearchHistory.findViewHolderForAdapterPosition(0)
+                            holder?.itemView?.requestFocus() ?: binding.recyclerSearchHistory.requestFocus()
+                            return@setOnKeyListener true
+                        }
+                    }
                 }
             }
             false
@@ -178,6 +230,14 @@ class SearchActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+
+        historyManager.syncWithCloud(client.username) {
+            runOnUiThread {
+                if (cachedQuery.isEmpty()) {
+                    loadSearchHistory()
+                }
+            }
+        }
 
         // Wenn aus dem Player zurückgekehrt wird: Suchergebnisse erhalten und Fokus auf das Ergebnis setzen!
         if (isReturningFromPlayer) {
@@ -194,10 +254,58 @@ class SearchActivity : AppCompatActivity() {
                 foundChannels = cachedChannels
                 foundPrograms = cachedPrograms
                 activeFilterTab = cachedTab
+                binding.btnClearSearch.visibility = View.VISIBLE
                 updateTabStyles()
                 renderSearchResults()
                 focusSearchResultItem(lastSelectedStreamId)
             }
+        }
+    }
+
+    private fun setupClearButton() {
+        binding.btnClearSearch.setOnClickListener {
+            binding.editSearchQuery.setText("")
+            searchJob?.cancel()
+            progressiveEpgJob?.cancel()
+            binding.btnClearSearch.visibility = View.GONE
+            cachedQuery = ""
+            cachedChannels = emptyList()
+            cachedPrograms = emptyList()
+            foundChannels = emptyList()
+            foundPrograms = emptyList()
+            showHistoryView()
+            hideKeyboard()
+            binding.editSearchQuery.requestFocus()
+        }
+
+        binding.btnClearSearch.setOnKeyListener { _, keyCode, event ->
+            if (event.action == KeyEvent.ACTION_DOWN) {
+                when (keyCode) {
+                    KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
+                        binding.btnClearSearch.performClick()
+                        return@setOnKeyListener true
+                    }
+                    KeyEvent.KEYCODE_DPAD_LEFT -> {
+                        binding.editSearchQuery.requestFocus()
+                        return@setOnKeyListener true
+                    }
+                    KeyEvent.KEYCODE_DPAD_DOWN -> {
+                        if (binding.layoutTabs.visibility == View.VISIBLE) {
+                            if (activeFilterTab == "PROGRAMS") {
+                                binding.btnTabPrograms.requestFocus()
+                            } else {
+                                binding.btnTabChannels.requestFocus()
+                            }
+                            return@setOnKeyListener true
+                        } else if (binding.layoutSearchHistory.visibility == View.VISIBLE) {
+                            val holder = binding.recyclerSearchHistory.findViewHolderForAdapterPosition(0)
+                            holder?.itemView?.requestFocus() ?: binding.recyclerSearchHistory.requestFocus()
+                            return@setOnKeyListener true
+                        }
+                    }
+                }
+            }
+            false
         }
     }
 
@@ -210,8 +318,8 @@ class SearchActivity : AppCompatActivity() {
         val targetPos = if (streamId != null) {
             val idx = items.indexOfFirst {
                 when (it) {
-                    is SearchResultItem.ChannelItem -> it.stream.streamId == streamId
-                    is SearchResultItem.ProgramItem -> it.stream.streamId == streamId
+                    is SearchResultItem.ChannelItem -> it.channel.sources.any { s -> s.streamId == streamId } || it.channel.cleanName.equals(cachedQuery, ignoreCase = true)
+                    is SearchResultItem.ProgramItem -> it.channel.sources.any { s -> s.streamId == streamId }
                 }
             }
             if (idx != -1) idx else 0
@@ -305,16 +413,60 @@ class SearchActivity : AppCompatActivity() {
         }
     }
 
-    private fun loadGlobalStreams() {
-        lifecycleScope.launch {
-            allLiveStreams = if (LiveTvActivity.allLiveStreamsCache.isNotEmpty()) {
-                LiveTvActivity.allLiveStreamsCache
-            } else {
-                try {
-                    client.getAllLiveStreams()
-                } catch (e: Exception) {
-                    emptyList()
+    private fun loadGlobalChannels() {
+        if (allCachedChannels.isNotEmpty()) return
+
+        // 1. In-Memory aus LiveTvActivity
+        if (LiveTvActivity.multiStreamCategoriesMap.isNotEmpty()) {
+            allCachedChannels = LiveTvActivity.multiStreamCategoriesMap.values.flatten().distinctBy { it.cleanName }
+            return
+        }
+
+        // 2. Aus Disk-Cache (LiveTvCacheManager)
+        lifecycleScope.launch(Dispatchers.IO) {
+            val diskBundled = cacheManager.loadBundledChannels()
+            if (!diskBundled.isNullOrEmpty()) {
+                val list = diskBundled.values.flatten().distinctBy { it.cleanName }
+                withContext(Dispatchers.Main) {
+                    allCachedChannels = list
+                    val currentQ = binding.editSearchQuery.text.toString().trim()
+                    if (currentQ.length >= 2 && foundChannels.isEmpty()) {
+                        performDualSearch(currentQ)
+                    }
                 }
+                return@launch
+            }
+
+            // 3. Fallback: categoryChannelMap
+            if (LiveTvActivity.categoryChannelMap.isNotEmpty()) {
+                val list = LiveTvActivity.categoryChannelMap.values.flatten().map { it.channel }.distinctBy { it.cleanName }
+                withContext(Dispatchers.Main) {
+                    allCachedChannels = list
+                    val currentQ = binding.editSearchQuery.text.toString().trim()
+                    if (currentQ.length >= 2 && foundChannels.isEmpty()) {
+                        performDualSearch(currentQ)
+                    }
+                }
+                return@launch
+            }
+
+            // 4. Einmaliger Kaltstart-Fallback
+            try {
+                val rawCats = client.getLiveCategories()
+                val streams = client.getAllLiveStreams()
+                if (streams.isNotEmpty()) {
+                    val bundledMap = MultiStreamManager.buildMultiStreamCategories(streams, rawCats, this@SearchActivity)
+                    val list = bundledMap.values.flatten().distinctBy { it.cleanName }
+                    withContext(Dispatchers.Main) {
+                        allCachedChannels = list
+                        val currentQ = binding.editSearchQuery.text.toString().trim()
+                        if (currentQ.length >= 2 && foundChannels.isEmpty()) {
+                            performDualSearch(currentQ)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                // Ignore fallback network error
             }
         }
     }
@@ -333,70 +485,120 @@ class SearchActivity : AppCompatActivity() {
     }
 
     private fun performDualSearch(query: String) {
-        if (query.isEmpty()) return
+        val cleanQuery = query.trim()
+        if (cleanQuery.length < 2) {
+            searchJob?.cancel()
+            progressiveEpgJob?.cancel()
+            showHistoryView()
+            return
+        }
 
         binding.layoutSearchHistory.visibility = View.GONE
-        binding.progressSearch.visibility = View.VISIBLE
+        binding.progressSearch.visibility = View.GONE
         binding.txtNoResults.visibility = View.GONE
 
-        lifecycleScope.launch {
-            // 1. Sender-Treffer
-            val channelMatches = allLiveStreams.filter { it.name.contains(query, ignoreCase = true) }
-            foundChannels = channelMatches
+        // 1. Sendersuche: Blitzschnell aus lokalem In-Memory Cache sortiert nach Relevanz & natürlicher Zahlenordnung
+        val qLower = cleanQuery.lowercase()
+        val channelMatches = allCachedChannels.filter { ch ->
+            ch.cleanName.lowercase().contains(qLower) ||
+            ch.originalName.lowercase().contains(qLower) ||
+            ch.sources.any { it.name.lowercase().contains(qLower) }
+        }.sortedWith(
+            compareBy<MultiStreamChannel> { !it.cleanName.equals(cleanQuery, ignoreCase = true) }
+                .thenBy { !it.cleanName.startsWith(cleanQuery, ignoreCase = true) }
+                .thenBy(MultiStreamManager.NaturalOrderComparator) { it.cleanName }
+        )
 
-            // 2. Live-Programm Treffer
-            val programMatches = mutableListOf<Pair<EpgProgram, LiveStream>>()
+        foundChannels = channelMatches
 
-            val cachedChannelsList = LiveTvActivity.categoryChannelMap.values.flatten()
-            for (item in cachedChannelsList) {
-                for (epg in item.epgList) {
-                    if (isProgramNowPlaying(epg)) {
-                        if (epg.title.contains(query, ignoreCase = true) || epg.description.contains(query, ignoreCase = true)) {
-                            programMatches.add(Pair(epg, item.stream))
-                        }
+        // 2. Sofortige Programmsuche aus dem lokalen EPG-Cache
+        val programMatches = mutableListOf<Pair<EpgProgram, MultiStreamChannel>>()
+        val seenProgramKeys = mutableSetOf<String>()
+
+        fun checkAndAddProgram(epg: EpgProgram, channel: MultiStreamChannel) {
+            if (isProgramNowPlaying(epg)) {
+                if (epg.title.contains(cleanQuery, ignoreCase = true) || epg.description.contains(cleanQuery, ignoreCase = true)) {
+                    val key = "${channel.cleanName}|${epg.title}|${epg.start}"
+                    if (seenProgramKeys.add(key)) {
+                        programMatches.add(Pair(epg, channel))
                     }
                 }
             }
+        }
 
-            val channelsToCheck = channelMatches.take(12)
-            for (stream in channelsToCheck) {
-                val isAlreadyChecked = cachedChannelsList.any { it.stream.streamId == stream.streamId }
-                if (!isAlreadyChecked) {
-                    try {
-                        val epgList = client.getEpg(stream.streamId)
-                        for (epg in epgList) {
-                            if (isProgramNowPlaying(epg)) {
-                                if (epg.title.contains(query, ignoreCase = true) || epg.description.contains(query, ignoreCase = true)) {
-                                    if (programMatches.none { it.second.streamId == stream.streamId }) {
-                                        programMatches.add(Pair(epg, stream))
-                                    }
+        for (item in LiveTvActivity.categoryChannelMap.values.flatten()) {
+            for (epg in item.epgList) {
+                checkAndAddProgram(epg, item.channel)
+            }
+        }
+
+        for ((chName, epgList) in LiveTvActivity.epgGlobalCache) {
+            val ch = allCachedChannels.firstOrNull { it.cleanName.equals(chName, ignoreCase = true) }
+            if (ch != null) {
+                for (epg in epgList) {
+                    checkAndAddProgram(epg, ch)
+                }
+            }
+        }
+
+        foundPrograms = programMatches
+
+        // Falls Sender leer, aber Programme da sind, wechsle auf Programme
+        if (foundChannels.isEmpty() && foundPrograms.isNotEmpty()) {
+            activeFilterTab = "PROGRAMS"
+        } else {
+            activeFilterTab = "CHANNELS"
+        }
+
+        // Cache sichern
+        cachedQuery = cleanQuery
+        cachedChannels = foundChannels
+        cachedPrograms = foundPrograms
+        cachedTab = activeFilterTab
+
+        updateTabStyles()
+        renderSearchResults()
+
+        // 3. Aufbauende ("progressive") EPG-Suche im Hintergrund für noch nicht geladene relevante Sender
+        progressiveEpgJob?.cancel()
+        progressiveEpgJob = lifecycleScope.launch {
+            val candidateChannels = allCachedChannels.filter { ch ->
+                !LiveTvActivity.epgGlobalCache.containsKey(ch.cleanName) &&
+                (ch.cleanName.lowercase().contains(qLower) || ch.categoryId in listOf("MAIN_FREETV", "MAIN_SKY", "MAIN_SPORT"))
+            }.take(25)
+
+            for (ch in candidateChannels) {
+                if (!isActive) break
+                val sid = ch.epgStreamId ?: ch.sources.firstOrNull()?.streamId ?: continue
+                val fetched = try {
+                    withContext(Dispatchers.IO) { client.getEpg(sid) }
+                } catch (e: Exception) {
+                    emptyList()
+                }
+                if (fetched.isNotEmpty() && isActive) {
+                    LiveTvActivity.epgGlobalCache[ch.cleanName] = fetched
+                    var newFound = false
+                    for (epg in fetched) {
+                        if (isProgramNowPlaying(epg)) {
+                            if (epg.title.contains(cleanQuery, ignoreCase = true) || epg.description.contains(cleanQuery, ignoreCase = true)) {
+                                val key = "${ch.cleanName}|${epg.title}|${epg.start}"
+                                if (seenProgramKeys.add(key)) {
+                                    programMatches.add(Pair(epg, ch))
+                                    newFound = true
                                 }
                             }
                         }
-                    } catch (e: Exception) {
-                        // Silent
+                    }
+                    if (newFound && isActive) {
+                        foundPrograms = ArrayList(programMatches)
+                        cachedPrograms = foundPrograms
+                        updateTabStyles()
+                        if (activeFilterTab == "PROGRAMS") {
+                            renderSearchResults()
+                        }
                     }
                 }
             }
-
-            foundPrograms = programMatches
-            binding.progressSearch.visibility = View.GONE
-
-            // Falls Sender leer, aber Programme da sind, wechsle auf Programme
-            if (foundChannels.isEmpty() && foundPrograms.isNotEmpty()) {
-                activeFilterTab = "PROGRAMS"
-            } else if (foundChannels.isNotEmpty()) {
-                activeFilterTab = "CHANNELS"
-            }
-
-            // Cache sichern
-            cachedQuery = query
-            cachedChannels = foundChannels
-            cachedPrograms = foundPrograms
-            cachedTab = activeFilterTab
-
-            updateTabStyles()
-            renderSearchResults()
         }
     }
 
@@ -428,12 +630,12 @@ class SearchActivity : AppCompatActivity() {
         val items = mutableListOf<SearchResultItem>()
 
         if (activeFilterTab == "CHANNELS") {
-            for (stream in foundChannels) {
-                items.add(SearchResultItem.ChannelItem(stream))
+            for (channel in foundChannels) {
+                items.add(SearchResultItem.ChannelItem(channel))
             }
         } else {
-            for ((prog, stream) in foundPrograms) {
-                items.add(SearchResultItem.ProgramItem(prog, stream))
+            for ((prog, channel) in foundPrograms) {
+                items.add(SearchResultItem.ProgramItem(prog, channel))
             }
         }
 
@@ -443,43 +645,57 @@ class SearchActivity : AppCompatActivity() {
         } else {
             binding.txtNoResults.visibility = View.GONE
             binding.recyclerSearchResults.visibility = View.VISIBLE
-            binding.recyclerSearchResults.adapter = SearchResultsAdapter(items) { stream ->
-                selectAndPlayStream(stream)
+            binding.recyclerSearchResults.adapter = SearchResultsAdapter(items) { channel ->
+                selectAndPlayChannel(channel)
             }
         }
     }
 
-    private fun selectAndPlayStream(stream: LiveStream) {
+    private fun selectAndPlayChannel(channel: MultiStreamChannel) {
         val query = binding.editSearchQuery.text.toString().trim()
-        if (query.isNotEmpty()) {
+        if (query.length >= 2) {
             historyManager.addSearchQuery("LIVE", query)
         }
+
+        val bestStreamId = channel.primarySource?.streamId ?: channel.sources.firstOrNull()?.streamId ?: -1
 
         // Cache sichern vor Player-Start
         cachedQuery = query
         cachedChannels = foundChannels
         cachedPrograms = foundPrograms
         cachedTab = activeFilterTab
-        lastSelectedStreamId = stream.streamId
+        lastSelectedStreamId = bestStreamId
         isReturningFromPlayer = true
 
-        // Such-Playlist für das Zappen im Player aufbauen
-        val playlist: ArrayList<LiveStream> = if (activeFilterTab == "CHANNELS") {
+        val playlist: ArrayList<MultiStreamChannel> = if (activeFilterTab == "CHANNELS") {
             ArrayList(foundChannels)
         } else {
-            ArrayList(foundPrograms.map { it.second })
+            ArrayList(foundPrograms.map { it.second }.distinctBy { it.cleanName })
         }
-        val index = playlist.indexOfFirst { it.streamId == stream.streamId }.coerceAtLeast(0)
+        val index = playlist.indexOfFirst { it.cleanName.equals(channel.cleanName, ignoreCase = true) }.coerceAtLeast(0)
 
         val intent = Intent(this, PlayerActivity::class.java).apply {
-            putExtra("STREAM_URL", client.getLiveStreamUrl(stream.streamId))
-            putExtra("STREAM_NAME", stream.name)
-            putExtra("STREAM_ID", stream.streamId)
+            putExtra("STREAM_URL", client.getLiveStreamUrl(bestStreamId))
+            putExtra("STREAM_NAME", channel.cleanName)
+            putExtra("STREAM_ID", bestStreamId)
             putExtra("STREAM_TYPE", "LIVE")
-            putExtra("STREAM_LIST", playlist)
+            putExtra("MULTI_STREAM_CHANNEL", channel)
+            putExtra("MULTI_STREAM_LIST", playlist)
             putExtra("CURRENT_INDEX", index)
+            putExtra("POSTER_URL", channel.icon)
         }
         startActivity(intent)
+    }
+
+    override fun finish() {
+        if (searchType == "LIVE" && lastSelectedStreamId != null) {
+            val data = Intent().apply {
+                putExtra("SELECTED_STREAM_ID", lastSelectedStreamId)
+                putExtra("START_FULLSCREEN", false)
+            }
+            setResult(RESULT_OK, data)
+        }
+        super.finish()
     }
 
     private fun submitVodOrSeriesSearch(query: String) {
@@ -500,13 +716,17 @@ class SearchActivity : AppCompatActivity() {
         } else {
             binding.layoutSearchHistory.visibility = View.VISIBLE
             binding.recyclerSearchHistory.adapter = HistoryChipAdapter(history) { query ->
+                hideKeyboard()
                 binding.editSearchQuery.setText(query)
                 binding.editSearchQuery.setSelection(query.length)
-                if (searchType == "LIVE") {
-                    hideKeyboard()
-                    performDualSearch(query)
-                } else {
-                    submitVodOrSeriesSearch(query)
+                binding.btnClearSearch.visibility = View.VISIBLE
+                binding.editSearchQuery.post { hideKeyboard() }
+                if (query.trim().length >= 2) {
+                    if (searchType == "LIVE") {
+                        performDualSearch(query)
+                    } else {
+                        submitVodOrSeriesSearch(query)
+                    }
                 }
             }
         }
@@ -554,7 +774,7 @@ class SearchActivity : AppCompatActivity() {
 
     inner class SearchResultsAdapter(
         val items: List<SearchResultItem>,
-        private val onSelect: (LiveStream) -> Unit
+        private val onSelect: (MultiStreamChannel) -> Unit
     ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
         inner class ChannelViewHolder(view: View) : RecyclerView.ViewHolder(view) {
@@ -588,24 +808,26 @@ class SearchActivity : AppCompatActivity() {
             when (val item = items[position]) {
                 is SearchResultItem.ChannelItem -> {
                     val vh = holder as ChannelViewHolder
-                    vh.name.text = item.stream.name
-                    vh.category.text = "Live TV"
+                    vh.name.text = item.channel.cleanName
+                    val srcCount = item.channel.sources.size
+                    val topSource = item.channel.primarySource?.label ?: "Standard"
+                    vh.category.text = if (srcCount > 1) "⚡ $srcCount Quellen • $topSource" else "Live TV • $topSource"
                     vh.itemView.isFocusable = true
                     vh.itemView.isClickable = true
 
-                    if (!item.stream.streamIcon.isNullOrEmpty()) {
-                        Glide.with(vh.itemView).load(item.stream.streamIcon).override(36, 36).into(vh.logo)
+                    if (!item.channel.icon.isNullOrEmpty()) {
+                        Glide.with(vh.itemView).load(item.channel.icon).override(36, 36).into(vh.logo)
                     } else {
                         vh.logo.setImageResource(R.drawable.tv_banner)
                     }
 
                     vh.itemView.setOnClickListener {
-                        onSelect(item.stream)
+                        onSelect(item.channel)
                     }
                     vh.itemView.setOnKeyListener { _, keyCode, event ->
                         if (event.action == KeyEvent.ACTION_DOWN) {
                             if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) {
-                                onSelect(item.stream)
+                                onSelect(item.channel)
                                 return@setOnKeyListener true
                             } else if (keyCode == KeyEvent.KEYCODE_DPAD_UP && position == 0) {
                                 if (activeFilterTab == "PROGRAMS") binding.btnTabPrograms.requestFocus()
@@ -619,7 +841,7 @@ class SearchActivity : AppCompatActivity() {
                 is SearchResultItem.ProgramItem -> {
                     val vh = holder as ProgramViewHolder
                     vh.title.text = item.program.title
-                    vh.channel.text = item.stream.name
+                    vh.channel.text = item.channel.cleanName
                     val timeStr = "${item.program.start} - ${item.program.end}"
                     val desc = if (item.program.description.isNotEmpty()) " • ${item.program.description}" else ""
                     vh.timeAndDesc.text = "$timeStr$desc"
@@ -627,12 +849,12 @@ class SearchActivity : AppCompatActivity() {
                     vh.itemView.isClickable = true
 
                     vh.itemView.setOnClickListener {
-                        onSelect(item.stream)
+                        onSelect(item.channel)
                     }
                     vh.itemView.setOnKeyListener { _, keyCode, event ->
                         if (event.action == KeyEvent.ACTION_DOWN) {
                             if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) {
-                                onSelect(item.stream)
+                                onSelect(item.channel)
                                 return@setOnKeyListener true
                             } else if (keyCode == KeyEvent.KEYCODE_DPAD_UP && position == 0) {
                                 if (activeFilterTab == "PROGRAMS") binding.btnTabPrograms.requestFocus()

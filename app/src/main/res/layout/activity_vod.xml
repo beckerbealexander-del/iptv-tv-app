@@ -48,7 +48,9 @@
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/recyclerVodCategories"
             android:layout_width="match_parent"
-            android:layout_height="match_parent" />
+            android:layout_height="match_parent">
+            <requestFocus />
+        </androidx.recyclerview.widget.RecyclerView>
     </LinearLayout>
 
     <!-- Rechte Spalte: Hero Banner & Movie Grid -->
@@ -59,16 +61,33 @@
         android:orientation="vertical"
         android:padding="10dp">
 
-        <!-- Kategorie-Titel -->
-        <TextView
-            android:id="@+id/txtVodCategoryTitle"
+        <!-- Kategorie-Titel & Positionscounter -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Filme"
-            android:textColor="@color/text_primary"
-            android:textSize="15sp"
-            android:textStyle="bold"
-            android:layout_marginBottom="4dp" />
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="4dp">
+
+            <TextView
+                android:id="@+id/txtVodCategoryTitle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Filme"
+                android:textColor="@color/text_primary"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/txtVodCategoryCounter"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/accent_gold"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:text="" />
+        </LinearLayout>
 
         <!-- Kompakter Hero Banner -->
         <LinearLayout
@@ -128,65 +147,7 @@
             </LinearLayout>
         </LinearLayout>
 
-        <!-- Steuerungselement: Sortierleiste direkt über der Grid-Liste -->
-        <LinearLayout
-            android:id="@+id/layoutVodSortBar"
-            android:layout_width="match_parent"
-            android:layout_height="28dp"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:layout_marginBottom="6dp">
 
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Sortierung: "
-                android:textColor="@color/text_secondary"
-                android:textSize="11sp" />
-
-            <Button
-                android:id="@+id/btnSortDefault"
-                android:layout_width="wrap_content"
-                android:layout_height="24dp"
-                android:background="@drawable/card_focus_selector"
-                android:text="⚡ Standard"
-                android:textColor="@color/text_primary"
-                android:textSize="10sp"
-                android:paddingHorizontal="8dp"
-                android:layout_marginEnd="4dp" />
-
-            <Button
-                android:id="@+id/btnSortRating"
-                android:layout_width="wrap_content"
-                android:layout_height="24dp"
-                android:background="@drawable/card_focus_selector"
-                android:text="⭐ Bewertung"
-                android:textColor="@color/text_primary"
-                android:textSize="10sp"
-                android:paddingHorizontal="8dp"
-                android:layout_marginEnd="4dp" />
-
-            <Button
-                android:id="@+id/btnSortYear"
-                android:layout_width="wrap_content"
-                android:layout_height="24dp"
-                android:background="@drawable/card_focus_selector"
-                android:text="📅 Jahr"
-                android:textColor="@color/text_primary"
-                android:textSize="10sp"
-                android:paddingHorizontal="8dp"
-                android:layout_marginEnd="4dp" />
-
-            <Button
-                android:id="@+id/btnSortAlpha"
-                android:layout_width="wrap_content"
-                android:layout_height="24dp"
-                android:background="@drawable/card_focus_selector"
-                android:text="🔤 A-Z"
-                android:textColor="@color/text_primary"
-                android:textSize="10sp"
-                android:paddingHorizontal="8dp" />
-        </LinearLayout>
 
         <ProgressBar
             android:id="@+id/progressVod"
