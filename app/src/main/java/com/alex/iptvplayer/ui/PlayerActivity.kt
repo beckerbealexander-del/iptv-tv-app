@@ -11,31 +11,29 @@ import android.view.KeyEvent
 import android.view.View
 import android.widget.SeekBar
 import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
-import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
 import androidx.media3.exoplayer.ExoPlayer
-import com.alex.iptvplayer.R
 import com.alex.iptvplayer.data.EpisodeItem
 import com.alex.iptvplayer.data.HistoryManager
 import com.alex.iptvplayer.data.LiveStream
 import com.alex.iptvplayer.data.MultiStreamChannel
 import com.alex.iptvplayer.data.MultiStreamManager
 import com.alex.iptvplayer.data.QualityPreferenceManager
-import com.alex.iptvplayer.data.StreamSource
 import com.alex.iptvplayer.data.XtreamClient
 import com.alex.iptvplayer.databinding.ActivityPlayerBinding
+import com.alex.iptvplayer.ui.player.PlayerOsdController
+import com.alex.iptvplayer.ui.player.PlayerScrubberHelper
+import com.alex.iptvplayer.ui.player.PlayerStatsOverlayHelper
+import com.alex.iptvplayer.ui.player.PlayerTrackDialogHelper
 import com.alex.iptvplayer.util.AppLogger
 import com.alex.iptvplayer.util.PlayerUtils
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
 import java.util.Locale
 
 class PlayerActivity : AppCompatActivity() {
@@ -44,6 +42,12 @@ class PlayerActivity : AppCompatActivity() {
     private var exoPlayer: ExoPlayer? = null
     private lateinit var client: XtreamClient
     private lateinit var historyManager: HistoryManager
+
+    // Modulare Helfer
+    private lateinit var statsOverlayHelper: PlayerStatsOverlayHelper
+    private lateinit var scrubberHelper: PlayerScrubberHelper
+    private lateinit var trackDialogHelper: PlayerTrackDialogHelper
+    private lateinit var osdController: PlayerOsdController
 
     private var isLive: Boolean = false
     private var streamList: List<LiveStream> = emptyList()
@@ -62,34 +66,20 @@ class PlayerActivity : AppCompatActivity() {
     private var episodeNum: Int = 1
     private var seriesId: Int = -1
 
-    private val osdHandler = Handler(Looper.getMainLooper())
     private val progressHandler = Handler(Looper.getMainLooper())
-    private val scrubHandler = Handler(Looper.getMainLooper())
     private val retryHandler = Handler(Looper.getMainLooper())
-    private var epgJob: Job? = null
 
-    // Automatischer Reconnect & Retry
     private var retryCount = 0
     private val maxRetries = 5
     private val resetRetryRunnable = Runnable { retryCount = 0 }
     private var lastKnownPosition: Long = 0L
-    private var activeDialog: AlertDialog? = null
-
-    // Netflix-Style Spulen Variablen
-    private var isScrubbing = false
-    private var targetSeekPosition: Long = -1L
-    private var scrubSessionStartTime = 0L
-    private var lastScrubTime = 0L
     private var lastKnownDuration: Long = 0L
-    private var lastFocusedOsdButton: View? = null
+    private var hasTestedSourcesCount = 0
 
-    private val hideOsdRunnable = Runnable { hideOsd() }
-
-    // Standby-Erkennung (HDMI / Display Off)
     private val screenOffReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == Intent.ACTION_SCREEN_OFF) {
-                AppLogger.logLifecycle("PlayerActivity", "ACTION_SCREEN_OFF -> Releasing stream connections immediately")
+                AppLogger.logLifecycle("PlayerActivity", "ACTION_SCREEN_OFF -> Releasing stream connections")
                 saveCurrentState()
                 retryHandler.removeCallbacksAndMessages(null)
                 PlayerUtils.releaseStreamConnections(exoPlayer)
@@ -102,7 +92,6 @@ class PlayerActivity : AppCompatActivity() {
         AppLogger.init(this)
         AppLogger.logLifecycle("PlayerActivity", "onCreate")
 
-        // Bildschirmschoner / Standby auf TV während Wiedergabe verhindern
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         binding = ActivityPlayerBinding.inflate(layoutInflater)
         setContentView(binding.root)
@@ -113,6 +102,12 @@ class PlayerActivity : AppCompatActivity() {
 
         client = XtreamClient(this)
         historyManager = HistoryManager(this)
+
+        // Helfer initialisieren
+        statsOverlayHelper = PlayerStatsOverlayHelper(binding, ::formatTime)
+        scrubberHelper = PlayerScrubberHelper(binding, ::formatTime)
+        trackDialogHelper = PlayerTrackDialogHelper()
+        osdController = PlayerOsdController(binding, client, lifecycleScope)
 
         currentStreamUrl = intent.getStringExtra("STREAM_URL") ?: ""
         currentStreamName = intent.getStringExtra("STREAM_NAME") ?: "Stream"
@@ -149,7 +144,6 @@ class PlayerActivity : AppCompatActivity() {
             isLive = streamList.isNotEmpty() || currentType == "LIVE"
         }
 
-        // Vor dem Start den neuesten Stand synchronisieren
         historyManager.syncWithCloud(client.username)
 
         if (isLive && currentStreamId > 0) {
@@ -171,7 +165,7 @@ class PlayerActivity : AppCompatActivity() {
         setupPlayer(currentStreamUrl, currentStreamName, currentStreamId)
 
         binding.root.post {
-            if (!isLive && binding.osdBottom.visibility == View.VISIBLE && !isOsdFocused()) {
+            if (!isLive && binding.osdBottom.visibility == View.VISIBLE && !osdController.isOsdFocused()) {
                 binding.playerSeekBar.requestFocus()
             }
         }
@@ -179,7 +173,7 @@ class PlayerActivity : AppCompatActivity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus && !isLive && binding.osdBottom.visibility == View.VISIBLE && !isOsdFocused()) {
+        if (hasFocus && !isLive && binding.osdBottom.visibility == View.VISIBLE && !osdController.isOsdFocused()) {
             binding.playerSeekBar.requestFocus()
         }
     }
@@ -206,14 +200,26 @@ class PlayerActivity : AppCompatActivity() {
             }
         }
 
-        binding.btnAudioTracks.setOnClickListener { showAudioTrackDialog() }
-        binding.btnSubtitles.setOnClickListener { showSubtitleDialog() }
-        binding.btnDebugOverlay.setOnClickListener { toggleDebugOverlay() }
+        binding.btnAudioTracks.setOnClickListener {
+            trackDialogHelper.showAudioTrackDialog(this, exoPlayer, ::updateQualityAndAudioBadges) {
+                binding.btnAudioTracks.requestFocus()
+                osdController.resetOsdInactivityTimer(trackDialogHelper::isDialogShowing)
+            }
+        }
+        binding.btnSubtitles.setOnClickListener {
+            trackDialogHelper.showSubtitleDialog(this, exoPlayer, ::updateQualityAndAudioBadges) {
+                binding.btnSubtitles.requestFocus()
+                osdController.resetOsdInactivityTimer(trackDialogHelper::isDialogShowing)
+            }
+        }
+        binding.btnDebugOverlay.setOnClickListener {
+            statsOverlayHelper.toggle(exoPlayer, currentStreamId, currentType, seasonNum, episodeNum, lastKnownDuration)
+        }
 
         val buttonFocusChangeListener = View.OnFocusChangeListener { v, hasFocus ->
             if (hasFocus) {
-                lastFocusedOsdButton = v
-                resetOsdInactivityTimer()
+                osdController.lastFocusedOsdButton = v
+                osdController.resetOsdInactivityTimer(trackDialogHelper::isDialogShowing)
             }
         }
         binding.btnAudioTracks.onFocusChangeListener = buttonFocusChangeListener
@@ -224,15 +230,13 @@ class PlayerActivity : AppCompatActivity() {
 
         val buttonKeyHandler = View.OnKeyListener { _, keyCode, event ->
             if (event.action == KeyEvent.ACTION_DOWN) {
-                resetOsdInactivityTimer()
+                osdController.resetOsdInactivityTimer(trackDialogHelper::isDialogShowing)
                 when (keyCode) {
                     KeyEvent.KEYCODE_DPAD_UP -> {
                         binding.playerSeekBar.requestFocus()
                         return@OnKeyListener true
                     }
-                    KeyEvent.KEYCODE_DPAD_DOWN -> {
-                        return@OnKeyListener true
-                    }
+                    KeyEvent.KEYCODE_DPAD_DOWN -> return@OnKeyListener true
                 }
             }
             false
@@ -244,38 +248,36 @@ class PlayerActivity : AppCompatActivity() {
         binding.btnDebugOverlay.setOnKeyListener(buttonKeyHandler)
 
         binding.playerSeekBar.setOnKeyListener { _, keyCode, event ->
-            resetOsdInactivityTimer()
+            osdController.resetOsdInactivityTimer(trackDialogHelper::isDialogShowing)
             when (keyCode) {
                 KeyEvent.KEYCODE_DPAD_UP -> {
                     if (event.action == KeyEvent.ACTION_DOWN) {
-                        hideOsd()
+                        osdController.hideOsd()
                     }
                     return@setOnKeyListener true
                 }
                 KeyEvent.KEYCODE_DPAD_DOWN -> {
                     if (event.action == KeyEvent.ACTION_DOWN) {
-                        focusOsdButtonRow()
+                        osdController.focusOsdButtonRow()
                     }
                     return@setOnKeyListener true
                 }
                 KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_MEDIA_REWIND -> {
                     if (event.action == KeyEvent.ACTION_DOWN) {
-                        performNetflixScrub(false)
+                        performScrub(false)
                     }
-                    return@setOnKeyListener true // Consumes ACTION_DOWN AND ACTION_UP so AbsSeekBar doesn't touch progress
+                    return@setOnKeyListener true
                 }
                 KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {
                     if (event.action == KeyEvent.ACTION_DOWN) {
-                        performNetflixScrub(true)
+                        performScrub(true)
                     }
-                    return@setOnKeyListener true // Consumes ACTION_DOWN AND ACTION_UP so AbsSeekBar doesn't touch progress
+                    return@setOnKeyListener true
                 }
                 KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
-                    if (event.action == KeyEvent.ACTION_DOWN) {
-                        if (isScrubbing && targetSeekPosition >= 0) {
-                            commitScrubSeek()
-                            return@setOnKeyListener true
-                        }
+                    if (event.action == KeyEvent.ACTION_DOWN && scrubberHelper.isScrubbing && scrubberHelper.targetSeekPosition >= 0) {
+                        commitScrub()
+                        return@setOnKeyListener true
                     }
                 }
             }
@@ -284,8 +286,7 @@ class PlayerActivity : AppCompatActivity() {
 
         binding.playerSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                // Nur wenn der Nutzer aktiv per Touch/Maus schiebt und KEIN D-Pad-Scrubbing aktiv ist
-                if (fromUser && !isScrubbing && exoPlayer != null) {
+                if (fromUser && !scrubberHelper.isScrubbing && exoPlayer != null) {
                     val duration = if (exoPlayer!!.duration > 0) exoPlayer!!.duration else lastKnownDuration
                     if (duration > 0) {
                         val seekPos = (duration * progress) / 1000
@@ -334,7 +335,7 @@ class PlayerActivity : AppCompatActivity() {
         retryCount = 0
 
         updateEpisodeButtons()
-        showOsd(currentStreamName, currentStreamId)
+        showOsdWrapper()
 
         val mediaItem = MediaItem.fromUri(currentStreamUrl)
         exoPlayer?.setMediaItem(mediaItem)
@@ -343,7 +344,7 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     private fun setupPlayer(url: String, name: String, streamId: Int) {
-        showOsd(name, streamId)
+        showOsdWrapper()
         retryCount = 0
 
         exoPlayer = PlayerUtils.createExoPlayer(this, isLive = isLive).apply {
@@ -383,7 +384,6 @@ class PlayerActivity : AppCompatActivity() {
 
                     updateCenterPauseVisibility(exoPlayer?.isPlaying == true)
 
-                    // Automatisch nächste Folge abspielen
                     if (state == Player.STATE_ENDED && currentType == "SERIES") {
                         if (currentEpisodeIndex < episodeList.size - 1) {
                             Toast.makeText(this@PlayerActivity, "Nächste Folge startet...", Toast.LENGTH_SHORT).show()
@@ -395,7 +395,6 @@ class PlayerActivity : AppCompatActivity() {
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
                     updateCenterPauseVisibility(isPlaying)
                     if (isPlaying) {
-                        // Erst nach 3 Sekunden stabiler Wiedergabe den Retry-Zähler zurücksetzen
                         retryHandler.removeCallbacks(resetRetryRunnable)
                         retryHandler.postDelayed(resetRetryRunnable, 3000)
                     } else {
@@ -458,9 +457,7 @@ class PlayerActivity : AppCompatActivity() {
                         showRetryBanner(msg)
                         AppLogger.logNetwork("Auto-Retry #$retryCount in 2.5s waiting for stream socket ($currentStreamUrl)")
                         retryHandler.removeCallbacksAndMessages(null)
-                        retryHandler.postDelayed({
-                            reconnectStream(pos)
-                        }, 2500)
+                        retryHandler.postDelayed({ reconnectStream(pos) }, 2500)
                         return
                     }
 
@@ -469,7 +466,6 @@ class PlayerActivity : AppCompatActivity() {
                         Toast.makeText(this@PlayerActivity, "⚠️ Verbindungsversuch (${retryCount}/${maxRetries})...", Toast.LENGTH_SHORT).show()
                         binding.playerLoading.visibility = View.VISIBLE
 
-                        // Container-Fallback nach 2 Fehlversuchen (z.B. .mp4 <-> .mkv <-> .ts)
                         if (retryCount == 3) {
                             if (currentStreamUrl.endsWith(".mp4")) {
                                 currentStreamUrl = currentStreamUrl.replace(".mp4", ".mkv")
@@ -479,9 +475,7 @@ class PlayerActivity : AppCompatActivity() {
                         }
 
                         retryHandler.removeCallbacksAndMessages(null)
-                        retryHandler.postDelayed({
-                            reconnectStream(pos)
-                        }, 1500)
+                        retryHandler.postDelayed({ reconnectStream(pos) }, 1500)
                     } else {
                         hideRetryBanner()
                         Toast.makeText(this@PlayerActivity, "Wiedergabefehler: ${error.message} (Server antwortet nicht)", Toast.LENGTH_LONG).show()
@@ -494,7 +488,6 @@ class PlayerActivity : AppCompatActivity() {
             setMediaItem(mediaItem)
             prepare()
 
-            // Fortsetzen / Resume
             if (!isLive) {
                 val resumePos = historyManager.getResumePosition(url, currentStreamId)
                 if (resumePos > 15_000) {
@@ -504,15 +497,14 @@ class PlayerActivity : AppCompatActivity() {
                 }
             }
 
-            // Untertitel-Stil: Weiß auf 90% durchsichtigem Schwarz, 2 Nummern kleiner
             binding.playerView.subtitleView?.apply {
                 val captionStyle = androidx.media3.ui.CaptionStyleCompat(
-                    /* foregroundColor = */ android.graphics.Color.WHITE,
-                    /* backgroundColor = */ android.graphics.Color.argb(26, 0, 0, 0), // 90% transparentes Schwarz
-                    /* windowColor = */ android.graphics.Color.TRANSPARENT,
-                    /* edgeType = */ androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_OUTLINE,
-                    /* edgeColor = */ android.graphics.Color.argb(180, 0, 0, 0),
-                    /* typeface = */ null
+                    android.graphics.Color.WHITE,
+                    android.graphics.Color.argb(26, 0, 0, 0),
+                    android.graphics.Color.TRANSPARENT,
+                    androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_OUTLINE,
+                    android.graphics.Color.argb(180, 0, 0, 0),
+                    null
                 )
                 setStyle(captionStyle)
                 setFractionalTextSize(androidx.media3.ui.SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * 0.72f)
@@ -588,7 +580,7 @@ class PlayerActivity : AppCompatActivity() {
         progressHandler.post(object : Runnable {
             override fun run() {
                 val player = exoPlayer
-                if (player != null && !isLive && player.duration > 0 && !isScrubbing && targetSeekPosition < 0) {
+                if (player != null && !isLive && player.duration > 0 && !scrubberHelper.isScrubbing && scrubberHelper.targetSeekPosition < 0) {
                     val current = player.currentPosition
                     val total = player.duration
                     if (current > 0) lastKnownPosition = current
@@ -613,8 +605,8 @@ class PlayerActivity : AppCompatActivity() {
                         )
                     }
                 }
-                if (binding.layoutDebugOverlay.visibility == View.VISIBLE) {
-                    updateDebugOverlayStats()
+                if (statsOverlayHelper.isVisible) {
+                    statsOverlayHelper.update(player, currentStreamId, currentType, seasonNum, episodeNum, lastKnownDuration)
                 }
                 progressHandler.postDelayed(this, 1000)
             }
@@ -634,140 +626,56 @@ class PlayerActivity : AppCompatActivity() {
         val player = exoPlayer ?: return
         if (player.isPlaying) {
             player.pause()
-            showOsd(binding.txtPlayerTitle.text.toString(), currentStreamId)
+            showOsdWrapper()
         } else {
             player.play()
-            showOsd(binding.txtPlayerTitle.text.toString(), currentStreamId)
+            showOsdWrapper()
         }
     }
 
-    private fun resetOsdInactivityTimer() {
-        osdHandler.removeCallbacksAndMessages(null)
-        osdHandler.postDelayed({
-            if (activeDialog == null || !activeDialog!!.isShowing) {
-                hideOsd()
-            }
-        }, 5000)
-    }
-
-    private fun showOsd(name: String, streamId: Int) {
+    private fun showOsdWrapper() {
         if (isLive) {
-            showLiveOsd()
-            return
-        }
-
-        binding.layoutLiveOsd.visibility = View.GONE
-        binding.txtPlayerTitle.text = name
-        binding.osdTop.visibility = View.VISIBLE
-        binding.osdBottom.visibility = View.VISIBLE
-
-        resetOsdInactivityTimer()
-
-        if (!isOsdFocused()) {
-            binding.playerSeekBar.post {
-                if (binding.osdBottom.visibility == View.VISIBLE && !isOsdButtonFocused()) {
-                    binding.playerSeekBar.requestFocus()
-                }
-            }
-        }
-    }
-
-    private fun showLiveOsd() {
-        binding.osdTop.visibility = View.GONE
-        binding.osdBottom.visibility = View.GONE
-        binding.layoutLiveOsd.visibility = View.VISIBLE
-
-        val ch = activeChannel
-        val chNum = if (currentIndex >= 0) "${currentIndex + 1}" else "🔴"
-        binding.txtLiveOsdChannelNum.text = chNum
-        binding.txtLiveOsdChannelName.text = ch?.cleanName ?: currentStreamName
-
-        if (ch != null && ch.sources.isNotEmpty()) {
-            val src = ch.sources.getOrNull(activeSourceIndex) ?: ch.sources[0]
-            val count = ch.sources.size
-            binding.txtLiveOsdSourceInfo.text = if (count > 1) {
-                "⚡ Quelle ${activeSourceIndex + 1}/$count: ${src.label}"
-            } else {
-                "⚡ ${src.label}"
-            }
-            binding.txtLiveOsdSourceInfo.visibility = View.VISIBLE
+            osdController.showLiveOsd(
+                activeChannel,
+                currentStreamName,
+                currentStreamId,
+                activeSourceIndex,
+                currentIndex,
+                exoPlayer,
+                trackDialogHelper::isDialogShowing
+            )
         } else {
-            binding.txtLiveOsdSourceInfo.visibility = View.GONE
-        }
-
-        val vf = exoPlayer?.videoFormat
-        val af = exoPlayer?.audioFormat
-        val res = if (vf != null && vf.width > 0 && vf.height > 0) "${vf.width}x${vf.height}" else "1080p"
-        val fps = if (vf != null && vf.frameRate > 0) "${vf.frameRate.toInt()} fps" else "50 fps"
-        val vCodec = vf?.sampleMimeType?.substringAfter("/")?.uppercase() ?: "H.264"
-        val aCodec = af?.sampleMimeType?.substringAfter("/")?.uppercase() ?: "AAC"
-        binding.txtLiveOsdTechSpecs.text = "$res | $fps | $vCodec | $aCodec"
-
-        val epgTargetId = ch?.epgStreamId ?: currentStreamId
-        if (epgTargetId > 0) {
-            epgJob?.cancel()
-            epgJob = lifecycleScope.launch {
-                try {
-                    val list = client.getEpg(epgTargetId)
-                    val cur = list.firstOrNull { it.isNowPlaying } ?: list.firstOrNull()
-                    if (cur != null) {
-                        binding.txtLiveOsdProgramTitle.text = "🔴 JETZT: ${cur.title}"
-                        binding.txtLiveOsdProgramTime.text = "${cur.start} - ${cur.end}"
-                        binding.txtLiveOsdProgramDesc.text = if (cur.description.isNotEmpty()) cur.description else "Keine Programmbeschreibung vorhanden."
-                        val prog = calculateProgress(cur.start, cur.end)
-                        binding.progressLiveOsdProgram.progress = prog
-                        binding.progressLiveOsdProgram.visibility = View.VISIBLE
-                    } else {
-                        binding.txtLiveOsdProgramTitle.text = "🔴 LIVE TV"
-                        binding.txtLiveOsdProgramTime.text = ""
-                        binding.txtLiveOsdProgramDesc.text = ""
-                        binding.progressLiveOsdProgram.visibility = View.GONE
-                    }
-                } catch (e: Exception) {
-                    binding.txtLiveOsdProgramTitle.text = "🔴 LIVE TV"
-                    binding.txtLiveOsdProgramTime.text = ""
-                    binding.txtLiveOsdProgramDesc.text = ""
-                    binding.progressLiveOsdProgram.visibility = View.GONE
-                }
+            osdController.showOsd(
+                currentStreamName,
+                isLive,
+                trackDialogHelper::isDialogShowing
+            ) {
+                binding.playerSeekBar.requestFocus()
             }
         }
-
-        resetOsdInactivityTimer()
     }
 
-    private fun hideOsd() {
-        binding.osdTop.visibility = View.GONE
-        binding.osdBottom.visibility = View.GONE
-        binding.layoutLiveOsd.visibility = View.GONE
-        binding.playerView.requestFocus()
+    private fun performScrub(forward: Boolean) {
+        showOsdWrapper()
+        scrubberHelper.performNetflixScrub(
+            forward,
+            exoPlayer,
+            lastKnownDuration,
+            lastKnownPosition,
+            onOsdKeepOpen = { osdController.keepOsdOpen() },
+            onCommitSeek = { finalPos ->
+                lastKnownPosition = finalPos
+                osdController.resetOsdInactivityTimer(trackDialogHelper::isDialogShowing)
+            }
+        )
     }
 
-    private fun calculateProgress(start: String, end: String): Int {
-        return try {
-            val sdf = java.text.SimpleDateFormat("HH:mm", Locale.getDefault())
-            val cal = java.util.Calendar.getInstance()
-            val nowMin = cal.get(java.util.Calendar.HOUR_OF_DAY) * 60 + cal.get(java.util.Calendar.MINUTE)
-
-            val sCal = java.util.Calendar.getInstance().apply { time = sdf.parse(start) ?: return 50 }
-            val sMin = sCal.get(java.util.Calendar.HOUR_OF_DAY) * 60 + sCal.get(java.util.Calendar.MINUTE)
-
-            val eCal = java.util.Calendar.getInstance().apply { time = sdf.parse(end) ?: return 50 }
-            var eMin = eCal.get(java.util.Calendar.HOUR_OF_DAY) * 60 + eCal.get(java.util.Calendar.MINUTE)
-            if (eMin <= sMin) eMin += 24 * 60
-
-            var cur = nowMin
-            if (cur < sMin && eMin > 24 * 60) cur += 24 * 60
-
-            val total = eMin - sMin
-            if (total <= 0) return 50
-            val current = cur - sMin
-            ((current.toFloat() / total.toFloat()) * 100).toInt().coerceIn(0, 100)
-        } catch (e: Exception) {
-            50
+    private fun commitScrub() {
+        scrubberHelper.commitScrubSeek(exoPlayer, lastKnownDuration) { finalPos ->
+            lastKnownPosition = finalPos
+            osdController.resetOsdInactivityTimer(trackDialogHelper::isDialogShowing)
         }
     }
-
-    private var hasTestedSourcesCount = 0
 
     private fun playCurrentLiveSource() {
         val ch = activeChannel ?: return
@@ -784,7 +692,7 @@ class PlayerActivity : AppCompatActivity() {
             categoryId = ch.categoryId
         )
         historyManager.saveLiveChannel(s)
-        showLiveOsd()
+        showOsdWrapper()
         val mediaItem = MediaItem.fromUri(currentStreamUrl)
         exoPlayer?.setMediaItem(mediaItem)
         exoPlayer?.prepare()
@@ -837,294 +745,31 @@ class PlayerActivity : AppCompatActivity() {
         }
     }
 
-    private fun isOsdFocused(): Boolean {
-        return binding.btnAudioTracks.hasFocus() ||
-                binding.btnSubtitles.hasFocus() ||
-                binding.btnPrevEpisode.hasFocus() ||
-                binding.btnNextEpisode.hasFocus() ||
-                binding.btnDebugOverlay.hasFocus() ||
-                binding.playerSeekBar.hasFocus()
-    }
-
-    private fun isOsdButtonFocused(): Boolean {
-        return binding.btnAudioTracks.hasFocus() ||
-                binding.btnSubtitles.hasFocus() ||
-                binding.btnPrevEpisode.hasFocus() ||
-                binding.btnNextEpisode.hasFocus() ||
-                binding.btnDebugOverlay.hasFocus()
-    }
-
-    private fun toggleDebugOverlay() {
-        if (binding.layoutDebugOverlay.visibility == View.VISIBLE) {
-            binding.layoutDebugOverlay.visibility = View.GONE
-        } else {
-            binding.layoutDebugOverlay.visibility = View.VISIBLE
-            updateDebugOverlayStats()
-        }
-    }
-
-    private fun updateDebugOverlayStats() {
-        val player = exoPlayer ?: return
-        val stateStr = when (player.playbackState) {
-            Player.STATE_IDLE -> "IDLE"
-            Player.STATE_BUFFERING -> "BUFFERING"
-            Player.STATE_READY -> if (player.isPlaying) "PLAYING" else "PAUSED"
-            Player.STATE_ENDED -> "ENDED"
-            else -> "UNKNOWN"
-        }
-        val bufferSec = ((player.bufferedPosition - player.currentPosition).coerceAtLeast(0) / 1000.0)
-        binding.txtDebugState.text = "State: $stateStr | Buffer: ${String.format(Locale.US, "%.1fs", bufferSec)}"
-
-        val vf = player.videoFormat
-        if (vf != null) {
-            val w = vf.width
-            val h = vf.height
-            val fps = if (vf.frameRate > 0) "${vf.frameRate.toInt()}fps" else "?fps"
-            val codec = vf.sampleMimeType?.substringAfter("/")?.uppercase() ?: "UNKNOWN"
-            binding.txtDebugVideo.text = "Video: ${w}x${h} @ $fps ($codec)"
-        } else {
-            binding.txtDebugVideo.text = "Video: N/A"
-        }
-
-        val af = player.audioFormat
-        if (af != null) {
-            val channels = when (af.channelCount) {
-                1 -> "Mono"
-                2 -> "Stereo"
-                6 -> "5.1"
-                8 -> "7.1"
-                else -> "${af.channelCount}ch"
-            }
-            val aCodec = af.sampleMimeType?.substringAfter("/")?.uppercase() ?: "AUDIO"
-            val lang = af.language ?: "und"
-            binding.txtDebugAudio.text = "Audio: $aCodec $channels ($lang)"
-        } else {
-            binding.txtDebugAudio.text = "Audio: N/A"
-        }
-
-        val cur = player.currentPosition
-        val dur = if (player.duration > 0) player.duration else lastKnownDuration
-        val pct = if (dur > 0) (cur * 100 / dur).toInt() else 0
-        binding.txtDebugPos.text = "Pos: ${formatTime(cur)} / ${formatTime(dur)} ($pct%)"
-
-        val epInfo = if (currentType == "SERIES") " | S${seasonNum}E${episodeNum}" else ""
-        binding.txtDebugStreamInfo.text = "ID: $currentStreamId | Type: $currentType$epInfo"
-    }
-
-    private fun focusOsdButtonRow() {
-        val lastBtn = lastFocusedOsdButton
-        if (lastBtn != null && lastBtn.visibility == View.VISIBLE) {
-            lastBtn.requestFocus()
-        } else if (binding.btnPrevEpisode.visibility == View.VISIBLE) {
-            binding.btnPrevEpisode.requestFocus()
-        } else if (binding.btnNextEpisode.visibility == View.VISIBLE) {
-            binding.btnNextEpisode.requestFocus()
-        } else {
-            binding.btnAudioTracks.requestFocus()
-        }
-    }
-
-    // --- Netflix-Style Scrubbing (erste 3 Sek im 15s-Takt, 3-7s im 30s-Takt, danach 1m) ---
-    private fun performNetflixScrub(forward: Boolean) {
-        val player = exoPlayer ?: return
-        val totalDuration = if (player.duration > 0) player.duration else lastKnownDuration
-        if (totalDuration <= 0) return
-
-        val now = System.currentTimeMillis()
-
-        // Key-repeat Drosselung: wenn D-Pad gehalten wird, feuert Android ca. alle 50ms.
-        // Drosseln auf min. 140ms pro Schritt für präzises, ruhiges Spulen ohne Durchrauschen
-        if (isScrubbing && now - lastScrubTime < 140L) {
-            return
-        }
-
-        if (!isScrubbing || targetSeekPosition < 0) {
-            isScrubbing = true
-            scrubSessionStartTime = now
-            val cur = player.currentPosition
-            targetSeekPosition = if (cur in 0..totalDuration) cur else lastKnownPosition.coerceIn(0, totalDuration)
-        }
-
-        lastScrubTime = now
-
-        val sessionDuration = now - scrubSessionStartTime
-        val stepMs = when {
-            sessionDuration < 3000L -> 15_000L
-            sessionDuration < 7000L -> 30_000L
-            else -> 60_000L
-        }
-
-        if (forward) {
-            targetSeekPosition = (targetSeekPosition + stepMs).coerceAtMost(totalDuration)
-        } else {
-            targetSeekPosition = (targetSeekPosition - stepMs).coerceAtLeast(0L)
-        }
-
-        val icon = if (forward) "⏩ +" else "⏪ -"
-        val stepSec = stepMs / 1000
-        val stepText = if (stepSec >= 60) "${stepSec / 60}m" else "${stepSec}s"
-        binding.txtScrubSpeed.text = "$icon$stepText"
-        binding.txtScrubTargetTime.text = "${formatTime(targetSeekPosition)} / ${formatTime(totalDuration)}"
-        binding.osdScrubBubble.visibility = View.VISIBLE
-
-        showOsd(binding.txtPlayerTitle.text.toString(), currentStreamId)
-        binding.txtTimeCurrent.text = formatTime(targetSeekPosition)
-        binding.txtTimeTotal.text = formatTime(totalDuration)
-        binding.playerSeekBar.progress = ((targetSeekPosition * 1000) / totalDuration).toInt()
-
-        // OSD während des Spulens geöffnet halten
-        osdHandler.removeCallbacksAndMessages(null)
-
-        // Nach 800ms ohne weiteren Tastendruck automatisch ausführen
-        scrubHandler.removeCallbacksAndMessages(null)
-        scrubHandler.postDelayed({
-            commitScrubSeek()
-        }, 800)
-    }
-
-    private fun commitScrubSeek() {
-        scrubHandler.removeCallbacksAndMessages(null)
-        val pos = targetSeekPosition
-        val wasScrubbing = isScrubbing
-        isScrubbing = false
-        targetSeekPosition = -1L
-        binding.osdScrubBubble.visibility = View.GONE
-
-        if (wasScrubbing && pos >= 0) {
-            val player = exoPlayer ?: return
-            val totalDuration = if (player.duration > 0) player.duration else lastKnownDuration
-            val finalPos = if (totalDuration > 0) pos.coerceIn(0L, totalDuration) else pos.coerceAtLeast(0L)
-            lastKnownPosition = finalPos
-            player.seekTo(finalPos)
-            binding.txtTimeCurrent.text = formatTime(finalPos)
-            if (totalDuration > 0) {
-                binding.playerSeekBar.progress = ((finalPos * 1000) / totalDuration).toInt()
-            }
-            resetOsdInactivityTimer()
-        }
-    }
-
-    // --- Audio-Spuren Dialog ---
-    private fun showAudioTrackDialog() {
-        val player = exoPlayer ?: return
-        val tracks = player.currentTracks
-        val audioGroups = tracks.groups.filter { it.type == C.TRACK_TYPE_AUDIO }
-
-        if (audioGroups.isEmpty()) {
-            Toast.makeText(this, "Keine alternativen Tonspuren verfügbar", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        val names = mutableListOf<String>()
-        var selectedIdx = 0
-        audioGroups.forEachIndexed { idx, g ->
-            val f = g.getTrackFormat(0)
-            val lang = f.language ?: "Spur ${idx + 1}"
-            val channels = if (f.channelCount > 2) "${f.channelCount}.1" else "Stereo"
-            val label = f.label ?: ""
-            names.add("$lang $label ($channels)".trim())
-            if (g.isSelected) selectedIdx = idx
-        }
-
-        val dialog = AlertDialog.Builder(this, androidx.appcompat.R.style.Theme_AppCompat_Dialog_Alert)
-            .setTitle("Tonspur auswählen")
-            .setSingleChoiceItems(names.toTypedArray(), selectedIdx) { d, which ->
-                val group = audioGroups[which]
-                player.trackSelectionParameters = player.trackSelectionParameters
-                    .buildUpon()
-                    .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, 0))
-                    .build()
-                d.dismiss()
-                updateQualityAndAudioBadges()
-                Toast.makeText(this, "Tonspur gewählt: ${names[which]}", Toast.LENGTH_SHORT).show()
-            }
-            .setNegativeButton("Abbrechen", null)
-            .create()
-
-        activeDialog = dialog
-        dialog.setOnDismissListener {
-            activeDialog = null
-            binding.btnAudioTracks.requestFocus()
-            resetOsdInactivityTimer()
-        }
-        dialog.show()
-    }
-
-    // --- Untertitel Dialog ---
-    private fun showSubtitleDialog() {
-        val player = exoPlayer ?: return
-        val tracks = player.currentTracks
-        val textGroups = tracks.groups.filter { it.type == C.TRACK_TYPE_TEXT }
-
-        val names = mutableListOf("Aus (Deaktiviert)")
-        var selectedIdx = 0
-        textGroups.forEachIndexed { idx, g ->
-            val f = g.getTrackFormat(0)
-            val lang = f.language ?: "Untertitel ${idx + 1}"
-            names.add(lang)
-            if (g.isSelected) selectedIdx = idx + 1
-        }
-
-        val dialog = AlertDialog.Builder(this, androidx.appcompat.R.style.Theme_AppCompat_Dialog_Alert)
-            .setTitle("Untertitel auswählen")
-            .setSingleChoiceItems(names.toTypedArray(), selectedIdx) { d, which ->
-                if (which == 0) {
-                    player.trackSelectionParameters = player.trackSelectionParameters
-                        .buildUpon()
-                        .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
-                        .build()
-                } else {
-                    val group = textGroups[which - 1]
-                    player.trackSelectionParameters = player.trackSelectionParameters
-                        .buildUpon()
-                        .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
-                        .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, 0))
-                        .build()
-                }
-                d.dismiss()
-            }
-            .setNegativeButton("Abbrechen", null)
-            .create()
-
-        activeDialog = dialog
-        dialog.setOnDismissListener {
-            activeDialog = null
-            binding.btnSubtitles.requestFocus()
-            resetOsdInactivityTimer()
-        }
-        dialog.show()
-    }
-
-    // --- Fernbedienungssteuerung (D-Pad) ---
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        resetOsdInactivityTimer()
+        osdController.resetOsdInactivityTimer(trackDialogHelper::isDialogShowing)
         when (keyCode) {
             KeyEvent.KEYCODE_BACK -> {
-                if (activeDialog != null && activeDialog!!.isShowing) {
-                    activeDialog?.dismiss()
+                if (trackDialogHelper.dismissActiveDialog()) {
                     return true
                 }
-                if (isScrubbing) {
-                    scrubHandler.removeCallbacksAndMessages(null)
-                    isScrubbing = false
-                    targetSeekPosition = -1L
-                    binding.osdScrubBubble.visibility = View.GONE
-                    hideOsd()
+                if (scrubberHelper.isScrubbing) {
+                    scrubberHelper.cancelScrub()
+                    osdController.hideOsd()
                     return true
                 }
                 if (isLive && binding.layoutLiveOsd.visibility == View.VISIBLE) {
-                    hideOsd()
+                    osdController.hideOsd()
                     return true
                 }
                 if (binding.osdBottom.visibility == View.VISIBLE) {
-                    hideOsd()
+                    osdController.hideOsd()
                     return true
                 }
                 finish()
                 return true
             }
             KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_INFO, KeyEvent.KEYCODE_M, KeyEvent.KEYCODE_I -> {
-                toggleDebugOverlay()
+                statsOverlayHelper.toggle(exoPlayer, currentStreamId, currentType, seasonNum, episodeNum, lastKnownDuration)
                 return true
             }
             KeyEvent.KEYCODE_PROG_YELLOW, KeyEvent.KEYCODE_BUTTON_Y -> {
@@ -1139,19 +784,19 @@ class PlayerActivity : AppCompatActivity() {
                         cycleToNextSourceManually()
                         return true
                     }
-                } else if (isOsdButtonFocused()) {
-                    return false // Erlaubt D-Pad Navigation zwischen den Buttons
+                } else if (osdController.isOsdButtonFocused()) {
+                    return false
                 } else {
-                    performNetflixScrub(true)
+                    performScrub(true)
                     return true
                 }
             }
             KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_MEDIA_REWIND -> {
                 if (!isLive) {
-                    if (isOsdButtonFocused()) {
-                        return false // Erlaubt D-Pad Navigation zwischen den Buttons
+                    if (osdController.isOsdButtonFocused()) {
+                        return false
                     } else {
-                        performNetflixScrub(false)
+                        performScrub(false)
                         return true
                     }
                 }
@@ -1162,15 +807,14 @@ class PlayerActivity : AppCompatActivity() {
                     return true
                 } else {
                     if (binding.osdBottom.visibility != View.VISIBLE) {
-                        showOsd(binding.txtPlayerTitle.text.toString(), currentStreamId)
+                        showOsdWrapper()
                         binding.playerSeekBar.requestFocus()
                     } else if (binding.playerSeekBar.hasFocus()) {
-                        focusOsdButtonRow()
-                    } else if (isOsdButtonFocused()) {
-                        // Bereits auf den Buttons, Fokus behalten
+                        osdController.focusOsdButtonRow()
+                    } else if (osdController.isOsdButtonFocused()) {
+                        // Fokus behalten
                     } else {
-                        // OSD ist bereits sichtbar, aber weder SeekBar noch Buttons waren fokussiert:
-                        focusOsdButtonRow()
+                        osdController.focusOsdButtonRow()
                     }
                     return true
                 }
@@ -1181,16 +825,13 @@ class PlayerActivity : AppCompatActivity() {
                     return true
                 } else {
                     if (binding.osdBottom.visibility != View.VISIBLE) {
-                        showOsd(binding.txtPlayerTitle.text.toString(), currentStreamId)
+                        showOsdWrapper()
                         binding.playerSeekBar.requestFocus()
-                    } else if (isOsdButtonFocused()) {
-                        // Von der Buttonleiste hoch zur SeekBar
+                    } else if (osdController.isOsdButtonFocused()) {
                         binding.playerSeekBar.requestFocus()
                     } else if (binding.playerSeekBar.hasFocus()) {
-                        // Von der SeekBar hoch: OSD schließen
-                        hideOsd()
+                        osdController.hideOsd()
                     } else {
-                        // OSD sichtbar, Fokus war nicht im OSD: zur SeekBar
                         binding.playerSeekBar.requestFocus()
                     }
                     return true
@@ -1199,21 +840,27 @@ class PlayerActivity : AppCompatActivity() {
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
                 if (isLive) {
                     if (binding.layoutLiveOsd.visibility == View.VISIBLE) {
-                        hideOsd()
+                        osdController.hideOsd()
                     } else {
-                        showLiveOsd()
+                        showOsdWrapper()
                     }
                     return true
                 } else {
-                    if (isScrubbing && targetSeekPosition >= 0) {
-                        commitScrubSeek()
+                    if (scrubberHelper.isScrubbing && scrubberHelper.targetSeekPosition >= 0) {
+                        commitScrub()
                         return true
                     }
                     if (binding.btnAudioTracks.hasFocus()) {
-                        showAudioTrackDialog()
+                        trackDialogHelper.showAudioTrackDialog(this, exoPlayer, ::updateQualityAndAudioBadges) {
+                            binding.btnAudioTracks.requestFocus()
+                            osdController.resetOsdInactivityTimer(trackDialogHelper::isDialogShowing)
+                        }
                         return true
                     } else if (binding.btnSubtitles.hasFocus()) {
-                        showSubtitleDialog()
+                        trackDialogHelper.showSubtitleDialog(this, exoPlayer, ::updateQualityAndAudioBadges) {
+                            binding.btnSubtitles.requestFocus()
+                            osdController.resetOsdInactivityTimer(trackDialogHelper::isDialogShowing)
+                        }
                         return true
                     } else if (binding.btnPrevEpisode.hasFocus()) {
                         playPreviousEpisode()
@@ -1222,7 +869,7 @@ class PlayerActivity : AppCompatActivity() {
                         playNextEpisode()
                         return true
                     } else if (binding.btnDebugOverlay.hasFocus()) {
-                        toggleDebugOverlay()
+                        statsOverlayHelper.toggle(exoPlayer, currentStreamId, currentType, seasonNum, episodeNum, lastKnownDuration)
                         return true
                     } else {
                         togglePlayPause()
@@ -1269,13 +916,12 @@ class PlayerActivity : AppCompatActivity() {
         retryCount = 0
         hideRetryBanner()
 
-        // Vor neuem Stream sofort vorherige Verbindung stoppen
         exoPlayer?.stop()
         exoPlayer?.clearMediaItems()
         PlayerUtils.cancelPendingMediaRequests()
 
         historyManager.saveLiveChannel(stream)
-        showOsd(stream.name, stream.streamId)
+        showOsdWrapper()
         val mediaItem = MediaItem.fromUri(currentStreamUrl)
         exoPlayer?.setMediaItem(mediaItem)
         exoPlayer?.prepare()
@@ -1339,9 +985,8 @@ class PlayerActivity : AppCompatActivity() {
             unregisterReceiver(screenOffReceiver)
         } catch (e: Exception) {}
         saveCurrentState()
-        osdHandler.removeCallbacksAndMessages(null)
+        osdController.onDestroy()
         progressHandler.removeCallbacksAndMessages(null)
-        scrubHandler.removeCallbacksAndMessages(null)
         retryHandler.removeCallbacksAndMessages(null)
         PlayerUtils.releaseStreamConnections(exoPlayer)
         exoPlayer?.release()
