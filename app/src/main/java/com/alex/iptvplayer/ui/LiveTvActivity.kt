@@ -396,7 +396,7 @@ class LiveTvActivity : AppCompatActivity() {
                     when (playbackState) {
                         Player.STATE_BUFFERING -> {
                             watchdogHandler.removeCallbacks(bufferWatchdogRunnable)
-                            watchdogHandler.postDelayed(bufferWatchdogRunnable, 6000)
+                            watchdogHandler.postDelayed(bufferWatchdogRunnable, 10000)
                             AppLogger.logPlayerState("LiveTv", "BUFFERING")
                         }
                         Player.STATE_READY -> {
@@ -780,8 +780,8 @@ class LiveTvActivity : AppCompatActivity() {
             livePlayer?.prepare()
             livePlayer?.playWhenReady = true
 
-            // 6s Puffer-Watchdog starten
-            watchdogHandler.postDelayed(bufferWatchdogRunnable, 6000)
+            // 10s Puffer-Watchdog starten
+            watchdogHandler.postDelayed(bufferWatchdogRunnable, 10000)
 
             updateOsdSourceBadge()
             if (activeStream != null) {

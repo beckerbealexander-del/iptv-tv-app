@@ -2,6 +2,7 @@ package com.alex.iptvplayer.ui
 
 import android.content.Intent
 import android.os.Bundle
+import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -129,11 +130,38 @@ class MainActivity : AppCompatActivity() {
         // 2. Im Hintergrund Trends laden und abgleichen
         loadTrendingContent()
 
-        // 3. Im Hintergrund TMDb Provider-Katalog vorwärmen & Serienliste cachen
+        // 3. Im Hintergrund ALLE Kataloge vorwärmen (Sender, Filme, Serien, TMDb) für sofortige Ladezeiten
         lifecycleScope.launch(Dispatchers.IO) {
             try {
+                // 3a. Live-TV Kanäle in Memory cachen
+                val liveCache = com.alex.iptvplayer.data.LiveTvCacheManager(this@MainActivity)
+                val bundled = liveCache.loadBundledChannels()
+                if (bundled != null) {
+                    LiveTvActivity.multiStreamCategoriesMap.putAll(bundled)
+                }
+
+                // 3b. VOD Filme in Memory cachen
+                val diskMovies = client.loadCachedVodCatalog()
+                if (diskMovies.isNotEmpty()) {
+                    VodActivity.cachedAllMoviesGlobal = diskMovies
+                } else {
+                    val freshMovies = client.getGermanVodStreamsStreamed()
+                    VodActivity.cachedAllMoviesGlobal = freshMovies
+                }
+
+                // 3c. Serien in Memory cachen
+                val diskSeries = client.loadCachedSeriesCatalog()
+                if (diskSeries.isNotEmpty()) {
+                    SeriesActivity.cachedAllSeriesGlobal = diskSeries
+                    allSeriesList = diskSeries
+                } else {
+                    val freshSeries = client.getGermanSeriesStreamed()
+                    SeriesActivity.cachedAllSeriesGlobal = freshSeries
+                    allSeriesList = freshSeries
+                }
+
+                // 3d. TMDb Provider-Katalog vorwärmen
                 com.alex.iptvplayer.data.TmdbProviderCatalogManager.getCatalog(this@MainActivity)
-                allSeriesList = client.getAllSeries()
             } catch (e: Exception) {
                 // Silent
             }
@@ -169,23 +197,23 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupRecyclers() {
         binding.recyclerChannelHistory.apply {
-            layoutManager = LinearLayoutManager(this@MainActivity, LinearLayoutManager.HORIZONTAL, false)
+            layoutManager = com.alex.iptvplayer.util.HorizontalLockingLayoutManager(this@MainActivity)
             setHasFixedSize(true)
         }
         binding.recyclerSeriesHistory.apply {
-            layoutManager = LinearLayoutManager(this@MainActivity, LinearLayoutManager.HORIZONTAL, false)
+            layoutManager = com.alex.iptvplayer.util.HorizontalLockingLayoutManager(this@MainActivity)
             setHasFixedSize(true)
         }
         binding.recyclerMovieHistory.apply {
-            layoutManager = LinearLayoutManager(this@MainActivity, LinearLayoutManager.HORIZONTAL, false)
+            layoutManager = com.alex.iptvplayer.util.HorizontalLockingLayoutManager(this@MainActivity)
             setHasFixedSize(true)
         }
         binding.recyclerTrendingSeries.apply {
-            layoutManager = LinearLayoutManager(this@MainActivity, LinearLayoutManager.HORIZONTAL, false)
+            layoutManager = com.alex.iptvplayer.util.HorizontalLockingLayoutManager(this@MainActivity)
             setHasFixedSize(true)
         }
         binding.recyclerTrendingMovies.apply {
-            layoutManager = LinearLayoutManager(this@MainActivity, LinearLayoutManager.HORIZONTAL, false)
+            layoutManager = com.alex.iptvplayer.util.HorizontalLockingLayoutManager(this@MainActivity)
             setHasFixedSize(true)
         }
     }
@@ -375,6 +403,13 @@ class MainActivity : AppCompatActivity() {
                 holder.sub.isSelected = hasFocus
             }
 
+            holder.itemView.setOnKeyListener { _, keyCode, event ->
+                if (event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && position >= list.size - 1) {
+                    return@setOnKeyListener true
+                }
+                false
+            }
+
             holder.itemView.setOnClickListener { onClick(item) }
         }
 
@@ -413,6 +448,13 @@ class MainActivity : AppCompatActivity() {
 
             holder.itemView.setOnFocusChangeListener { _, hasFocus ->
                 holder.txtName.isSelected = hasFocus
+            }
+
+            holder.itemView.setOnKeyListener { _, keyCode, event ->
+                if (event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && position >= list.size - 1) {
+                    return@setOnKeyListener true
+                }
+                false
             }
 
             holder.itemView.setOnClickListener { onClick(stream, position) }
@@ -762,6 +804,13 @@ class MainActivity : AppCompatActivity() {
 
             holder.itemView.setOnFocusChangeListener { _, hasFocus ->
                 holder.txtTitle.isSelected = hasFocus
+            }
+
+            holder.itemView.setOnKeyListener { _, keyCode, event ->
+                if (event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && position >= list.size - 1) {
+                    return@setOnKeyListener true
+                }
+                false
             }
 
             holder.itemView.setOnClickListener { onClick(item) }

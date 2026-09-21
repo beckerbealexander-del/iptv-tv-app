@@ -29,11 +29,10 @@ object PlayerUtils {
     }
 
     fun createExoPlayer(context: Context, isLive: Boolean = false): ExoPlayer {
-        // 1. OkHttpDataSource für präzises Schließen aller TCP-Sockets
+        // 1. OkHttpDataSource mit robuster Keep-Alive Verbindung
         val okHttpDataSourceFactory = OkHttpDataSource.Factory(playerOkHttpClient)
             .setUserAgent("VLC/3.0.18 (Linux; Android 11; TV) ExoPlayerLib/2.18.2")
             .setDefaultRequestProperties(mapOf(
-                "Connection" to "close", // Schneller Verbindungsabbau ohne hängende Keep-Alive Sockets
                 "Accept" to "*/*"
             ))
 
@@ -59,15 +58,15 @@ object PlayerUtils {
                 .build()
         }
 
-        // 4. Maßgeschneiderte Puffersteuerung: Live-TV (2.5s-5s) vs. VOD
+        // 4. Robuste Puffersteuerung: Live-TV (8s-25s Puffer gegen WLAN-Schwankungen) vs. VOD
         val loadControl = if (isLive) {
             DefaultLoadControl.Builder()
-                .setAllocator(DefaultAllocator(true, 32 * 1024))
+                .setAllocator(DefaultAllocator(true, 64 * 1024))
                 .setBufferDurationsMs(
-                    /* minBufferMs = */ 2500,
-                    /* maxBufferMs = */ 5000,
-                    /* bufferForPlaybackMs = */ 1500,
-                    /* bufferForPlaybackAfterRebufferMs = */ 2000
+                    /* minBufferMs = */ 8000,
+                    /* maxBufferMs = */ 25000,
+                    /* bufferForPlaybackMs = */ 2000,
+                    /* bufferForPlaybackAfterRebufferMs = */ 4000
                 )
                 .setPrioritizeTimeOverSizeThresholds(true)
                 .build()
