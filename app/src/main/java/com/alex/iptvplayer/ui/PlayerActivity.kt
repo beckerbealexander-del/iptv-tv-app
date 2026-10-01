@@ -377,7 +377,8 @@ class PlayerActivity : AppCompatActivity() {
                                 durationMs = dur,
                                 season = seasonNum,
                                 episodeNum = episodeNum,
-                                seriesId = if (currentType == "SERIES") seriesId else 0
+                                seriesId = if (currentType == "SERIES") seriesId else 0,
+                                forceCloudUpload = true
                             )
                         }
                     }
@@ -945,7 +946,8 @@ class PlayerActivity : AppCompatActivity() {
                 durationMs = player.duration,
                 season = seasonNum,
                 episodeNum = episodeNum,
-                seriesId = if (currentType == "SERIES") seriesId else 0
+                seriesId = if (currentType == "SERIES") seriesId else 0,
+                forceCloudUpload = true
             )
         }
     }

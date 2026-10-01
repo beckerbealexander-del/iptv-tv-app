@@ -235,10 +235,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun loadAllHistoryRows() {
-        val allHistory = historyManager.getHistory()
+        val allHistory = historyManager.getHistory().filterNot {
+            historyManager.isAdultContent(it.title, it.streamUrl)
+        }
 
         // 1. TV-Sender Verlauf (Zuletzt gesehen - 1. Reihe)
-        val channelHistory = historyManager.getRecentLiveChannels()
+        val channelHistory = historyManager.getRecentLiveChannels().filterNot {
+            historyManager.isAdultContent(it.name, categoryId = it.categoryId)
+        }
         if (channelHistory.isNotEmpty()) {
             binding.txtNoChannelHistory.visibility = View.GONE
             binding.recyclerChannelHistory.visibility = View.VISIBLE

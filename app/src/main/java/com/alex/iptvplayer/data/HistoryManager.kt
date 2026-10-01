@@ -6,6 +6,7 @@ import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -46,11 +47,24 @@ class HistoryManager(context: Context) {
         context.getSharedPreferences("alex_iptv_history", Context.MODE_PRIVATE)
     private val gson = Gson()
     private val httpClient = OkHttpClient.Builder()
-        .connectTimeout(25, TimeUnit.SECONDS)
-        .readTimeout(25, TimeUnit.SECONDS)
+        .connectTimeout(35, TimeUnit.SECONDS)
+        .readTimeout(35, TimeUnit.SECONDS)
         .build()
 
     private val cloudSyncUrl = "https://iptvproxy-x8rs.onrender.com/api/sync"
+    private var lastCloudUploadTimestamp = 0L
+    var hasSuccessfullySyncedOnce = false
+        private set
+
+    fun isAdultContent(title: String?, streamUrl: String? = null, categoryId: String? = null): Boolean {
+        if (categoryId == "16" || categoryId == "MAIN_PRIVAT" || categoryId == "ADULT_MOVIES") return true
+        val url = streamUrl?.lowercase() ?: ""
+        if (url.contains("/adult/") || url.contains("category_id=16")) return true
+        val t = title?.uppercase() ?: ""
+        if (t.contains("ADULT SWIM") || t.contains("ADULT-SWIM") || t.contains("ADULT_SWIM")) return false
+        return t.contains("FOR ADULTS") || t.contains("ADULT") || t.contains("XXX") ||
+                t.contains("18+") || t.contains("PORN") || t.contains("EROTIC")
+    }
 
     fun saveProgress(
         id: String,
@@ -63,9 +77,11 @@ class HistoryManager(context: Context) {
         durationMs: Long,
         season: Int = 1,
         episodeNum: Int = 1,
-        seriesId: Int = 0
+        seriesId: Int = 0,
+        forceCloudUpload: Boolean = false
     ) {
         if (type == "LIVE" || streamUrl.contains("/live/")) return
+        if (isAdultContent(title, streamUrl)) return
         if (positionMs < 5000 && durationMs <= 0) return
 
         val list = getHistory().toMutableList()
@@ -97,10 +113,16 @@ class HistoryManager(context: Context) {
 
         val trimmed = if (list.size > 2000) list.take(2000) else list
         saveList(trimmed)
-        uploadToCloud()
+
+        val now = System.currentTimeMillis()
+        if (forceCloudUpload || (now - lastCloudUploadTimestamp >= 60_000L)) {
+            lastCloudUploadTimestamp = now
+            uploadToCloud()
+        }
     }
 
     fun saveLiveChannel(stream: LiveStream) {
+        if (isAdultContent(stream.name, categoryId = stream.categoryId)) return
         val list = getRecentLiveChannels().toMutableList()
         list.removeAll { it.streamId == stream.streamId }
         list.add(0, stream)
@@ -114,7 +136,8 @@ class HistoryManager(context: Context) {
         val json = prefs.getString("recent_live_channels", null) ?: return emptyList()
         return try {
             val type = object : TypeToken<List<LiveStream>>() {}.type
-            gson.fromJson(json, type) ?: emptyList()
+            val raw = gson.fromJson<List<LiveStream>>(json, type) ?: emptyList()
+            raw.filterNot { isAdultContent(it.name, categoryId = it.categoryId) }
         } catch (e: Exception) {
             emptyList()
         }
@@ -124,7 +147,8 @@ class HistoryManager(context: Context) {
         val json = prefs.getString("history_items", null) ?: return emptyList()
         return try {
             val type = object : TypeToken<List<HistoryItem>>() {}.type
-            gson.fromJson(json, type) ?: emptyList()
+            val raw = gson.fromJson<List<HistoryItem>>(json, type) ?: emptyList()
+            raw.filterNot { isAdultContent(it.title, it.streamUrl) }
         } catch (e: Exception) {
             emptyList()
         }
@@ -180,6 +204,10 @@ class HistoryManager(context: Context) {
 
     // Bidirektionale Synchronisation mit der Cloud
     fun syncWithCloud(user: String, onComplete: (() -> Unit)? = null) {
+        syncWithCloudInternal(user, isRetry = false, onComplete)
+    }
+
+    private fun syncWithCloudInternal(user: String, isRetry: Boolean = false, onComplete: (() -> Unit)? = null) {
         prefs.edit().putString("sync_username", user).apply()
         CoroutineScope(Dispatchers.IO).launch {
             try {
@@ -190,14 +218,16 @@ class HistoryManager(context: Context) {
                     .build()
                 httpClient.newCall(req).execute().use { resp ->
                     if (resp.isSuccessful) {
+                        hasSuccessfullySyncedOnce = true
                         val body = resp.body?.string()
                         if (!body.isNullOrEmpty()) {
                             val payload = gson.fromJson(body, CloudSyncPayload::class.java)
 
                             // Historie intelligent mergen: Neuere Zeitstempel überschreiben ältere lokale Stände
+                            // Filtert gleichzeitig eventuelle alte Adult-Inhalte aus!
                             val local = getHistory().toMutableList()
                             var changed = false
-                            payload?.history?.forEach { cloudItem ->
+                            payload?.history?.filterNot { isAdultContent(it.title, it.streamUrl) }?.forEach { cloudItem ->
                                 val existingIndex = local.indexOfFirst {
                                     it.id == cloudItem.id ||
                                     (it.seriesId > 0 && it.seriesId == cloudItem.seriesId && it.season == cloudItem.season && it.episodeNum == cloudItem.episodeNum) ||
@@ -222,18 +252,18 @@ class HistoryManager(context: Context) {
                                 saveList(trimmed)
                             }
 
-                            // Zuletzt gesehene TV-Sender mergen
+                            // Zuletzt gesehene TV-Sender mergen (ohne Adult)
                             if (!payload?.recentChannels.isNullOrEmpty()) {
                                 val localChans = getRecentLiveChannels().toMutableList()
                                 val mergedChans = mutableListOf<LiveStream>()
                                 // Erst die aus der Cloud
-                                payload?.recentChannels?.forEach { c ->
+                                payload?.recentChannels?.filterNot { isAdultContent(it.name, categoryId = it.categoryId) }?.forEach { c ->
                                     if (mergedChans.none { it.streamId == c.streamId }) {
                                         mergedChans.add(c)
                                     }
                                 }
                                 // Dann die lokalen ergänzen
-                                localChans.forEach { c ->
+                                localChans.filterNot { isAdultContent(it.name, categoryId = it.categoryId) }.forEach { c ->
                                     if (mergedChans.none { it.streamId == c.streamId }) {
                                         mergedChans.add(c)
                                     }
@@ -266,6 +296,14 @@ class HistoryManager(context: Context) {
                 uploadToCloudDirect(user)
             } catch (e: Exception) {
                 com.alex.iptvplayer.util.AppLogger.e("HistoryManager", "syncWithCloud error: ${e.message}", e)
+                // Retry einmalig nach 8 Sekunden (falls Render-Server gerade hochfährt)
+                if (!isRetry) {
+                    CoroutineScope(Dispatchers.IO).launch {
+                        delay(8000)
+                        syncWithCloudInternal(user, isRetry = true, onComplete)
+                    }
+                    return@launch
+                }
             } finally {
                 onComplete?.invoke()
             }
