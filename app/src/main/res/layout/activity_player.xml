@@ -142,6 +142,18 @@
             android:textColor="@color/accent_blue"
             android:textSize="12sp"
             android:textStyle="bold" />
+
+        <!-- Aktuelle Uhrzeit -->
+        <TextClock
+            android:id="@+id/txtPlayerClock"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:format12Hour="HH:mm"
+            android:format24Hour="HH:mm"
+            android:textColor="@color/text_primary"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:layout_marginStart="14dp" />
     </LinearLayout>
 
     <!-- Bottom OSD: Dezent, schlank & elegant -->
@@ -284,6 +296,20 @@
                 android:paddingHorizontal="12dp"
                 android:layout_marginEnd="8dp" />
 
+            <Button
+                android:id="@+id/btnSleepTimer"
+                android:layout_width="wrap_content"
+                android:layout_height="34dp"
+                android:background="@drawable/card_focus_selector"
+                android:clickable="true"
+                android:focusable="true"
+                android:nextFocusUp="@+id/playerSeekBar"
+                android:text="⏱️ Sleep: Aus"
+                android:textColor="@color/text_primary"
+                android:textSize="12sp"
+                android:paddingHorizontal="12dp"
+                android:layout_marginEnd="8dp" />
+
             <TextView
                 android:id="@+id/txtHintControls"
                 android:layout_width="0dp"
@@ -360,6 +386,18 @@
                 android:textColor="@color/accent_gold"
                 android:textSize="11sp"
                 android:textStyle="bold" />
+
+            <!-- Aktuelle Uhrzeit -->
+            <TextClock
+                android:id="@+id/txtLiveOsdClock"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:format12Hour="HH:mm"
+                android:format24Hour="HH:mm"
+                android:textColor="@color/text_primary"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:layout_marginStart="10dp" />
         </LinearLayout>
 
         <TextView
@@ -413,7 +451,7 @@
             android:id="@+id/txtLiveOsdHint"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="⚡ Gelbe Taste / ▶: Backup-Quelle | ▲ / ▼: Sender wechseln | ◀ Zurück zur Suche"
+            android:text="⚡ ◀ / ▶: Quellen wechseln | ▲ / ▼: Sender wechseln"
             android:textColor="#C5866D"
             android:textSize="10.5sp"
             android:layout_marginTop="4dp" />

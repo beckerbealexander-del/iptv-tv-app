@@ -4,15 +4,15 @@ plugins {
 }
 
 android {
-    namespace = "com.alex.iptvplayer"
+    namespace = "com.tivizone.player"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.alex.iptvplayer"
+        applicationId = "com.tivizone.player"
         minSdk = 21
         targetSdk = 34
-        versionCode = 20
-        versionName = "1.5.0"
+        versionCode = 21
+        versionName = "2.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

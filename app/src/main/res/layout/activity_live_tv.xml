@@ -312,6 +312,18 @@
                 android:textColor="@color/accent_gold"
                 android:textSize="11sp"
                 android:textStyle="bold" />
+
+            <!-- Aktuelle Uhrzeit -->
+            <TextClock
+                android:id="@+id/txtOsdClock"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:format12Hour="HH:mm"
+                android:format24Hour="HH:mm"
+                android:textColor="@color/text_primary"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:layout_marginStart="10dp" />
         </LinearLayout>
 
         <TextView
