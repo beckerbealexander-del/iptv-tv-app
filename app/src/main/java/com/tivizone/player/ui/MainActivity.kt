@@ -45,6 +45,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var client: XtreamClient
     private lateinit var historyManager: HistoryManager
+    private var lastUpdateCheckTime = 0L
 
     private val posterLookupMap = HashMap<Int, String>()
     private var allSeriesList: List<SeriesItem> = emptyList()
@@ -113,8 +114,14 @@ class MainActivity : AppCompatActivity() {
         client = XtreamClient(this)
         historyManager = HistoryManager(this)
 
+        // Diskrete Versionsanzeige unten links
+        binding.txtAppVersion.text = "v${com.tivizone.player.BuildConfig.VERSION_NAME}"
+
         setupSidebar()
         setupRecyclers()
+
+        // 0. Sofort lokalen Verlauf aus Cache/SharedPreferences laden (0ms Reaktionszeit)
+        loadAllHistoryRows()
 
         // 1. Sofort aus lokalem Cache anzeigen falls vorhanden (Reaktionszeit < 5ms)
         val (cachedSeries, cachedMovies) = loadCachedTrending()
@@ -170,6 +177,10 @@ class MainActivity : AppCompatActivity() {
         historyManager.syncWithCloud(client.username) {
             runOnUiThread { loadAllHistoryRows() }
         }
+
+        // Automatische Prüfung auf Online-Updates beim App-Start
+        lastUpdateCheckTime = System.currentTimeMillis()
+        com.tivizone.player.util.UpdateManager.checkForUpdates(this)
     }
 
     override fun onResume() {
@@ -178,6 +189,34 @@ class MainActivity : AppCompatActivity() {
         historyManager.syncWithCloud(client.username) {
             runOnUiThread { loadAllHistoryRows() }
         }
+
+        val now = System.currentTimeMillis()
+        if (now - lastUpdateCheckTime > 5 * 60 * 1000L) { // Alle 5 Minuten erneut prüfen
+            lastUpdateCheckTime = now
+            com.tivizone.player.util.UpdateManager.checkForUpdates(this)
+        }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        historyManager.uploadToCloud()
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.keyCode == KeyEvent.KEYCODE_BACK) {
+            if (event.action == KeyEvent.ACTION_DOWN) {
+                // App sauber beenden, kein versehentlicher Start von Serien im Verlauf!
+                finish()
+                return true
+            }
+            return true
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
+        finish()
     }
 
     private fun setupSidebar() {
@@ -246,8 +285,13 @@ class MainActivity : AppCompatActivity() {
         if (channelHistory.isNotEmpty()) {
             binding.txtNoChannelHistory.visibility = View.GONE
             binding.recyclerChannelHistory.visibility = View.VISIBLE
-            binding.recyclerChannelHistory.adapter = ChannelHistoryAdapter(channelHistory) { stream, pos ->
-                playLiveChannel(stream, channelHistory, pos)
+            val existing = binding.recyclerChannelHistory.adapter as? ChannelHistoryAdapter
+            if (existing != null) {
+                existing.updateList(channelHistory)
+            } else {
+                binding.recyclerChannelHistory.adapter = ChannelHistoryAdapter(channelHistory) { stream, pos ->
+                    playLiveChannel(stream, channelHistory, pos)
+                }
             }
         } else {
             binding.txtNoChannelHistory.visibility = View.VISIBLE
@@ -269,8 +313,13 @@ class MainActivity : AppCompatActivity() {
         if (seriesHistory.isNotEmpty()) {
             binding.txtNoSeriesHistory.visibility = View.GONE
             binding.recyclerSeriesHistory.visibility = View.VISIBLE
-            binding.recyclerSeriesHistory.adapter = HistoryAdapter(seriesHistory) { item ->
-                playSeriesHistoryItem(item)
+            val existing = binding.recyclerSeriesHistory.adapter as? HistoryAdapter
+            if (existing != null) {
+                existing.updateList(seriesHistory)
+            } else {
+                binding.recyclerSeriesHistory.adapter = HistoryAdapter(seriesHistory) { item ->
+                    playSeriesHistoryItem(item)
+                }
             }
         } else {
             binding.txtNoSeriesHistory.visibility = View.VISIBLE
@@ -291,8 +340,13 @@ class MainActivity : AppCompatActivity() {
         if (moviesHistory.isNotEmpty()) {
             binding.txtNoMovieHistory.visibility = View.GONE
             binding.recyclerMovieHistory.visibility = View.VISIBLE
-            binding.recyclerMovieHistory.adapter = HistoryAdapter(moviesHistory) { item ->
-                playMovieHistoryItem(item)
+            val existing = binding.recyclerMovieHistory.adapter as? HistoryAdapter
+            if (existing != null) {
+                existing.updateList(moviesHistory)
+            } else {
+                binding.recyclerMovieHistory.adapter = HistoryAdapter(moviesHistory) { item ->
+                    playMovieHistoryItem(item)
+                }
             }
         } else {
             binding.txtNoMovieHistory.visibility = View.VISIBLE
@@ -359,11 +413,46 @@ class MainActivity : AppCompatActivity() {
         else "%02d:%02d".format(minutes, seconds)
     }
 
+    private fun showDeleteHistoryDialog(item: HistoryItem) {
+        val titleText = if (isSeriesHistoryItem(item)) {
+            com.tivizone.player.util.SeriesUtils.cleanSeriesTitle(item.title)
+        } else {
+            item.title
+        }
+        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            .setTitle("Aus Verlauf entfernen")
+            .setMessage("Möchtest du \"$titleText\" wirklich aus deinem Verlauf löschen?")
+            .setPositiveButton("Löschen") { _, _ ->
+                historyManager.deleteHistoryItem(item)
+                loadAllHistoryRows()
+            }
+            .setNegativeButton("Abbrechen", null)
+            .show()
+    }
+
+    private fun showDeleteChannelDialog(stream: LiveStream) {
+        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            .setTitle("Sender entfernen")
+            .setMessage("Möchtest du \"${stream.name}\" aus dem Live TV Verlauf löschen?")
+            .setPositiveButton("Löschen") { _, _ ->
+                historyManager.deleteRecentChannel(stream)
+                loadAllHistoryRows()
+            }
+            .setNegativeButton("Abbrechen", null)
+            .show()
+    }
+
     // --- Adapter 1: Film & Serien Weiterschauen ---
     inner class HistoryAdapter(
-        private val list: List<HistoryItem>,
+        private var list: List<HistoryItem>,
         private val onClick: (HistoryItem) -> Unit
     ) : RecyclerView.Adapter<HistoryAdapter.ViewHolder>() {
+
+        fun updateList(newList: List<HistoryItem>) {
+            if (this.list == newList) return
+            this.list = newList
+            notifyDataSetChanged()
+        }
 
         inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
             val img: ImageView = view.findViewById(R.id.imgHistoryPoster)
@@ -415,6 +504,10 @@ class MainActivity : AppCompatActivity() {
             }
 
             holder.itemView.setOnClickListener { onClick(item) }
+            holder.itemView.setOnLongClickListener {
+                showDeleteHistoryDialog(item)
+                true
+            }
         }
 
         override fun getItemCount() = list.size
@@ -422,9 +515,15 @@ class MainActivity : AppCompatActivity() {
 
     // --- Adapter 2: Kompakte TV-Sender Verlaufskacheln ---
     inner class ChannelHistoryAdapter(
-        private val list: List<LiveStream>,
+        private var list: List<LiveStream>,
         private val onClick: (LiveStream, Int) -> Unit
     ) : RecyclerView.Adapter<ChannelHistoryAdapter.ViewHolder>() {
+
+        fun updateList(newList: List<LiveStream>) {
+            if (this.list == newList) return
+            this.list = newList
+            notifyDataSetChanged()
+        }
 
         inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
             val img: ImageView = view.findViewById(R.id.imgHistoryChannelLogo)
@@ -462,6 +561,10 @@ class MainActivity : AppCompatActivity() {
             }
 
             holder.itemView.setOnClickListener { onClick(stream, position) }
+            holder.itemView.setOnLongClickListener {
+                showDeleteChannelDialog(stream)
+                true
+            }
         }
 
         override fun getItemCount() = list.size

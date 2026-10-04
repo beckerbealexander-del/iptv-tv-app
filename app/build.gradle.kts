@@ -11,8 +11,8 @@ android {
         applicationId = "com.tivizone.player"
         minSdk = 21
         targetSdk = 34
-        versionCode = 21
-        versionName = "2.0.0"
+        versionCode = 24
+        versionName = "2.0.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

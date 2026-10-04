@@ -19,5 +19,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "AlexIPTVPlayer"
+rootProject.name = "TiviZone"
 include(":app")

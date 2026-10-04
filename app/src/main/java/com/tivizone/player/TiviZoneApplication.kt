@@ -8,5 +8,6 @@ class TiviZoneApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         CrashLogger.init(this)
+        com.tivizone.player.util.AppLogger.init(this)
     }
 }

@@ -54,41 +54,8 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
-
-data class ChannelWithEpg(
-    val channel: MultiStreamChannel,
-    var epgList: List<EpgProgram> = emptyList()
-) {
-    constructor(stream: LiveStream, epgList: List<EpgProgram> = emptyList()) : this(
-        channel = MultiStreamChannel(
-            cleanName = stream.name,
-            originalName = stream.name,
-            categoryId = stream.categoryId ?: "",
-            categoryName = "",
-            icon = stream.streamIcon,
-            epgId = stream.epgChannelId,
-            sources = listOf(
-                StreamSource(
-                    streamId = stream.streamId,
-                    name = stream.name,
-                    label = "Standard Stream",
-                    score = 50,
-                    subcategory = ""
-                )
-            )
-        ),
-        epgList = epgList
-    )
-
-    val stream: LiveStream
-        get() = LiveStream(
-            streamId = channel.primarySource?.streamId ?: 0,
-            name = channel.cleanName,
-            streamIcon = channel.icon,
-            epgChannelId = channel.epgId,
-            categoryId = channel.categoryId
-        )
-}
+import com.tivizone.player.data.ChannelWithEpg
+import com.tivizone.player.ui.player.PlayerSleepTimer
 
 class LiveTvActivity : AppCompatActivity() {
 
@@ -105,6 +72,7 @@ class LiveTvActivity : AppCompatActivity() {
     private lateinit var client: XtreamClient
     private lateinit var historyManager: HistoryManager
     private lateinit var cacheManager: LiveTvCacheManager
+    private lateinit var sleepTimer: PlayerSleepTimer
 
     private var allCategories: List<Category> = emptyList()
     private var displayedCategories: List<Category> = emptyList()
@@ -164,11 +132,14 @@ class LiveTvActivity : AppCompatActivity() {
         }
     }
 
-    // Watchdog für hängenden Puffer (Auto-Failover nach 6 Sekunden Buffering)
+    // Watchdog für hängenden Puffer (Reconnect der aktuellen Quelle nach 10 Sekunden Buffering)
     private val watchdogHandler = Handler(Looper.getMainLooper())
     private val bufferWatchdogRunnable = Runnable {
         if (livePlayer != null && livePlayer?.playbackState == Player.STATE_BUFFERING) {
-            triggerAutoFailover("Lade-Timeout")
+            AppLogger.logPlayerState("LiveTv", "Buffering timeout -> reconnecting current source")
+            activeChannel?.let { ch ->
+                playStreamSource(ch, activeSourceIndex)
+            }
         }
     }
 
@@ -266,6 +237,16 @@ class LiveTvActivity : AppCompatActivity() {
         client = XtreamClient(this)
         historyManager = HistoryManager(this)
         cacheManager = LiveTvCacheManager(this)
+
+        sleepTimer = PlayerSleepTimer(this, lifecycleScope, binding.btnLiveSleepTimer) { livePlayer }
+        binding.btnLiveSleepTimer.setOnClickListener {
+            showSleepTimerDialog()
+        }
+        binding.btnLiveSleepTimer.setOnFocusChangeListener { _, hasFocus ->
+            if (hasFocus) {
+                resetOsdHideTimer()
+            }
+        }
 
         setupLivePlayer()
         updateLiveTimeHeader()
@@ -430,9 +411,7 @@ class LiveTvActivity : AppCompatActivity() {
                     AppLogger.logFormatChange("LiveTv", livePlayer?.videoFormat, livePlayer?.audioFormat)
                 }
 
-                override fun onVideoSizeChanged(videoSize: VideoSize) {
-                    checkAndCacheQuality(videoSize.width, videoSize.height)
-                }
+                override fun onVideoSizeChanged(videoSize: VideoSize) {}
 
                 override fun onPlayerError(error: PlaybackException) {
                     watchdogHandler.removeCallbacks(bufferWatchdogRunnable)
@@ -475,7 +454,7 @@ class LiveTvActivity : AppCompatActivity() {
 
                     hideRetryBanner()
                     val errorMsg = error.cause?.message ?: error.message ?: "Wiedergabefehler"
-                    triggerAutoFailover(errorMsg)
+                    Toast.makeText(this@LiveTvActivity, "Wiedergabefehler: $errorMsg", Toast.LENGTH_SHORT).show()
                 }
             })
         }
@@ -488,62 +467,6 @@ class LiveTvActivity : AppCompatActivity() {
 
     private fun hideRetryBanner() {
         binding.txtPlayerRetryBanner.visibility = View.GONE
-    }
-
-    private var hasTestedSourcesCount = 0
-
-    private fun checkAndCacheQuality(width: Int, height: Int) {
-        val ch = activeChannel ?: return
-        if (ch.sources.size <= 1) return
-        if (QualityPreferenceManager.hasPreference(this, ch.cleanName)) return
-
-        val currentSource = ch.sources.getOrNull(activeSourceIndex) ?: return
-
-        if (width >= 1920 && height >= 1080) {
-            QualityPreferenceManager.savePreferredStream(
-                this,
-                ch.cleanName,
-                currentSource.streamId,
-                "${width}x${height}"
-            )
-        } else if (width > 0 && width < 1920 && hasTestedSourcesCount < 2 && activeSourceIndex + 1 < ch.sources.size) {
-            hasTestedSourcesCount++
-            activeSourceIndex++
-            playStreamSource(ch, activeSourceIndex)
-        } else if (width > 0) {
-            QualityPreferenceManager.savePreferredStream(
-                this,
-                ch.cleanName,
-                currentSource.streamId,
-                "${width}x${height}"
-            )
-        }
-    }
-
-    // Automatisches Failover auf die nächste verfügbare Quelle
-    private fun triggerAutoFailover(reason: String) {
-        val ch = activeChannel ?: return
-        if (ch.sources.size <= 1) {
-            Toast.makeText(this, "⚠️ Keine alternativen Quellen für ${ch.cleanName}", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        if (activeSourceIndex + 1 < ch.sources.size) {
-            activeSourceIndex++
-            val nextSource = ch.sources[activeSourceIndex]
-            Toast.makeText(
-                this,
-                "🔄 Failover ($reason):\nWechsle zu Quelle ${activeSourceIndex + 1}/${ch.sources.size}: ${nextSource.label}",
-                Toast.LENGTH_LONG
-            ).show()
-            playStreamSource(ch, activeSourceIndex)
-        } else {
-            Toast.makeText(
-                this,
-                "❌ Alle ${ch.sources.size} Quellen für ${ch.cleanName} sind derzeit nicht erreichbar.",
-                Toast.LENGTH_LONG
-            ).show()
-        }
     }
 
     // Manuelles Durchwechseln der Quellen (Gelbe Taste auf TV-Fernbedienung oder DPAD_RIGHT im OSD)
@@ -666,6 +589,7 @@ class LiveTvActivity : AppCompatActivity() {
         try {
             unregisterReceiver(screenOffReceiver)
         } catch (e: Exception) {}
+        sleepTimer.cancel()
         watchdogHandler.removeCallbacks(bufferWatchdogRunnable)
         osdHandler.removeCallbacks(hideOsdRunnable)
         retryRunnable?.let { retryHandler.removeCallbacks(it) }
@@ -946,6 +870,28 @@ class LiveTvActivity : AppCompatActivity() {
         focusTargetChannel(activePlaylistIndex)
     }
 
+    private fun showSleepTimerDialog() {
+        sleepTimer.showSelectionDialog(
+            onResetInactivity = { resetOsdHideTimer() },
+            onDismissed = {
+                binding.btnLiveSleepTimer.requestFocus()
+                resetOsdHideTimer()
+            }
+        )
+    }
+
+    private fun resetOsdHideTimer() {
+        osdHandler.removeCallbacks(hideOsdRunnable)
+        if (binding.layoutFullscreenOsd.visibility == View.VISIBLE && !sleepTimer.isDialogShowing()) {
+            osdHandler.postDelayed(hideOsdRunnable, 5000)
+        }
+    }
+
+    private fun hideOsd() {
+        osdHandler.removeCallbacks(hideOsdRunnable)
+        binding.layoutFullscreenOsd.visibility = View.GONE
+    }
+
     private fun showOsd() {
         osdHandler.removeCallbacks(hideOsdRunnable)
         if (activeStream != null) {
@@ -953,13 +899,14 @@ class LiveTvActivity : AppCompatActivity() {
         }
         binding.layoutFullscreenOsd.visibility = View.VISIBLE
         binding.layoutFullscreenOsd.bringToFront()
-        osdHandler.postDelayed(hideOsdRunnable, 5000)
+        if (!sleepTimer.isDialogShowing()) {
+            osdHandler.postDelayed(hideOsdRunnable, 5000)
+        }
     }
 
     private fun toggleOsd() {
         if (binding.layoutFullscreenOsd.visibility == View.VISIBLE) {
-            osdHandler.removeCallbacks(hideOsdRunnable)
-            binding.layoutFullscreenOsd.visibility = View.GONE
+            hideOsd()
         } else {
             showOsd()
         }
@@ -1409,10 +1356,21 @@ class LiveTvActivity : AppCompatActivity() {
             if (isFullscreen) {
                 when (event.keyCode) {
                     KeyEvent.KEYCODE_BACK -> {
+                        if (sleepTimer.dismissActiveDialog()) {
+                            return true
+                        }
+                        if (binding.layoutFullscreenOsd.visibility == View.VISIBLE) {
+                            hideOsd()
+                            return true
+                        }
                         setMiniPipMode()
                         return true
                     }
                     KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
+                        if (binding.layoutFullscreenOsd.visibility == View.VISIBLE && binding.btnLiveSleepTimer.hasFocus()) {
+                            showSleepTimerDialog()
+                            return true
+                        }
                         toggleOsd()
                         return true
                     }
@@ -1428,18 +1386,27 @@ class LiveTvActivity : AppCompatActivity() {
                             return true
                         }
                     }
-                    KeyEvent.KEYCODE_DPAD_UP -> {
-                        if (activePlaylistIndex > 0) {
-                            activePlaylistIndex--
+                    KeyEvent.KEYCODE_DPAD_DOWN -> {
+                        if (binding.layoutFullscreenOsd.visibility == View.VISIBLE && !binding.btnLiveSleepTimer.hasFocus()) {
+                            binding.btnLiveSleepTimer.requestFocus()
+                            resetOsdHideTimer()
+                            return true
+                        }
+                        if (activePlaylistIndex < activePlaylist.size - 1) {
+                            activePlaylistIndex++
                             val item = activePlaylist[activePlaylistIndex]
                             playMultiStreamChannel(item.channel, 0)
                             showOsd()
                         }
                         return true
                     }
-                    KeyEvent.KEYCODE_DPAD_DOWN -> {
-                        if (activePlaylistIndex < activePlaylist.size - 1) {
-                            activePlaylistIndex++
+                    KeyEvent.KEYCODE_DPAD_UP -> {
+                        if (binding.layoutFullscreenOsd.visibility == View.VISIBLE && binding.btnLiveSleepTimer.hasFocus()) {
+                            hideOsd()
+                            return true
+                        }
+                        if (activePlaylistIndex > 0) {
+                            activePlaylistIndex--
                             val item = activePlaylist[activePlaylistIndex]
                             playMultiStreamChannel(item.channel, 0)
                             showOsd()

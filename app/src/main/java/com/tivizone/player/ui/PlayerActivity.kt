@@ -9,14 +9,10 @@ import android.os.Handler
 import android.os.Looper
 import android.view.KeyEvent
 import android.view.View
-import android.view.WindowManager
 import android.widget.SeekBar
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
@@ -32,8 +28,12 @@ import com.tivizone.player.data.MultiStreamManager
 import com.tivizone.player.data.QualityPreferenceManager
 import com.tivizone.player.data.XtreamClient
 import com.tivizone.player.databinding.ActivityPlayerBinding
+import com.tivizone.player.ui.player.PlayerEpisodeManager
 import com.tivizone.player.ui.player.PlayerOsdController
+import com.tivizone.player.ui.player.PlayerRemoteHandler
+import com.tivizone.player.ui.player.PlayerRetryManager
 import com.tivizone.player.ui.player.PlayerScrubberHelper
+import com.tivizone.player.ui.player.PlayerSleepTimer
 import com.tivizone.player.ui.player.PlayerStatsOverlayHelper
 import com.tivizone.player.ui.player.PlayerTrackDialogHelper
 import com.tivizone.player.util.AppLogger
@@ -52,15 +52,17 @@ class PlayerActivity : AppCompatActivity() {
     private lateinit var scrubberHelper: PlayerScrubberHelper
     private lateinit var trackDialogHelper: PlayerTrackDialogHelper
     private lateinit var osdController: PlayerOsdController
+    private lateinit var episodeManager: PlayerEpisodeManager
+    private lateinit var sleepTimer: PlayerSleepTimer
+    private lateinit var retryManager: PlayerRetryManager
+    private lateinit var remoteHandler: PlayerRemoteHandler
 
     private var isLive: Boolean = false
     private var streamList: List<LiveStream> = emptyList()
     private var channelList: List<MultiStreamChannel> = emptyList()
     private var activeChannel: MultiStreamChannel? = null
     private var activeSourceIndex: Int = 0
-    private var episodeList: List<EpisodeItem> = emptyList()
     private var currentIndex: Int = -1
-    private var currentEpisodeIndex: Int = -1
     private var currentStreamId: Int = -1
     private var currentStreamUrl: String = ""
     private var currentStreamName: String = ""
@@ -71,21 +73,16 @@ class PlayerActivity : AppCompatActivity() {
     private var seriesId: Int = -1
 
     private val progressHandler = Handler(Looper.getMainLooper())
-    private val retryHandler = Handler(Looper.getMainLooper())
-
-    private var retryCount = 0
-    private val maxRetries = 5
-    private val resetRetryRunnable = Runnable { retryCount = 0 }
     private var lastKnownPosition: Long = 0L
     private var lastKnownDuration: Long = 0L
-    private var hasTestedSourcesCount = 0
+    private var lastPeriodicCloudSync: Long = 0L
 
     private val screenOffReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == Intent.ACTION_SCREEN_OFF) {
                 AppLogger.logLifecycle("PlayerActivity", "ACTION_SCREEN_OFF -> Releasing stream connections")
                 saveCurrentState()
-                retryHandler.removeCallbacksAndMessages(null)
+                retryManager.cancelAll()
                 PlayerUtils.releaseStreamConnections(exoPlayer)
             }
         }
@@ -112,13 +109,72 @@ class PlayerActivity : AppCompatActivity() {
         scrubberHelper = PlayerScrubberHelper(binding, ::formatTime)
         trackDialogHelper = PlayerTrackDialogHelper()
         osdController = PlayerOsdController(binding, client, lifecycleScope)
+        sleepTimer = PlayerSleepTimer(this, lifecycleScope, listOf(binding.btnSleepTimer, binding.btnLivePlayerSleepTimer)) { exoPlayer }
+        retryManager = PlayerRetryManager(this, binding.txtPlayerRetryBanner, binding.playerLoading) { seekPos ->
+            reconnectStream(seekPos)
+        }
+
+        episodeManager = PlayerEpisodeManager(
+            client = client,
+            btnPrevEpisode = binding.btnPrevEpisode,
+            btnNextEpisode = binding.btnNextEpisode,
+            onEpisodeSelected = { streamUrl, title, streamId, season, episode, poster ->
+                currentStreamUrl = streamUrl
+                currentStreamName = title
+                currentStreamId = streamId
+                seasonNum = season
+                episodeNum = episode
+                currentPosterUrl = poster
+                retryManager.resetRetryCount()
+
+                val mediaItem = MediaItem.fromUri(currentStreamUrl)
+                exoPlayer?.setMediaItem(mediaItem)
+                exoPlayer?.prepare()
+                exoPlayer?.playWhenReady = true
+            },
+            onShowOsd = { showOsdWrapper() }
+        )
+
+        remoteHandler = PlayerRemoteHandler(
+            binding = binding,
+            osdController = osdController,
+            scrubberHelper = scrubberHelper,
+            isAnyDialogShowing = { isAnyDialogShowing() },
+            dismissAnyDialog = { dismissAnyDialog() },
+            isLive = { isLive },
+            onPlayPause = { togglePlayPause() },
+            onPerformScrub = { forward -> performScrub(forward) },
+            onCommitScrub = { commitScrub() },
+            onZapNext = { zapNextChannel() },
+            onZapPrev = { zapPreviousChannel() },
+            onCycleSourceNext = { cycleToNextSourceManually() },
+            onCycleSourcePrev = { cycleToPreviousSourceManually() },
+            onToggleStats = { statsOverlayHelper.toggle(exoPlayer, currentStreamId, currentType, seasonNum, episodeNum, lastKnownDuration) },
+            onOpenSleepTimerMenu = { showSleepTimerDialog() },
+            onPlayPrevEpisode = { episodeManager.playPreviousEpisode() },
+            onPlayNextEpisode = { episodeManager.playNextEpisode() },
+            onShowAudioTrackDialog = {
+                trackDialogHelper.showAudioTrackDialog(this, exoPlayer, ::updateQualityAndAudioBadges) {
+                    binding.btnAudioTracks.requestFocus()
+                    osdController.resetOsdInactivityTimer { isAnyDialogShowing() }
+                }
+            },
+            onShowSubtitleDialog = {
+                trackDialogHelper.showSubtitleDialog(this, exoPlayer, ::updateQualityAndAudioBadges) {
+                    binding.btnSubtitles.requestFocus()
+                    osdController.resetOsdInactivityTimer { isAnyDialogShowing() }
+                }
+            },
+            onShowOsd = { showOsdWrapper() },
+            onFinish = { finish() }
+        )
 
         currentStreamUrl = intent.getStringExtra("STREAM_URL") ?: ""
         currentStreamName = intent.getStringExtra("STREAM_NAME") ?: "Stream"
         currentPosterUrl = intent.getStringExtra("POSTER_URL")
         currentStreamId = intent.getIntExtra("STREAM_ID", -1)
         currentIndex = intent.getIntExtra("CURRENT_INDEX", -1)
-        currentEpisodeIndex = intent.getIntExtra("EPISODE_INDEX", -1)
+        val initialEpisodeIndex = intent.getIntExtra("EPISODE_INDEX", -1)
         currentType = intent.getStringExtra("STREAM_TYPE") ?: if (intent.hasExtra("STREAM_LIST") || intent.hasExtra("MULTI_STREAM_CHANNEL")) "LIVE" else "VOD"
         seasonNum = intent.getIntExtra("SEASON_NUM", 1)
         episodeNum = intent.getIntExtra("EPISODE_NUM", 1)
@@ -131,7 +187,7 @@ class PlayerActivity : AppCompatActivity() {
         @Suppress("DEPRECATION")
         activeChannel = intent.getSerializableExtra("MULTI_STREAM_CHANNEL") as? MultiStreamChannel
         @Suppress("DEPRECATION")
-        episodeList = (intent.getSerializableExtra("EPISODE_LIST") as? ArrayList<EpisodeItem>) ?: emptyList()
+        val episodes = (intent.getSerializableExtra("EPISODE_LIST") as? ArrayList<EpisodeItem>) ?: emptyList()
 
         if (activeChannel != null) {
             activeChannel = MultiStreamManager.applyPreferredSources(this, activeChannel!!)
@@ -165,8 +221,8 @@ class PlayerActivity : AppCompatActivity() {
             historyManager.saveLiveChannel(s)
         }
 
-        setupUI()
-        setupPlayer(currentStreamUrl, currentStreamName, currentStreamId)
+        setupUI(episodes, initialEpisodeIndex)
+        setupPlayer(currentStreamUrl)
 
         binding.root.post {
             if (!isLive && binding.osdBottom.visibility == View.VISIBLE && !osdController.isOsdFocused()) {
@@ -182,7 +238,7 @@ class PlayerActivity : AppCompatActivity() {
         }
     }
 
-    private fun setupUI() {
+    private fun setupUI(episodes: List<EpisodeItem>, initialEpisodeIndex: Int) {
         if (isLive) {
             binding.layoutTimeline.visibility = View.GONE
             binding.btnPrevEpisode.visibility = View.GONE
@@ -194,104 +250,32 @@ class PlayerActivity : AppCompatActivity() {
             binding.layoutTimeline.visibility = View.VISIBLE
             binding.txtHintControls.text = "OK Pause | ◀ / ▶ Spulen | ▲/▼ OSD"
 
-            if (currentType == "SERIES" && episodeList.isNotEmpty()) {
-                updateEpisodeButtons()
-                binding.btnPrevEpisode.setOnClickListener { playPreviousEpisode() }
-                binding.btnNextEpisode.setOnClickListener { playNextEpisode() }
-            } else {
-                binding.btnPrevEpisode.visibility = View.GONE
-                binding.btnNextEpisode.visibility = View.GONE
-            }
+            episodeManager.setup(currentType, episodes, initialEpisodeIndex, currentStreamName, currentPosterUrl)
         }
 
         binding.btnAudioTracks.setOnClickListener {
             trackDialogHelper.showAudioTrackDialog(this, exoPlayer, ::updateQualityAndAudioBadges) {
                 binding.btnAudioTracks.requestFocus()
-                osdController.resetOsdInactivityTimer(trackDialogHelper::isDialogShowing)
+                osdController.resetOsdInactivityTimer { isAnyDialogShowing() }
             }
         }
         binding.btnSubtitles.setOnClickListener {
             trackDialogHelper.showSubtitleDialog(this, exoPlayer, ::updateQualityAndAudioBadges) {
                 binding.btnSubtitles.requestFocus()
-                osdController.resetOsdInactivityTimer(trackDialogHelper::isDialogShowing)
+                osdController.resetOsdInactivityTimer { isAnyDialogShowing() }
             }
         }
         binding.btnDebugOverlay.setOnClickListener {
             statsOverlayHelper.toggle(exoPlayer, currentStreamId, currentType, seasonNum, episodeNum, lastKnownDuration)
         }
         binding.btnSleepTimer.setOnClickListener {
-            toggleSleepTimer()
+            showSleepTimerDialog()
+        }
+        binding.btnLivePlayerSleepTimer.setOnClickListener {
+            showSleepTimerDialog()
         }
 
-        val buttonFocusChangeListener = View.OnFocusChangeListener { v, hasFocus ->
-            if (hasFocus) {
-                osdController.lastFocusedOsdButton = v
-                osdController.resetOsdInactivityTimer(trackDialogHelper::isDialogShowing)
-            }
-        }
-        binding.btnAudioTracks.onFocusChangeListener = buttonFocusChangeListener
-        binding.btnSubtitles.onFocusChangeListener = buttonFocusChangeListener
-        binding.btnPrevEpisode.onFocusChangeListener = buttonFocusChangeListener
-        binding.btnNextEpisode.onFocusChangeListener = buttonFocusChangeListener
-        binding.btnDebugOverlay.onFocusChangeListener = buttonFocusChangeListener
-        binding.btnSleepTimer.onFocusChangeListener = buttonFocusChangeListener
-
-        val buttonKeyHandler = View.OnKeyListener { _, keyCode, event ->
-            if (event.action == KeyEvent.ACTION_DOWN) {
-                osdController.resetOsdInactivityTimer(trackDialogHelper::isDialogShowing)
-                when (keyCode) {
-                    KeyEvent.KEYCODE_DPAD_UP -> {
-                        binding.playerSeekBar.requestFocus()
-                        return@OnKeyListener true
-                    }
-                    KeyEvent.KEYCODE_DPAD_DOWN -> return@OnKeyListener true
-                }
-            }
-            false
-        }
-        binding.btnAudioTracks.setOnKeyListener(buttonKeyHandler)
-        binding.btnSubtitles.setOnKeyListener(buttonKeyHandler)
-        binding.btnPrevEpisode.setOnKeyListener(buttonKeyHandler)
-        binding.btnNextEpisode.setOnKeyListener(buttonKeyHandler)
-        binding.btnDebugOverlay.setOnKeyListener(buttonKeyHandler)
-        binding.btnSleepTimer.setOnKeyListener(buttonKeyHandler)
-
-        binding.playerSeekBar.setOnKeyListener { _, keyCode, event ->
-            osdController.resetOsdInactivityTimer(trackDialogHelper::isDialogShowing)
-            when (keyCode) {
-                KeyEvent.KEYCODE_DPAD_UP -> {
-                    if (event.action == KeyEvent.ACTION_DOWN) {
-                        osdController.hideOsd()
-                    }
-                    return@setOnKeyListener true
-                }
-                KeyEvent.KEYCODE_DPAD_DOWN -> {
-                    if (event.action == KeyEvent.ACTION_DOWN) {
-                        osdController.focusOsdButtonRow()
-                    }
-                    return@setOnKeyListener true
-                }
-                KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_MEDIA_REWIND -> {
-                    if (event.action == KeyEvent.ACTION_DOWN) {
-                        performScrub(false)
-                    }
-                    return@setOnKeyListener true
-                }
-                KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {
-                    if (event.action == KeyEvent.ACTION_DOWN) {
-                        performScrub(true)
-                    }
-                    return@setOnKeyListener true
-                }
-                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
-                    if (event.action == KeyEvent.ACTION_DOWN && scrubberHelper.isScrubbing && scrubberHelper.targetSeekPosition >= 0) {
-                        commitScrub()
-                        return@setOnKeyListener true
-                    }
-                }
-            }
-            false
-        }
+        remoteHandler.setupKeyListeners()
 
         binding.playerSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
@@ -308,53 +292,9 @@ class PlayerActivity : AppCompatActivity() {
         })
     }
 
-    private fun updateEpisodeButtons() {
-        if (currentType != "SERIES" || episodeList.isEmpty()) {
-            binding.btnPrevEpisode.visibility = View.GONE
-            binding.btnNextEpisode.visibility = View.GONE
-            return
-        }
-        binding.btnPrevEpisode.visibility = if (currentEpisodeIndex > 0) View.VISIBLE else View.GONE
-        binding.btnNextEpisode.visibility = if (currentEpisodeIndex < episodeList.size - 1) View.VISIBLE else View.GONE
-    }
-
-    private fun playNextEpisode() {
-        if (currentEpisodeIndex < episodeList.size - 1) {
-            playEpisodeAtIndex(currentEpisodeIndex + 1)
-        }
-    }
-
-    private fun playPreviousEpisode() {
-        if (currentEpisodeIndex > 0) {
-            playEpisodeAtIndex(currentEpisodeIndex - 1)
-        }
-    }
-
-    private fun playEpisodeAtIndex(index: Int) {
-        if (index < 0 || index >= episodeList.size) return
-        currentEpisodeIndex = index
-        val ep = episodeList[index]
-        val seriesTitle = currentStreamName.substringBefore(" - S")
-        currentStreamName = "$seriesTitle - S${ep.season}E${ep.episodeNum} ${ep.title}"
-        currentStreamUrl = client.getSeriesStreamUrl(ep.id, ep.containerExtension ?: "mp4")
-        currentStreamId = ep.id.toIntOrNull() ?: -1
-        seasonNum = ep.season
-        episodeNum = ep.episodeNum
-        currentPosterUrl = ep.info?.movieImage ?: currentPosterUrl
-        retryCount = 0
-
-        updateEpisodeButtons()
+    private fun setupPlayer(url: String) {
         showOsdWrapper()
-
-        val mediaItem = MediaItem.fromUri(currentStreamUrl)
-        exoPlayer?.setMediaItem(mediaItem)
-        exoPlayer?.prepare()
-        exoPlayer?.playWhenReady = true
-    }
-
-    private fun setupPlayer(url: String, name: String, streamId: Int) {
-        showOsdWrapper()
-        retryCount = 0
+        retryManager.resetRetryCount()
 
         exoPlayer = PlayerUtils.createExoPlayer(this, isLive = isLive).apply {
             binding.playerView.player = this
@@ -365,13 +305,13 @@ class PlayerActivity : AppCompatActivity() {
                         if (state == Player.STATE_BUFFERING) View.VISIBLE else View.GONE
 
                     if (state == Player.STATE_READY) {
-                        hideRetryBanner()
+                        retryManager.hideRetryBanner()
                         updateQualityAndAudioBadges()
                         AppLogger.logPlayerState("PlayerActivity", "READY (Stream: $currentStreamId, Type: $currentType)")
                     } else if (state == Player.STATE_BUFFERING) {
                         AppLogger.logPlayerState("PlayerActivity", "BUFFERING")
                     } else if (state == Player.STATE_ENDED) {
-                        retryHandler.removeCallbacks(resetRetryRunnable)
+                        retryManager.onPlaybackStateEnded()
                         AppLogger.logPlayerState("PlayerActivity", "ENDED")
                         val dur = if (exoPlayer?.duration != null && exoPlayer!!.duration > 0) exoPlayer!!.duration else lastKnownDuration
                         if (dur > 0 && !isLive) {
@@ -395,21 +335,16 @@ class PlayerActivity : AppCompatActivity() {
                     updateCenterPauseVisibility(exoPlayer?.isPlaying == true)
 
                     if (state == Player.STATE_ENDED && currentType == "SERIES") {
-                        if (currentEpisodeIndex < episodeList.size - 1) {
+                        if (episodeManager.hasNextEpisode()) {
                             Toast.makeText(this@PlayerActivity, "Nächste Folge startet...", Toast.LENGTH_SHORT).show()
-                            playNextEpisode()
+                            episodeManager.playNextEpisode()
                         }
                     }
                 }
 
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
                     updateCenterPauseVisibility(isPlaying)
-                    if (isPlaying) {
-                        retryHandler.removeCallbacks(resetRetryRunnable)
-                        retryHandler.postDelayed(resetRetryRunnable, 3000)
-                    } else {
-                        retryHandler.removeCallbacks(resetRetryRunnable)
-                    }
+                    retryManager.onIsPlayingChanged(isPlaying)
                 }
 
                 override fun onTracksChanged(tracks: Tracks) {
@@ -417,80 +352,17 @@ class PlayerActivity : AppCompatActivity() {
                     updateQualityAndAudioBadges()
                 }
 
-                override fun onVideoSizeChanged(videoSize: VideoSize) {
-                    checkAndCacheQuality(videoSize.width, videoSize.height)
-                }
+                override fun onVideoSizeChanged(videoSize: VideoSize) {}
 
                 override fun onPlayerError(error: PlaybackException) {
-                    retryHandler.removeCallbacks(resetRetryRunnable)
-                    AppLogger.logError("PlayerActivity", "Player error: ${error.errorCodeName} (${error.errorCode})", error)
-
-                    if (error.errorCode == PlaybackException.ERROR_CODE_AUDIO_TRACK_INIT_FAILED ||
-                        error.errorCode == PlaybackException.ERROR_CODE_DECODER_INIT_FAILED) {
-                        binding.playerLoading.visibility = View.GONE
-                        hideRetryBanner()
-                        Toast.makeText(this@PlayerActivity, "Audio-/Decoder-Fehler: Format wird vom Gerät nicht unterstützt", Toast.LENGTH_LONG).show()
-                        return
-                    }
-
-                    if (isLive && activeChannel != null && activeChannel!!.sources.size > 1) {
-                        if (activeSourceIndex + 1 < activeChannel!!.sources.size) {
-                            activeSourceIndex++
-                            val nextSource = activeChannel!!.sources[activeSourceIndex]
-                            Toast.makeText(
-                                this@PlayerActivity,
-                                "🔄 Auto-Failover: Wechsle zu Quelle ${activeSourceIndex + 1}/${activeChannel!!.sources.size}: ${nextSource.label}",
-                                Toast.LENGTH_SHORT
-                            ).show()
-                            playCurrentLiveSource()
-                            return
-                        }
-                    }
-
-                    val cause = error.cause
-                    val isHttpAuthOrRateLimit = when (cause) {
-                        is androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException -> {
-                            cause.responseCode in listOf(401, 403, 408, 429, 503)
-                        }
-                        else -> error.errorCode == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS
-                    }
-                    val isTimeoutOrConnFailed = error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED ||
-                            error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ||
-                            cause is java.net.SocketTimeoutException ||
-                            cause is java.net.ConnectException
-
-                    val pos = if (currentPosition > 0) currentPosition else lastKnownPosition
-
-                    if ((isHttpAuthOrRateLimit || isTimeoutOrConnFailed) && retryCount < maxRetries) {
-                        retryCount++
-                        val msg = "⏳ Warte auf Stream-Freigabe... ($retryCount/$maxRetries)"
-                        showRetryBanner(msg)
-                        AppLogger.logNetwork("Auto-Retry #$retryCount in 2.5s waiting for stream socket ($currentStreamUrl)")
-                        retryHandler.removeCallbacksAndMessages(null)
-                        retryHandler.postDelayed({ reconnectStream(pos) }, 2500)
-                        return
-                    }
-
-                    if (retryCount < maxRetries) {
-                        retryCount++
-                        Toast.makeText(this@PlayerActivity, "⚠️ Verbindungsversuch (${retryCount}/${maxRetries})...", Toast.LENGTH_SHORT).show()
-                        binding.playerLoading.visibility = View.VISIBLE
-
-                        if (retryCount == 3) {
-                            if (currentStreamUrl.endsWith(".mp4")) {
-                                currentStreamUrl = currentStreamUrl.replace(".mp4", ".mkv")
-                            } else if (currentStreamUrl.endsWith(".mkv")) {
-                                currentStreamUrl = currentStreamUrl.replace(".mkv", ".ts")
-                            }
-                        }
-
-                        retryHandler.removeCallbacksAndMessages(null)
-                        retryHandler.postDelayed({ reconnectStream(pos) }, 1500)
-                    } else {
-                        hideRetryBanner()
-                        Toast.makeText(this@PlayerActivity, "Wiedergabefehler: ${error.message} (Server antwortet nicht)", Toast.LENGTH_LONG).show()
-                        binding.playerLoading.visibility = View.GONE
-                    }
+                    val currentPos = if (currentPosition > 0) currentPosition else lastKnownPosition
+                    retryManager.handlePlayerError(
+                        error = error,
+                        currentPos = currentPos,
+                        lastKnownPos = lastKnownPosition,
+                        currentStreamUrl = currentStreamUrl,
+                        onUrlAdjusted = { adjustedUrl -> currentStreamUrl = adjustedUrl }
+                    )
                 }
             })
 
@@ -533,15 +405,6 @@ class PlayerActivity : AppCompatActivity() {
         }
         val isReady = (exoPlayer?.playbackState == Player.STATE_READY)
         binding.layoutCenterPause.visibility = if (!isPlaying && isReady) View.VISIBLE else View.GONE
-    }
-
-    private fun showRetryBanner(msg: String) {
-        binding.txtPlayerRetryBanner.text = msg
-        binding.txtPlayerRetryBanner.visibility = View.VISIBLE
-    }
-
-    private fun hideRetryBanner() {
-        binding.txtPlayerRetryBanner.visibility = View.GONE
     }
 
     private fun reconnectStream(seekPos: Long) {
@@ -613,6 +476,12 @@ class PlayerActivity : AppCompatActivity() {
                             episodeNum = episodeNum,
                             seriesId = if (currentType == "SERIES") seriesId else 0
                         )
+
+                        // Periodischer Cloud-Sync alle 60s während des Schauens
+                        if (System.currentTimeMillis() - lastPeriodicCloudSync > 60_000L) {
+                            lastPeriodicCloudSync = System.currentTimeMillis()
+                            saveCurrentState()
+                        }
                     }
                 }
                 if (statsOverlayHelper.isVisible) {
@@ -637,10 +506,30 @@ class PlayerActivity : AppCompatActivity() {
         if (player.isPlaying) {
             player.pause()
             showOsdWrapper()
+            saveCurrentState()
         } else {
             player.play()
             showOsdWrapper()
         }
+    }
+
+    private fun isAnyDialogShowing(): Boolean =
+        trackDialogHelper.isDialogShowing() || sleepTimer.isDialogShowing()
+
+    private fun dismissAnyDialog(): Boolean {
+        if (trackDialogHelper.dismissActiveDialog()) return true
+        if (sleepTimer.dismissActiveDialog()) return true
+        return false
+    }
+
+    private fun showSleepTimerDialog() {
+        sleepTimer.showSelectionDialog(
+            onResetInactivity = { osdController.resetOsdInactivityTimer { isAnyDialogShowing() } },
+            onDismissed = {
+                binding.btnSleepTimer.requestFocus()
+                osdController.resetOsdInactivityTimer { isAnyDialogShowing() }
+            }
+        )
     }
 
     private fun showOsdWrapper() {
@@ -652,13 +541,13 @@ class PlayerActivity : AppCompatActivity() {
                 activeSourceIndex,
                 currentIndex,
                 exoPlayer,
-                trackDialogHelper::isDialogShowing
+                { isAnyDialogShowing() }
             )
         } else {
             osdController.showOsd(
                 currentStreamName,
                 isLive,
-                trackDialogHelper::isDialogShowing
+                { isAnyDialogShowing() }
             ) {
                 binding.playerSeekBar.requestFocus()
             }
@@ -693,7 +582,7 @@ class PlayerActivity : AppCompatActivity() {
         currentStreamId = src.streamId
         currentStreamName = ch.cleanName
         currentStreamUrl = client.getLiveStreamUrl(src.streamId)
-        retryCount = 0
+        retryManager.resetRetryCount()
         val s = LiveStream(
             name = ch.cleanName,
             streamId = src.streamId,
@@ -737,218 +626,9 @@ class PlayerActivity : AppCompatActivity() {
         playCurrentLiveSource()
     }
 
-    private val sleepTimerOptions = listOf(0, 15, 30, 45, 60, 90, 120)
-    private var sleepTimerIndex = 0
-    private var sleepTimerJob: Job? = null
-    private var sleepTimerRemainingSeconds = 0
-
-    private fun toggleSleepTimer() {
-        sleepTimerIndex = (sleepTimerIndex + 1) % sleepTimerOptions.size
-        val minutes = sleepTimerOptions[sleepTimerIndex]
-        sleepTimerJob?.cancel()
-
-        if (minutes == 0) {
-            sleepTimerRemainingSeconds = 0
-            binding.btnSleepTimer.text = "⏱️ Sleep: Aus"
-            Toast.makeText(this, "⏱️ Sleep Timer deaktiviert", Toast.LENGTH_SHORT).show()
-        } else {
-            sleepTimerRemainingSeconds = minutes * 60
-            binding.btnSleepTimer.text = "⏱️ $minutes Min"
-            Toast.makeText(this, "⏱️ Sleep Timer auf $minutes Minuten gestellt", Toast.LENGTH_SHORT).show()
-
-            sleepTimerJob = lifecycleScope.launch {
-                while (sleepTimerRemainingSeconds > 0) {
-                    delay(1000)
-                    sleepTimerRemainingSeconds--
-                    val remMin = (sleepTimerRemainingSeconds + 59) / 60
-                    binding.btnSleepTimer.text = "⏱️ $remMin Min"
-                }
-                onSleepTimerTriggered()
-            }
-        }
-        osdController.resetOsdInactivityTimer(trackDialogHelper::isDialogShowing)
-    }
-
-    private fun onSleepTimerTriggered() {
-        runOnUiThread {
-            Toast.makeText(this, "⏱️ Sleep Timer abgelaufen – Standby wird eingeleitet", Toast.LENGTH_LONG).show()
-            exoPlayer?.stop()
-            exoPlayer?.clearMediaItems()
-            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            finishAffinity()
-        }
-    }
-
-    private fun checkAndCacheQuality(width: Int, height: Int) {
-        if (!isLive || activeChannel == null) return
-        val ch = activeChannel ?: return
-        if (ch.sources.size <= 1) return
-
-        if (QualityPreferenceManager.hasPreference(this, ch.cleanName)) {
-            return
-        }
-
-        val currentSource = ch.sources.getOrNull(activeSourceIndex) ?: return
-
-        if (width >= 1920 && height >= 1080) {
-            QualityPreferenceManager.savePreferredStream(
-                this,
-                ch.cleanName,
-                currentSource.streamId,
-                "${width}x${height}"
-            )
-        } else if (width > 0 && width < 1920 && hasTestedSourcesCount < 2 && activeSourceIndex + 1 < ch.sources.size) {
-            hasTestedSourcesCount++
-            activeSourceIndex++
-            playCurrentLiveSource()
-        } else if (width > 0) {
-            QualityPreferenceManager.savePreferredStream(
-                this,
-                ch.cleanName,
-                currentSource.streamId,
-                "${width}x${height}"
-            )
-        }
-    }
-
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        osdController.resetOsdInactivityTimer(trackDialogHelper::isDialogShowing)
-        when (keyCode) {
-            KeyEvent.KEYCODE_BACK -> {
-                if (trackDialogHelper.dismissActiveDialog()) {
-                    return true
-                }
-                if (scrubberHelper.isScrubbing) {
-                    scrubberHelper.cancelScrub()
-                    osdController.hideOsd()
-                    return true
-                }
-                if (isLive && binding.layoutLiveOsd.visibility == View.VISIBLE) {
-                    osdController.hideOsd()
-                    return true
-                }
-                if (binding.osdBottom.visibility == View.VISIBLE) {
-                    osdController.hideOsd()
-                    return true
-                }
-                finish()
-                return true
-            }
-            KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_INFO, KeyEvent.KEYCODE_M, KeyEvent.KEYCODE_I -> {
-                statsOverlayHelper.toggle(exoPlayer, currentStreamId, currentType, seasonNum, episodeNum, lastKnownDuration)
-                return true
-            }
-            KeyEvent.KEYCODE_PROG_YELLOW, KeyEvent.KEYCODE_BUTTON_Y -> {
-                if (isLive) {
-                    cycleToNextSourceManually()
-                    return true
-                }
-            }
-            KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {
-                if (isLive) {
-                    if (binding.layoutLiveOsd.visibility == View.VISIBLE) {
-                        cycleToNextSourceManually()
-                        return true
-                    }
-                } else if (osdController.isOsdButtonFocused()) {
-                    return false
-                } else {
-                    performScrub(true)
-                    return true
-                }
-            }
-            KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_MEDIA_REWIND -> {
-                if (isLive) {
-                    if (binding.layoutLiveOsd.visibility == View.VISIBLE) {
-                        cycleToPreviousSourceManually()
-                        return true
-                    }
-                } else if (osdController.isOsdButtonFocused()) {
-                    return false
-                } else {
-                    performScrub(false)
-                    return true
-                }
-            }
-            KeyEvent.KEYCODE_DPAD_DOWN -> {
-                if (isLive) {
-                    zapPreviousChannel()
-                    return true
-                } else {
-                    if (binding.osdBottom.visibility != View.VISIBLE) {
-                        showOsdWrapper()
-                        binding.playerSeekBar.requestFocus()
-                    } else if (binding.playerSeekBar.hasFocus()) {
-                        osdController.focusOsdButtonRow()
-                    } else if (osdController.isOsdButtonFocused()) {
-                        // Fokus behalten
-                    } else {
-                        osdController.focusOsdButtonRow()
-                    }
-                    return true
-                }
-            }
-            KeyEvent.KEYCODE_DPAD_UP -> {
-                if (isLive) {
-                    zapNextChannel()
-                    return true
-                } else {
-                    if (binding.osdBottom.visibility != View.VISIBLE) {
-                        showOsdWrapper()
-                        binding.playerSeekBar.requestFocus()
-                    } else if (osdController.isOsdButtonFocused()) {
-                        binding.playerSeekBar.requestFocus()
-                    } else if (binding.playerSeekBar.hasFocus()) {
-                        osdController.hideOsd()
-                    } else {
-                        binding.playerSeekBar.requestFocus()
-                    }
-                    return true
-                }
-            }
-            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
-                if (isLive) {
-                    if (binding.layoutLiveOsd.visibility == View.VISIBLE) {
-                        osdController.hideOsd()
-                    } else {
-                        showOsdWrapper()
-                    }
-                    return true
-                } else {
-                    if (scrubberHelper.isScrubbing && scrubberHelper.targetSeekPosition >= 0) {
-                        commitScrub()
-                        return true
-                    }
-                    if (binding.btnAudioTracks.hasFocus()) {
-                        trackDialogHelper.showAudioTrackDialog(this, exoPlayer, ::updateQualityAndAudioBadges) {
-                            binding.btnAudioTracks.requestFocus()
-                            osdController.resetOsdInactivityTimer(trackDialogHelper::isDialogShowing)
-                        }
-                        return true
-                    } else if (binding.btnSubtitles.hasFocus()) {
-                        trackDialogHelper.showSubtitleDialog(this, exoPlayer, ::updateQualityAndAudioBadges) {
-                            binding.btnSubtitles.requestFocus()
-                            osdController.resetOsdInactivityTimer(trackDialogHelper::isDialogShowing)
-                        }
-                        return true
-                    } else if (binding.btnPrevEpisode.hasFocus()) {
-                        playPreviousEpisode()
-                        return true
-                    } else if (binding.btnNextEpisode.hasFocus()) {
-                        playNextEpisode()
-                        return true
-                    } else if (binding.btnDebugOverlay.hasFocus()) {
-                        statsOverlayHelper.toggle(exoPlayer, currentStreamId, currentType, seasonNum, episodeNum, lastKnownDuration)
-                        return true
-                    } else if (binding.btnSleepTimer.hasFocus()) {
-                        toggleSleepTimer()
-                        return true
-                    } else {
-                        togglePlayPause()
-                    }
-                    return true
-                }
-            }
+        if (remoteHandler.handleKeyDown(keyCode, event)) {
+            return true
         }
         return super.onKeyDown(keyCode, event)
     }
@@ -958,7 +638,6 @@ class PlayerActivity : AppCompatActivity() {
             currentIndex = (currentIndex + 1) % channelList.size
             activeChannel = MultiStreamManager.applyPreferredSources(this, channelList[currentIndex])
             activeSourceIndex = 0
-            hasTestedSourcesCount = 0
             playCurrentLiveSource()
         } else if (streamList.isNotEmpty() && currentIndex >= 0) {
             currentIndex = (currentIndex + 1) % streamList.size
@@ -972,7 +651,6 @@ class PlayerActivity : AppCompatActivity() {
             currentIndex = if (currentIndex - 1 < 0) channelList.size - 1 else currentIndex - 1
             activeChannel = MultiStreamManager.applyPreferredSources(this, channelList[currentIndex])
             activeSourceIndex = 0
-            hasTestedSourcesCount = 0
             playCurrentLiveSource()
         } else if (streamList.isNotEmpty() && currentIndex >= 0) {
             currentIndex = if (currentIndex - 1 < 0) streamList.size - 1 else currentIndex - 1
@@ -985,8 +663,7 @@ class PlayerActivity : AppCompatActivity() {
         currentStreamId = stream.streamId
         currentStreamName = stream.name
         currentStreamUrl = client.getLiveStreamUrl(stream.streamId)
-        retryCount = 0
-        hideRetryBanner()
+        retryManager.resetRetryCount()
 
         exoPlayer?.stop()
         exoPlayer?.clearMediaItems()
@@ -1039,7 +716,7 @@ class PlayerActivity : AppCompatActivity() {
         super.onPause()
         AppLogger.logLifecycle("PlayerActivity", "onPause -> Releasing stream connections")
         saveCurrentState()
-        retryHandler.removeCallbacksAndMessages(null)
+        retryManager.cancelAll()
         PlayerUtils.releaseStreamConnections(exoPlayer)
     }
 
@@ -1047,7 +724,7 @@ class PlayerActivity : AppCompatActivity() {
         super.onStop()
         AppLogger.logLifecycle("PlayerActivity", "onStop -> Releasing stream connections")
         saveCurrentState()
-        retryHandler.removeCallbacksAndMessages(null)
+        retryManager.cancelAll()
         PlayerUtils.releaseStreamConnections(exoPlayer)
     }
 
@@ -1058,10 +735,10 @@ class PlayerActivity : AppCompatActivity() {
             unregisterReceiver(screenOffReceiver)
         } catch (e: Exception) {}
         saveCurrentState()
-        sleepTimerJob?.cancel()
+        sleepTimer.cancel()
         osdController.onDestroy()
         progressHandler.removeCallbacksAndMessages(null)
-        retryHandler.removeCallbacksAndMessages(null)
+        retryManager.cancelAll()
         PlayerUtils.releaseStreamConnections(exoPlayer)
         exoPlayer?.release()
         exoPlayer = null

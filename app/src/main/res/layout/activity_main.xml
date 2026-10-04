@@ -112,6 +112,24 @@
                 android:textStyle="bold" />
         </LinearLayout>
 
+        <!-- Spacer um Versionsanzeige ganz nach unten zu schieben -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
+        <!-- Diskrete Versionsanzeige unten links -->
+        <TextView
+            android:id="@+id/txtAppVersion"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#55FFFFFF"
+            android:textSize="11sp"
+            android:fontFamily="sans-serif-medium"
+            android:text="v2.0.3"
+            android:layout_marginBottom="4dp" />
+
     </LinearLayout>
 
     <!-- 2. Hauptbereich: Scrollbare Übersicht mit Verläufen und beliebten Inhalten -->

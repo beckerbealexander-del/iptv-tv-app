@@ -1,4 +1,4 @@
-﻿# Gradle & Build outputs
+# Gradle & Build outputs
 .gradle/
 build/
 app/build/
@@ -18,7 +18,10 @@ local.properties
 /*.jpg
 /*.jpeg
 bedroom_*.xml
+temp_*.xml
 *.log
 scratch/
 *.xlsx
 *.csv
+*.py
+__pycache__/

@@ -60,6 +60,9 @@ class MovieDetailActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         updatePlayButtonProgress()
+        historyManager.syncWithCloud(client.username) {
+            runOnUiThread { updatePlayButtonProgress() }
+        }
     }
 
     private fun displayInitialInfo(vodStream: VodStream?) {
